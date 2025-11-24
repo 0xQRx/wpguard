@@ -212,6 +212,11 @@ def cmd_search(args: argparse.Namespace) -> int:
         print("[*] No plugins found")
         return 0
 
+    # Interactive mode - show numbered list and allow selection
+    if args.interactive:
+        return _interactive_search(plugins, args, total_pages)
+
+    # Normal mode - just display results
     print(f"\n[*] Search results for '{args.query}' (page {args.page}/{total_pages}):\n")
     print(f"{'Slug':<30} {'Installs':<12} {'Version':<10} {'Rating':<8} Name")
     print("-" * 100)
@@ -225,6 +230,103 @@ def cmd_search(args: argparse.Namespace) -> int:
     print("-" * 100)
     print(f"Page {args.page} of {total_pages}")
     return 0
+
+
+def _interactive_search(plugins: list, args: argparse.Namespace, total_pages: int) -> int:
+    """Interactive search mode - select plugins to add to watchlist."""
+    print(f"\n[*] Search results for '{args.query}' (page {args.page}/{total_pages}):\n")
+    print(f"{'#':<4} {'Slug':<30} {'Installs':<12} {'Version':<10} Name")
+    print("-" * 100)
+
+    for i, p in enumerate(plugins, 1):
+        installs = f"{p.active_installs:,}"
+        name = (p.name[:35] + "...") if len(p.name) > 35 else p.name
+        print(f"{i:<4} {p.slug:<30} {installs:<12} {p.version:<10} {name}")
+
+    print("-" * 100)
+    print(f"\nPage {args.page} of {total_pages}")
+    print("\nEnter numbers to add to watchlist (comma-separated, e.g., 1,3,5)")
+    print("Or: 'all' to add all, 'q' to quit, 'n' for next page, 'p' for prev page")
+
+    while True:
+        try:
+            selection = input("\n> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[*] Cancelled")
+            return 0
+
+        if selection == 'q' or selection == 'quit':
+            print("[*] Cancelled")
+            return 0
+
+        if selection == 'n' or selection == 'next':
+            if args.page < total_pages:
+                args.page += 1
+                from wpguard.api.wordpress import WordPressPluginAPI
+                api = WordPressPluginAPI()
+                plugins, total_pages = api.query_plugins(
+                    search=args.query, page=args.page, per_page=args.per_page
+                )
+                return _interactive_search(plugins, args, total_pages)
+            else:
+                print("[!] Already on last page")
+                continue
+
+        if selection == 'p' or selection == 'prev':
+            if args.page > 1:
+                args.page -= 1
+                from wpguard.api.wordpress import WordPressPluginAPI
+                api = WordPressPluginAPI()
+                plugins, total_pages = api.query_plugins(
+                    search=args.query, page=args.page, per_page=args.per_page
+                )
+                return _interactive_search(plugins, args, total_pages)
+            else:
+                print("[!] Already on first page")
+                continue
+
+        # Determine which plugins to add
+        slugs_to_add = []
+
+        if selection == 'all':
+            slugs_to_add = [p.slug for p in plugins]
+        else:
+            # Parse comma-separated numbers or ranges (e.g., "1,3,5" or "1-5,7")
+            try:
+                indices = set()
+                for part in selection.split(','):
+                    part = part.strip()
+                    if '-' in part:
+                        start, end = part.split('-', 1)
+                        for i in range(int(start), int(end) + 1):
+                            indices.add(i)
+                    elif part.isdigit():
+                        indices.add(int(part))
+
+                for idx in sorted(indices):
+                    if 1 <= idx <= len(plugins):
+                        slugs_to_add.append(plugins[idx - 1].slug)
+                    else:
+                        print(f"[!] Invalid number: {idx}")
+            except ValueError:
+                print("[!] Invalid input. Use numbers like: 1,3,5 or 1-5 or 'all'")
+                continue
+
+        if not slugs_to_add:
+            print("[!] No valid selections")
+            continue
+
+        # Add selected plugins to watchlist
+        print(f"\n[*] Adding {len(slugs_to_add)} plugin(s) to watchlist...")
+        watcher = PluginWatcher(output_dir=args.output_dir)
+
+        success_count = 0
+        for slug in slugs_to_add:
+            if watcher.add_plugin(slug):
+                success_count += 1
+
+        print(f"\n[+] Added {success_count}/{len(slugs_to_add)} plugins to watchlist")
+        return 0
 
 
 def cmd_watch_add(args: argparse.Namespace) -> int:
@@ -248,10 +350,102 @@ def cmd_watch_remove(args: argparse.Namespace) -> int:
     """Remove plugins from watchlist."""
     watcher = PluginWatcher(output_dir=args.output_dir)
 
+    # Interactive mode - show list and let user select
+    if args.interactive:
+        return _interactive_remove(watcher)
+
+    # Check if slugs were provided
+    if not args.slugs:
+        print("[ERROR] No plugins specified. Use -i for interactive mode or provide slugs.")
+        return 1
+
     for slug in args.slugs:
         watcher.remove_plugin(slug)
 
     return 0
+
+
+def _interactive_remove(watcher: PluginWatcher) -> int:
+    """Interactive remove mode - select plugins to remove from watchlist."""
+    plugins = watcher.list_watched()
+
+    if not plugins:
+        print("[*] No plugins in watchlist")
+        return 0
+
+    print("\n[*] Current watchlist:\n")
+    print(f"{'#':<4} {'Slug':<30} {'Version':<12} Name")
+    print("-" * 80)
+
+    for i, p in enumerate(plugins, 1):
+        svn_info = f" (r{p['svn_revision']})" if p.get('svn_revision') else ""
+        print(f"{i:<4} {p['slug']:<30} {p['version']:<12} {p['name'][:30]}{svn_info}")
+
+    print("-" * 80)
+    print(f"\nTotal: {len(plugins)} plugin(s)")
+    print("\nEnter numbers to remove (comma-separated, e.g., 1,3,5)")
+    print("Or: 'all' to remove all, 'q' to quit")
+
+    while True:
+        try:
+            selection = input("\n> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[*] Cancelled")
+            return 0
+
+        if selection == 'q' or selection == 'quit':
+            print("[*] Cancelled")
+            return 0
+
+        # Determine which plugins to remove
+        slugs_to_remove = []
+
+        if selection == 'all':
+            slugs_to_remove = [p['slug'] for p in plugins]
+        else:
+            # Parse comma-separated numbers or ranges
+            try:
+                indices = set()
+                for part in selection.split(','):
+                    part = part.strip()
+                    if '-' in part:
+                        start, end = part.split('-', 1)
+                        for i in range(int(start), int(end) + 1):
+                            indices.add(i)
+                    elif part.isdigit():
+                        indices.add(int(part))
+
+                for idx in sorted(indices):
+                    if 1 <= idx <= len(plugins):
+                        slugs_to_remove.append(plugins[idx - 1]['slug'])
+                    else:
+                        print(f"[!] Invalid number: {idx}")
+            except ValueError:
+                print("[!] Invalid input. Use numbers like: 1,3,5 or 1-5 or 'all'")
+                continue
+
+        if not slugs_to_remove:
+            print("[!] No valid selections")
+            continue
+
+        # Confirm removal
+        print(f"\n[?] Remove {len(slugs_to_remove)} plugin(s)? [y/N] ", end="")
+        try:
+            confirm = input().strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[*] Cancelled")
+            return 0
+
+        if confirm != 'y' and confirm != 'yes':
+            print("[*] Cancelled")
+            continue
+
+        # Remove selected plugins
+        for slug in slugs_to_remove:
+            watcher.remove_plugin(slug)
+
+        print(f"\n[+] Removed {len(slugs_to_remove)} plugin(s) from watchlist")
+        return 0
 
 
 def cmd_watch_list(args: argparse.Namespace) -> int:
@@ -259,6 +453,118 @@ def cmd_watch_list(args: argparse.Namespace) -> int:
     watcher = PluginWatcher(output_dir=args.output_dir)
     watcher.print_watched()
     return 0
+
+
+def cmd_watch_status(args: argparse.Namespace) -> int:
+    """Show status of running wpguard tmux sessions."""
+    try:
+        # Get list of tmux sessions
+        result = subprocess.run(
+            ["tmux", "list-sessions", "-F", "#{session_name}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            print("[*] No tmux sessions running")
+            return 0
+
+        sessions = result.stdout.strip().split("\n")
+        wpguard_sessions = [s for s in sessions if s.startswith("wpguard")]
+
+        if not wpguard_sessions:
+            print("[*] No wpguard watch sessions running")
+            return 0
+
+        print("\n[*] Running wpguard watch sessions:")
+        print("-" * 70)
+
+        for session in wpguard_sessions:
+            # Capture recent output from the session
+            pane_result = subprocess.run(
+                ["tmux", "capture-pane", "-t", session, "-p"],
+                capture_output=True,
+                text=True,
+            )
+
+            print(f"\n  Session: {session}")
+
+            # Parse output to find what's being watched
+            if pane_result.returncode == 0:
+                output_lines = pane_result.stdout.strip().split("\n")
+                interval_info = None
+                watching_info = None
+                status_info = None
+
+                for line in output_lines:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    if "Watching" in line and "plugins" in line:
+                        watching_info = line
+                    elif "interval:" in line:
+                        interval_info = line
+                    elif "Next check in" in line:
+                        status_info = line
+
+                if interval_info:
+                    print(f"  {interval_info}")
+                if watching_info:
+                    print(f"  {watching_info}")
+                if status_info:
+                    print(f"  Status: {status_info}")
+
+            print(f"  Attach:  tmux attach -t {session}")
+            print(f"  Stop:    wpguard watch stop {session}")
+
+        print("-" * 70)
+        return 0
+
+    except FileNotFoundError:
+        print("[ERROR] tmux not installed")
+        return 1
+
+
+def cmd_watch_stop(args: argparse.Namespace) -> int:
+    """Stop a running wpguard tmux session."""
+    session_name = args.session
+
+    try:
+        # Check if session exists
+        check = subprocess.run(
+            ["tmux", "has-session", "-t", session_name],
+            capture_output=True,
+        )
+        if check.returncode != 0:
+            print(f"[ERROR] Session '{session_name}' not found")
+
+            # List available sessions
+            result = subprocess.run(
+                ["tmux", "list-sessions", "-F", "#{session_name}"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                sessions = [s for s in result.stdout.strip().split("\n") if s.startswith("wpguard")]
+                if sessions:
+                    print("\n[*] Available wpguard sessions:")
+                    for s in sessions:
+                        print(f"    - {s}")
+            return 1
+
+        # Kill the session
+        subprocess.run(
+            ["tmux", "kill-session", "-t", session_name],
+            check=True,
+        )
+        print(f"[+] Stopped watch session: {session_name}")
+        return 0
+
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Failed to stop session: {e}")
+        return 1
+    except FileNotFoundError:
+        print("[ERROR] tmux not installed")
+        return 1
 
 
 def cmd_watch_check(args: argparse.Namespace) -> int:
@@ -527,6 +833,17 @@ Examples:
         default=20,
         help="Results per page, max 250 (default: 20)",
     )
+    search_parser.add_argument(
+        "--interactive", "-i",
+        action="store_true",
+        help="Interactive mode: select plugins to add to watchlist",
+    )
+    search_parser.add_argument(
+        "--output-dir",
+        "-o",
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"Output directory for watchlist (default: {DEFAULT_OUTPUT_DIR})",
+    )
     search_parser.set_defaults(func=cmd_search)
 
     # Watch command (consolidated from monitor + watch)
@@ -576,7 +893,12 @@ Examples:
 
     # watch remove
     watch_rm = watch_sub.add_parser("remove", help="Remove plugins from watchlist")
-    watch_rm.add_argument("slugs", nargs="+", help="Plugin slugs to remove")
+    watch_rm.add_argument("slugs", nargs="*", help="Plugin slugs to remove (or use -i)")
+    watch_rm.add_argument(
+        "--interactive", "-i",
+        action="store_true",
+        help="Interactive mode: select plugins to remove",
+    )
     watch_rm.add_argument(
         "--output-dir",
         "-o",
@@ -608,6 +930,20 @@ Examples:
     )
     watch_check.add_argument("--discord-webhook", help="Discord webhook URL")
     watch_check.set_defaults(func=cmd_watch_check)
+
+    # watch status
+    watch_status = watch_sub.add_parser("status", help="Show running watch sessions")
+    watch_status.set_defaults(func=cmd_watch_status)
+
+    # watch stop
+    watch_stop = watch_sub.add_parser("stop", help="Stop a running watch session")
+    watch_stop.add_argument(
+        "session",
+        nargs="?",
+        default="wpguard",
+        help="Session name to stop (default: wpguard)",
+    )
+    watch_stop.set_defaults(func=cmd_watch_stop)
 
     return parser
 
