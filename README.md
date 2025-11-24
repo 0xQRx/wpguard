@@ -18,19 +18,19 @@ A defensive security research tool for downloading, monitoring, and analyzing Wo
 ### From GitHub (via pipx - recommended)
 
 ```bash
-pipx install git+https://github.com/USERNAME/WordPressGuard.git
+pipx install git+https://github.com/0xqrx/WordPressGuard.git
 ```
 
 ### From GitHub (via pip)
 
 ```bash
-pip install git+https://github.com/USERNAME/WordPressGuard.git
+pip install git+https://github.com/0xqrx/WordPressGuard.git
 ```
 
 ### Development Installation
 
 ```bash
-git clone https://github.com/USERNAME/WordPressGuard.git
+git clone https://github.com/0xqrx/WordPressGuard.git
 cd WordPressGuard
 pip install -e ".[dev]"
 ```

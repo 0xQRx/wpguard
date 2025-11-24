@@ -33,6 +33,34 @@ def cmd_download(args: argparse.Namespace) -> int:
     api = WordPressPluginAPI()
     downloader = PluginDownloader(plugins_dir)
 
+    # Single plugin download mode
+    if args.plugin:
+        plugin = api.get_plugin_info(args.plugin)
+        if not plugin:
+            print(f"[ERROR] Plugin '{args.plugin}' not found")
+            return 1
+
+        print(f"\n[*] {plugin.name} ({plugin.slug})")
+        print(f"    Active installs: {plugin.active_installs:,}")
+        print(f"    Version: {plugin.version}")
+
+        result = downloader.download_plugin(
+            plugin,
+            extract=args.extract,
+            svn=args.svn,
+        )
+
+        if result.zip_path:
+            print(f"    ZIP: {result.zip_path}")
+        if result.extracted_path:
+            print(f"    Extracted: {result.extracted_path}")
+        if result.svn_path:
+            print(f"    SVN: {result.svn_path}")
+
+        print(f"\n[+] Download complete. Files saved to: {plugins_dir}")
+        return 0
+
+    # Bulk download mode
     def progress(msg: str) -> None:
         print(f"[*] {msg}")
 
@@ -740,6 +768,10 @@ Examples:
     # Download command
     dl_parser = subparsers.add_parser(
         "download", help="Download plugins from WordPress repository"
+    )
+    dl_parser.add_argument(
+        "--plugin", "-p",
+        help="Download a single plugin by slug (e.g., --plugin akismet)",
     )
     dl_parser.add_argument("--search", "-s", help="Search term for plugins")
     dl_parser.add_argument(
