@@ -425,8 +425,8 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 # Tool implementations
 
 
-async def _plugin_info(slug: str) -> dict[str, Any]:
-    """Get detailed plugin information."""
+def _plugin_info_sync(slug: str) -> dict[str, Any]:
+    """Get detailed plugin information (sync version)."""
     api = WordPressPluginAPI()
     plugin = api.get_plugin_info(slug)
 
@@ -451,8 +451,13 @@ async def _plugin_info(slug: str) -> dict[str, Any]:
     }
 
 
-async def _search(query: str, page: int, per_page: int) -> dict[str, Any]:
-    """Search for plugins."""
+async def _plugin_info(slug: str) -> dict[str, Any]:
+    """Get detailed plugin information."""
+    return await run_in_executor(_plugin_info_sync, slug)
+
+
+def _search_sync(query: str, page: int, per_page: int) -> dict[str, Any]:
+    """Search for plugins (sync version)."""
     api = WordPressPluginAPI()
     plugins, total_pages = api.query_plugins(search=query, page=page, per_page=per_page)
 
@@ -475,15 +480,24 @@ async def _search(query: str, page: int, per_page: int) -> dict[str, Any]:
     }
 
 
-async def _download(
+async def _search(query: str, page: int, per_page: int) -> dict[str, Any]:
+    """Search for plugins."""
+    return await run_in_executor(_search_sync, query, page, per_page)
+
+
+def _download_sync(
     slug: str, output_dir: str, extract: bool, svn: bool
 ) -> dict[str, Any]:
-    """Download a single plugin."""
+    """Download a single plugin (sync version)."""
     api = WordPressPluginAPI()
     plugin = api.get_plugin_info(slug)
 
     if not plugin:
         return {"error": f"Plugin '{slug}' not found"}
+
+    # Check SVN availability if requested
+    if svn and not _check_svn_available():
+        return {"error": "SVN is not installed. Install with: apt install subversion"}
 
     plugins_dir = f"{output_dir}/{PLUGINS_SUBDIR}"
     downloader = PluginDownloader(plugins_dir)
@@ -500,7 +514,14 @@ async def _download(
     }
 
 
-async def _bulk_download(
+async def _download(
+    slug: str, output_dir: str, extract: bool, svn: bool
+) -> dict[str, Any]:
+    """Download a single plugin."""
+    return await run_in_executor(_download_sync, slug, output_dir, extract, svn)
+
+
+def _bulk_download_sync(
     search: str | None,
     min_installs: int,
     max_installs: int | None,
@@ -509,7 +530,7 @@ async def _bulk_download(
     output_dir: str,
     extract: bool,
 ) -> dict[str, Any]:
-    """Bulk download plugins."""
+    """Bulk download plugins (sync version)."""
     api = WordPressPluginAPI()
     plugins_dir = f"{output_dir}/{PLUGINS_SUBDIR}"
     downloader = PluginDownloader(plugins_dir)
@@ -548,8 +569,23 @@ async def _bulk_download(
     }
 
 
-async def _watch_add(slugs: list[str], output_dir: str) -> dict[str, Any]:
-    """Add plugins to watchlist."""
+async def _bulk_download(
+    search: str | None,
+    min_installs: int,
+    max_installs: int | None,
+    count: int,
+    browse: str | None,
+    output_dir: str,
+    extract: bool,
+) -> dict[str, Any]:
+    """Bulk download plugins."""
+    return await run_in_executor(
+        _bulk_download_sync, search, min_installs, max_installs, count, browse, output_dir, extract
+    )
+
+
+def _watch_add_sync(slugs: list[str], output_dir: str) -> dict[str, Any]:
+    """Add plugins to watchlist (sync version)."""
     watcher = PluginWatcher(output_dir=output_dir)
 
     results = []
@@ -565,8 +601,13 @@ async def _watch_add(slugs: list[str], output_dir: str) -> dict[str, Any]:
     }
 
 
-async def _watch_remove(slugs: list[str], output_dir: str) -> dict[str, Any]:
-    """Remove plugins from watchlist."""
+async def _watch_add(slugs: list[str], output_dir: str) -> dict[str, Any]:
+    """Add plugins to watchlist."""
+    return await run_in_executor(_watch_add_sync, slugs, output_dir)
+
+
+def _watch_remove_sync(slugs: list[str], output_dir: str) -> dict[str, Any]:
+    """Remove plugins from watchlist (sync version)."""
     watcher = PluginWatcher(output_dir=output_dir)
 
     results = []
@@ -582,8 +623,13 @@ async def _watch_remove(slugs: list[str], output_dir: str) -> dict[str, Any]:
     }
 
 
-async def _watch_list(output_dir: str) -> dict[str, Any]:
-    """List watched plugins."""
+async def _watch_remove(slugs: list[str], output_dir: str) -> dict[str, Any]:
+    """Remove plugins from watchlist."""
+    return await run_in_executor(_watch_remove_sync, slugs, output_dir)
+
+
+def _watch_list_sync(output_dir: str) -> dict[str, Any]:
+    """List watched plugins (sync version)."""
     watcher = PluginWatcher(output_dir=output_dir)
     plugins = watcher.list_watched()
 
@@ -594,8 +640,13 @@ async def _watch_list(output_dir: str) -> dict[str, Any]:
     }
 
 
-async def _watch_check(output_dir: str) -> dict[str, Any]:
-    """Check for plugin updates."""
+async def _watch_list(output_dir: str) -> dict[str, Any]:
+    """List watched plugins."""
+    return await run_in_executor(_watch_list_sync, output_dir)
+
+
+def _watch_check_sync(output_dir: str) -> dict[str, Any]:
+    """Check for plugin updates (sync version)."""
     watcher = PluginWatcher(output_dir=output_dir)
     results = watcher.check_updates()
 
@@ -625,6 +676,11 @@ async def _watch_check(output_dir: str) -> dict[str, Any]:
         "plugins_checked": len(watcher.state["plugins"]),
         "updates": updates,
     }
+
+
+async def _watch_check(output_dir: str) -> dict[str, Any]:
+    """Check for plugin updates."""
+    return await run_in_executor(_watch_check_sync, output_dir)
 
 
 def _svn_log_sync(slug: str, limit: int) -> dict[str, Any]:
@@ -711,8 +767,8 @@ async def _svn_revision(slug: str) -> dict[str, Any]:
     return await run_in_executor(_svn_revision_sync, slug)
 
 
-async def _plugin_versions(slug: str) -> dict[str, Any]:
-    """Get all available versions for a plugin."""
+def _plugin_versions_sync(slug: str) -> dict[str, Any]:
+    """Get all available versions for a plugin (sync version)."""
     api = WordPressPluginAPI()
     versions = api.get_plugin_versions(slug)
 
@@ -726,10 +782,20 @@ async def _plugin_versions(slug: str) -> dict[str, Any]:
     }
 
 
-async def _state_info(output_dir: str) -> dict[str, Any]:
-    """Get current state information."""
+async def _plugin_versions(slug: str) -> dict[str, Any]:
+    """Get all available versions for a plugin."""
+    return await run_in_executor(_plugin_versions_sync, slug)
+
+
+def _state_info_sync(output_dir: str) -> dict[str, Any]:
+    """Get current state information (sync version)."""
     watcher = PluginWatcher(output_dir=output_dir)
     return watcher.get_state_info()
+
+
+async def _state_info(output_dir: str) -> dict[str, Any]:
+    """Get current state information."""
+    return await run_in_executor(_state_info_sync, output_dir)
 
 
 async def run_server():
