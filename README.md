@@ -12,6 +12,7 @@ A defensive security research tool for downloading, monitoring, and analyzing Wo
 - **Local Reports**: JSON reports saved locally for each detected update
 - **Continuous Monitoring**: Background watch mode with tmux support
 - **SVN Commands**: Direct access to SVN log and diff for any plugin
+- **MCP Server**: Integration with Claude Code and other AI assistants via Model Context Protocol
 
 ## Installation
 
@@ -412,10 +413,69 @@ wpguard download --min-installs 500000 --count all --extract
 wpguard download --search security --count all --min-installs 10000
 ```
 
+## MCP Server (Claude Code Integration)
+
+WordPressGuard includes an MCP (Model Context Protocol) server that exposes all functionality as tools for AI assistants like Claude Code.
+
+### Adding to Claude Code
+
+```bash
+# Add for current user (available in all projects)
+claude mcp add wpguard -s user -- wpguard-mcp
+
+# Or add to current project only
+claude mcp add wpguard -- wpguard-mcp
+```
+
+Verify it was added:
+
+```bash
+claude mcp list
+```
+
+### Manual Configuration
+
+Add to `~/.claude/settings.json` (user) or `.claude/settings.json` (project):
+
+```json
+{
+  "mcpServers": {
+    "wpguard": {
+      "command": "wpguard-mcp"
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_plugin_info` | Get detailed info about a specific plugin |
+| `wpguard_search` | Search for plugins in the WordPress repository |
+| `wpguard_download` | Download a single plugin (ZIP + optional SVN) |
+| `wpguard_bulk_download` | Bulk download plugins with install filters |
+| `wpguard_watch_add` | Add plugins to the watchlist |
+| `wpguard_watch_remove` | Remove plugins from the watchlist |
+| `wpguard_watch_list` | List all watched plugins |
+| `wpguard_watch_check` | Check watched plugins for updates |
+| `wpguard_svn_log` | Get SVN commit history for a plugin |
+| `wpguard_svn_diff` | Compare changes between SVN revisions |
+| `wpguard_svn_revision` | Get latest SVN revision number |
+| `wpguard_plugin_versions` | Get all available versions of a plugin |
+| `wpguard_state_info` | Get current watcher state info |
+
+### Running the MCP Server Standalone
+
+```bash
+wpguard-mcp
+```
+
 ## Requirements
 
 - Python 3.9+
 - `requests` library
+- `mcp` library (for MCP server functionality)
 - `svn` command-line tool (optional, for SVN downloads and change tracking)
 - `tmux` (optional, for background watch mode)
 

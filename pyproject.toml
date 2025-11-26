@@ -30,6 +30,7 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.28.0",
+    "mcp>=1.0.0",
 ]
 
 [project.urls]
@@ -39,6 +40,7 @@ Issues = "https://github.com/USERNAME/WordPressGuard/issues"
 
 [project.scripts]
 wpguard = "wpguard.cli:main"
+wpguard-mcp = "wpguard.mcp_server:main"
 
 [project.optional-dependencies]
 dev = [
