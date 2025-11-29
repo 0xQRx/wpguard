@@ -58,10 +58,18 @@ All `wpguard_*` tools are available via MCP:
 
 ## Directory Structure
 
-- `targets/` - Downloaded plugin source code
-- `reports/` - Vulnerability reports and findings
-- `reports/poc/` - Proof of concept scripts
-- `state.json` - Current scan state (progress tracking)
+```
+project/
+├── targets/                    # Downloaded plugin source code
+│   └── {plugin_slug}/
+│       └── extracted/
+├── reports/                    # Vulnerability reports and PoCs
+│   └── {plugin_slug}/
+│       ├── finding_001.md      # Vulnerability report
+│       └── poc.py              # Proof of concept script
+├── state.json                  # Scan state (progress tracking)
+└── findings.json               # All findings database
+```
 
 ## Quick Start
 
@@ -89,7 +97,21 @@ All `wpguard_*` tools are available via MCP:
 | Common/Dangerous | 500 | SQL Injection, Stored XSS |
 | Standard | 50,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
 
-**Authentication Constraint:** Vulnerabilities must be exploitable at Subscriber level or below (unauthenticated preferred).
+## Authentication Levels to Audit
+
+**IMPORTANT: Audit ALL vulnerabilities for ALL authentication levels from Unauthenticated up to Author.**
+
+| Level | Username | Password | In Scope | Notes |
+|-------|----------|----------|----------|-------|
+| Unauthenticated | - | - | YES | Highest priority |
+| Subscriber | subscriber | subscriber | YES | Default registered user |
+| Customer | customer | customer | YES | WooCommerce customer role |
+| Contributor | contributor | contributor | YES | Can write posts (not publish) |
+| Author | author | author | YES | Can publish own posts |
+| Editor | - | - | NO | Out of scope |
+| Administrator | - | - | NO | Out of scope |
+
+**Key Point:** Always test each vulnerability at EVERY applicable auth level. A finding exploitable by Author is still valuable - document it with the correct auth_level.
 '''
 
 
@@ -265,9 +287,9 @@ This agent operates within an authorized bug bounty program. All analysis is per
 ## Responsibilities
 1. Ingest scope.yaml from Target Researcher
 2. Conduct focused vulnerability analysis based on defined scope
-3. Identify and confirm vulnerabilities exploitable at Subscriber level or below
+3. **Audit ALL vulnerabilities at ALL auth levels** (Unauth → Subscriber → Contributor → Author)
 4. Create detailed reports and working PoC scripts
-5. Document authentication requirements accurately
+5. Document authentication requirements accurately for each finding
 
 ## Vulnerability Analysis Checklist
 
@@ -319,17 +341,24 @@ This agent operates within an authorized bug bounty program. All analysis is per
 
 ## Authentication Level Documentation
 
-**CRITICAL: Every finding MUST document the exact authentication level required.**
+**CRITICAL: Test EVERY vulnerability at ALL in-scope auth levels. Document the LOWEST level that can exploit it.**
 
-| Level | In Scope |
-|-------|----------|
-| Unauthenticated | Yes |
-| Subscriber | Yes |
-| Customer | Yes |
-| Contributor | Edge case |
-| Author | Edge case |
-| Editor | NO |
-| Administrator | NO |
+| Level | Username | Password | In Scope | Priority |
+|-------|----------|----------|----------|----------|
+| Unauthenticated | - | - | YES | Highest |
+| Subscriber | subscriber | subscriber | YES | High |
+| Customer | customer | customer | YES | High |
+| Contributor | contributor | contributor | YES | Medium |
+| Author | author | author | YES | Medium |
+| Editor | - | - | NO | - |
+| Administrator | - | - | NO | - |
+
+**Testing Strategy:**
+1. Start with unauthenticated access
+2. If blocked, try subscriber
+3. If blocked, try contributor
+4. If blocked, try author
+5. Document the LOWEST successful auth level
 
 ## Creating Findings
 
@@ -369,7 +398,7 @@ wpguard_sandbox_request(
     data={"action": "vulnerable_action", "param": "test'"}
 )
 
-# Test authenticated request
+# Test as subscriber (subscriber:subscriber)
 wpguard_sandbox_request(
     method="POST",
     path="/wp-admin/admin-ajax.php",
@@ -377,9 +406,33 @@ wpguard_sandbox_request(
     auth="subscriber"
 )
 
+# Test as contributor (contributor:contributor)
+wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "auth_action", "param": "payload"},
+    auth="contributor"
+)
+
+# Test as author (author:author)
+wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "auth_action", "param": "payload"},
+    auth="author"
+)
+
 # Cleanup
 wpguard_sandbox_uninstall_plugin(slug="example-plugin")
 ```
+
+**Sandbox Credentials:**
+| Role | Username | Password |
+|------|----------|----------|
+| Subscriber | subscriber | subscriber |
+| Customer | customer | customer |
+| Contributor | contributor | contributor |
+| Author | author | author |
 
 ## CVSS 3.1 Quick Reference
 
@@ -390,6 +443,210 @@ Subscriber SQLi: CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N = 6.5 Medium
 Unauthenticated Stored XSS: CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N = 6.1 Medium
 Subscriber Stored XSS: CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:C/C:L/I:L/A:N = 5.4 Medium
 ```
+
+## PoC Requirements
+
+**CRITICAL: Every finding MUST include a standalone Python3 PoC script.**
+
+### PoC Script Requirements:
+
+1. **Standalone Python3** - Must run independently with `python3 poc.py`
+2. **Command-line arguments** - Accept URL, credentials, and other options via argparse
+3. **Full authentication flow** - Login to WordPress, maintain session cookies
+4. **Nonce handling** - Fetch and use WordPress nonces when required
+5. **Clear output** - Show success/failure with evidence of exploitation
+6. **No hardcoded values** - All target-specific values as arguments
+
+### PoC Template:
+
+```python
+#!/usr/bin/env python3
+"""
+PoC for [VULN_TYPE] in [PLUGIN_NAME] v[VERSION]
+CVE: [CVE-ID if assigned]
+Author: [Your Name]
+Date: [Date]
+
+Description:
+[Brief description of the vulnerability]
+
+Usage:
+    python3 poc.py --url http://target.com --username subscriber --password subscriber
+    python3 poc.py --url http://target.com  # For unauthenticated vulns
+"""
+
+import argparse
+import re
+import sys
+import requests
+from urllib.parse import urljoin
+
+def get_session(url: str, username: str = None, password: str = None) -> requests.Session:
+    """Create session and optionally authenticate to WordPress."""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
+
+    if username and password:
+        login_url = urljoin(url, "/wp-login.php")
+
+        # Get login page for any tokens
+        resp = session.get(login_url)
+
+        # Login
+        login_data = {
+            "log": username,
+            "pwd": password,
+            "wp-submit": "Log In",
+            "redirect_to": urljoin(url, "/wp-admin/"),
+            "testcookie": "1"
+        }
+
+        resp = session.post(login_url, data=login_data, allow_redirects=False)
+
+        if "wordpress_logged_in" not in str(session.cookies):
+            print(f"[-] Login failed for {username}")
+            sys.exit(1)
+
+        print(f"[+] Logged in as {username}")
+
+    return session
+
+def get_nonce(session: requests.Session, url: str, nonce_action: str = None) -> str:
+    """Fetch WordPress nonce from admin page or AJAX."""
+    # Method 1: From admin page
+    admin_url = urljoin(url, "/wp-admin/admin.php")
+    resp = session.get(admin_url)
+
+    # Try common nonce patterns
+    patterns = [
+        r'["\']_wpnonce["\']\s*:\s*["\']([a-f0-9]+)["\']',
+        r'nonce["\']\s*:\s*["\']([a-f0-9]+)["\']',
+        r'name=["\']_wpnonce["\'] value=["\']([a-f0-9]+)["\']',
+        r'wp_ajax_nonce["\']\s*:\s*["\']([a-f0-9]+)["\']',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, resp.text)
+        if match:
+            nonce = match.group(1)
+            print(f"[+] Got nonce: {nonce}")
+            return nonce
+
+    # Method 2: Via AJAX if nonce_action provided
+    if nonce_action:
+        ajax_url = urljoin(url, "/wp-admin/admin-ajax.php")
+        resp = session.post(ajax_url, data={"action": nonce_action})
+        if resp.ok:
+            return resp.text.strip()
+
+    print("[-] Could not retrieve nonce")
+    return None
+
+def exploit(session: requests.Session, url: str, nonce: str = None) -> bool:
+    """
+    Execute the exploit.
+
+    Returns True if successful, False otherwise.
+    """
+    ajax_url = urljoin(url, "/wp-admin/admin-ajax.php")
+
+    # === CUSTOMIZE THIS SECTION ===
+    payload = {
+        "action": "vulnerable_action",
+        "_wpnonce": nonce,  # Include if needed
+        "param": "malicious_value",
+    }
+
+    resp = session.post(ajax_url, data=payload)
+
+    # Check for success indicators
+    if "expected_success_string" in resp.text:
+        print(f"[+] Exploit successful!")
+        print(f"[+] Response: {resp.text[:500]}")
+        return True
+    else:
+        print(f"[-] Exploit failed")
+        print(f"[-] Response: {resp.text[:500]}")
+        return False
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="PoC for [VULN_TYPE] in [PLUGIN_NAME]",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    # Unauthenticated exploit
+    python3 poc.py --url http://localhost:8000
+
+    # Authenticated as subscriber
+    python3 poc.py --url http://localhost:8000 -u subscriber -p subscriber
+
+    # Authenticated as author
+    python3 poc.py --url http://localhost:8000 -u author -p author
+        """
+    )
+
+    parser.add_argument("--url", "-t", required=True, help="Target WordPress URL")
+    parser.add_argument("--username", "-u", help="WordPress username")
+    parser.add_argument("--password", "-p", help="WordPress password")
+    parser.add_argument("--proxy", help="Proxy URL (e.g., http://127.0.0.1:8080)")
+
+    args = parser.parse_args()
+
+    # Normalize URL
+    url = args.url.rstrip("/") + "/"
+
+    print(f"[*] Target: {url}")
+    print(f"[*] Plugin: [PLUGIN_NAME] v[VERSION]")
+    print(f"[*] Vulnerability: [VULN_TYPE]")
+    print()
+
+    # Setup session
+    session = get_session(url, args.username, args.password)
+
+    if args.proxy:
+        session.proxies = {"http": args.proxy, "https": args.proxy}
+        session.verify = False
+
+    # Get nonce if needed (comment out if not required)
+    nonce = get_nonce(session, url)
+
+    # Run exploit
+    success = exploit(session, url, nonce)
+
+    sys.exit(0 if success else 1)
+
+if __name__ == "__main__":
+    main()
+```
+
+### Report & PoC Location
+
+All reports and PoCs are organized by plugin slug:
+
+```
+reports/
+└── {plugin_slug}/
+    ├── finding_001.md          # Vulnerability report
+    ├── finding_002.md          # Additional finding (if any)
+    └── poc.py                  # PoC script for this plugin
+```
+
+Example: `reports/example-plugin/poc.py`
+
+### PoC Checklist
+
+Before submitting, verify your PoC:
+
+- [ ] Runs standalone with `python3 poc.py --help`
+- [ ] Accepts `--url`, `--username`, `--password` arguments
+- [ ] Successfully logs in when credentials provided
+- [ ] Fetches nonce if the vulnerable endpoint requires it
+- [ ] Clearly shows exploitation success/failure
+- [ ] Works against a fresh WordPress install with the vulnerable plugin
+- [ ] No hardcoded URLs, credentials, or target-specific values
 '''
 
 
@@ -431,13 +688,39 @@ wpguard_scope_check_finding(
 1. **Install Count** - Meets threshold for vuln type?
 2. **Vendor Exclusion** - Not from excluded vendor?
 3. **Availability** - Plugin still available on WordPress.org?
-4. **Auth Level** - Subscriber or lower?
+4. **Auth Level** - Author or lower? (Unauth/Sub/Contrib/Author all valid)
 5. **Vuln Type** - Not in exclusion list?
 6. **CVSS Score** - >= 4.0?
 7. **Environment** - No special requirements?
 8. **Novelty** - Not already reported/CVE?
 
-### Step 2: Reproduction
+### Step 2: PoC Validation
+
+**Every finding MUST have a Python3 PoC. Validate it works:**
+
+```bash
+# Test the PoC script directly (located in reports/{plugin_slug}/)
+cd reports/example-plugin/
+
+# For unauthenticated vulns
+python3 poc.py --url http://172.17.0.1:8000
+
+# For authenticated vulns (use the documented auth level)
+python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
+python3 poc.py --url http://172.17.0.1:8000 -u author -p author
+```
+
+**PoC Validation Checklist:**
+- [ ] Script runs with `python3 poc.py --help`
+- [ ] Script accepts `--url`, `--username`, `--password` arguments
+- [ ] Script performs WordPress login when credentials provided
+- [ ] Script fetches nonce if required by the endpoint
+- [ ] Script clearly shows success/failure output
+- [ ] No hardcoded URLs or credentials
+
+### Step 3: Reproduction in Sandbox
+
+**Test at the documented auth level AND verify lower levels don't work:**
 
 ```python
 # Check sandbox
@@ -446,19 +729,36 @@ wpguard_sandbox_status()
 # Install vulnerable version
 wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3")
 
-# Execute PoC
+# Execute PoC at documented auth level
+# Use appropriate auth: "subscriber", "contributor", or "author"
 wpguard_sandbox_request(
     method="POST",
     path="/wp-admin/admin-ajax.php",
     data={"action": "vulnerable_action", "param": "payload"},
-    auth="subscriber"
+    auth="author"  # Use the auth level from the finding
+)
+
+# Verify lower auth levels fail (confirms correct classification)
+wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "vulnerable_action", "param": "payload"},
+    auth="contributor"  # Should fail if finding says "author"
 )
 
 # Cleanup
 wpguard_sandbox_uninstall_plugin(slug="example-plugin")
 ```
 
-### Step 3: Update Finding Status
+**Sandbox Credentials:**
+| Role | Username | Password |
+|------|----------|----------|
+| Subscriber | subscriber | subscriber |
+| Customer | customer | customer |
+| Contributor | contributor | contributor |
+| Author | author | author |
+
+### Step 4: Update Finding Status
 
 ```python
 # Get finding
@@ -472,7 +772,7 @@ wpguard_finding_update(
 )
 ```
 
-### Step 4: Notify on Discord
+### Step 5: Notify on Discord
 
 ```python
 # Send validated finding notification
@@ -493,18 +793,20 @@ wpguard_discord_notify_summary(
 
 | Vulnerability | Min Installs | Auth Level |
 |--------------|--------------|------------|
-| RCE | 25 | Unauth/Sub |
-| PHP File Upload | 25 | Unauth/Sub |
-| PHP File Read/Delete | 25 | Unauth/Sub |
-| Options Update | 25 | Unauth/Sub |
-| Auth Bypass | 25 | Unauth/Sub |
-| Priv Esc | 25 | Unauth/Sub |
-| SQL Injection | 500 | Unauth/Sub |
-| Stored XSS | 500 | Unauth/Sub |
-| Reflected XSS | 50,000 | Unauth/Sub |
-| CSRF (impactful) | 50,000 | Unauth/Sub |
-| Missing Authz | 50,000 | Unauth/Sub |
-| Any | Any | Admin/Editor = NO |
+| RCE | 25 | Unauth/Sub/Contrib/Author |
+| PHP File Upload | 25 | Unauth/Sub/Contrib/Author |
+| PHP File Read/Delete | 25 | Unauth/Sub/Contrib/Author |
+| Options Update | 25 | Unauth/Sub/Contrib/Author |
+| Auth Bypass | 25 | Unauth/Sub/Contrib/Author |
+| Priv Esc | 25 | Unauth/Sub/Contrib/Author |
+| SQL Injection | 500 | Unauth/Sub/Contrib/Author |
+| Stored XSS | 500 | Unauth/Sub/Contrib/Author |
+| Reflected XSS | 50,000 | Unauth/Sub/Contrib/Author |
+| CSRF (impactful) | 50,000 | Unauth/Sub/Contrib/Author |
+| Missing Authz | 50,000 | Unauth/Sub/Contrib/Author |
+| Any | Any | Editor/Admin = OUT OF SCOPE |
+
+**All auth levels up to and including Author are IN SCOPE.**
 
 ## Out of Scope Vulnerability Types
 
@@ -543,7 +845,7 @@ def initialize_research_project(output_dir: str) -> dict:
         # Create directories
         root.mkdir(parents=True, exist_ok=True)
         (root / "targets").mkdir(exist_ok=True)
-        (root / "reports" / "poc").mkdir(parents=True, exist_ok=True)
+        (root / "reports").mkdir(exist_ok=True)  # Plugin subfolders created as needed
         (root / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
 
         # Write main CLAUDE.md
@@ -593,8 +895,9 @@ def initialize_research_project(output_dir: str) -> dict:
                 "commands": ["/target-research", "/security-research", "/qa-triage"],
                 "directories": [
                     "targets/",
+                    "targets/{plugin_slug}/",
                     "reports/",
-                    "reports/poc/",
+                    "reports/{plugin_slug}/",  # Contains finding_*.md and poc.py
                     ".claude/commands/",
                 ],
                 "files": ["state.json", "findings.json"],

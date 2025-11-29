@@ -15,11 +15,14 @@ WP_SANDBOX_PORT = int(os.environ.get("WP_SANDBOX_PORT", "8000"))
 WP_CONTAINER_NAME = os.environ.get("WP_CONTAINER_NAME", "wp_app")
 
 # WordPress Test Credentials (role -> (username, password))
+# All roles up to Author are IN SCOPE for Wordfence Bug Bounty
 WP_CREDENTIALS: dict[str, tuple[str, str]] = {
-    "admin": ("admin", "admin"),
-    "author": ("author", "author"),
-    "contributor": ("contributor", "contributor"),
-    "subscriber": ("subscriber", "subscriber"),
+    "admin": ("admin", "admin"),           # OUT OF SCOPE
+    "editor": ("editor", "editor"),         # OUT OF SCOPE
+    "author": ("author", "author"),         # IN SCOPE - can publish own posts
+    "contributor": ("contributor", "contributor"),  # IN SCOPE - can write posts (not publish)
+    "customer": ("customer", "customer"),   # IN SCOPE - WooCommerce customer role
+    "subscriber": ("subscriber", "subscriber"),  # IN SCOPE - default registered user
 }
 
 # API limits
