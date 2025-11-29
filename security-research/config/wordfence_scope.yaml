@@ -1,0 +1,344 @@
+# Wordfence Bug Bounty Program - Scope Configuration
+# For use with WordPressGuard security research pipeline
+# Reference: WORDFENCE_SCOPE.md
+
+program:
+  name: "Wordfence Bug Bounty Program"
+  platform: "wordfence"
+  researcher_tier: "standard"  # standard, resourceful, or 1337
+
+# Target criteria for plugin selection
+target_criteria:
+  repositories:
+    - type: "wordpress_plugin"
+      source: "wordpress.org"
+    - type: "wordpress_theme"
+      source: "wordpress.org"
+
+  # Premium plugins/themes require >=1000 installs for Common/Dangerous vulns
+  premium_min_installs: 1000
+
+# Vulnerability tiers with minimum installation requirements
+vulnerability_tiers:
+  # HIGH THREAT - Highest bounties, lowest install requirement
+  high_threat:
+    min_installs: 25
+    requires_wp_org_listing: true  # Required for 25-999 installs
+    auth_levels:
+      - unauthenticated
+      - subscriber
+      - customer
+    vulnerabilities:
+      - id: arbitrary_php_file_upload
+        name: "Arbitrary PHP File Upload"
+        cwe: "CWE-434"
+        patterns:
+          - "move_uploaded_file"
+          - "wp_handle_upload"
+          - "wp_handle_sideload"
+
+      - id: arbitrary_php_file_read
+        name: "Arbitrary PHP File Read"
+        cwe: "CWE-22"
+        patterns:
+          - "file_get_contents"
+          - "fread"
+          - "readfile"
+          - "include"
+          - "require"
+
+      - id: arbitrary_php_file_deletion
+        name: "Arbitrary PHP File Deletion"
+        cwe: "CWE-73"
+        patterns:
+          - "unlink"
+          - "wp_delete_file"
+          - "rmdir"
+
+      - id: arbitrary_options_update
+        name: "Arbitrary Options Update"
+        cwe: "CWE-284"
+        patterns:
+          - "update_option"
+          - "add_option"
+          - "update_site_option"
+
+      - id: remote_code_execution
+        name: "Remote Code Execution"
+        cwe: "CWE-94"
+        patterns:
+          - "eval"
+          - "create_function"
+          - "assert"
+          - "preg_replace"  # with /e modifier
+          - "call_user_func"
+          - "call_user_func_array"
+          - "array_map"
+          - "array_filter"
+          - "usort"
+
+      - id: authentication_bypass_admin
+        name: "Authentication Bypass to Admin"
+        cwe: "CWE-287"
+        patterns:
+          - "wp_set_auth_cookie"
+          - "wp_signon"
+          - "wp_authenticate"
+          - "is_user_logged_in"
+
+      - id: privilege_escalation_admin
+        name: "Privilege Escalation to Admin"
+        cwe: "CWE-269"
+        patterns:
+          - "wp_update_user"
+          - "add_role"
+          - "add_cap"
+          - "set_role"
+          - "wp_insert_user"
+
+  # COMMON/DANGEROUS - Medium bounties, 500+ installs
+  common_dangerous:
+    min_installs: 500
+    requires_wp_org_listing: true  # Required for 500-999 installs
+    auth_levels:
+      - unauthenticated
+      - subscriber
+      - customer
+    vulnerabilities:
+      - id: stored_xss
+        name: "Stored Cross-Site Scripting"
+        cwe: "CWE-79"
+        patterns:
+          - "echo"
+          - "print"
+          - "_e("
+          - "esc_html"  # check if missing
+          - "esc_attr"  # check if missing
+          - "wp_kses"   # check if missing
+
+      - id: sql_injection
+        name: "SQL Injection"
+        cwe: "CWE-89"
+        patterns:
+          - "$wpdb->query"
+          - "$wpdb->get_var"
+          - "$wpdb->get_row"
+          - "$wpdb->get_col"
+          - "$wpdb->get_results"
+          - "$wpdb->prepare"  # check if missing
+
+  # STANDARD TIER - Standard bounties, 50,000+ installs (for Standard researchers)
+  standard:
+    min_installs: 50000
+    auth_levels:
+      - unauthenticated
+      - subscriber
+      - customer
+    vulnerabilities:
+      - id: reflected_xss
+        name: "Reflected Cross-Site Scripting"
+        cwe: "CWE-79"
+
+      - id: csrf
+        name: "Cross-Site Request Forgery"
+        cwe: "CWE-352"
+        patterns:
+          - "wp_verify_nonce"  # check if missing
+          - "check_admin_referer"  # check if missing
+        notes: "Must have considerable security impact"
+
+      - id: missing_authorization
+        name: "Missing Authorization"
+        cwe: "CWE-862"
+        patterns:
+          - "current_user_can"  # check if missing
+          - "wp_ajax_"
+          - "wp_ajax_nopriv_"
+        notes: "Must lead to considerable security impact"
+
+      - id: arbitrary_content_deletion
+        name: "Arbitrary Content Deletion"
+        cwe: "CWE-284"
+
+      - id: idor
+        name: "Insecure Direct Object Reference"
+        cwe: "CWE-639"
+
+      - id: arbitrary_file_download
+        name: "Arbitrary File Download/Read"
+        cwe: "CWE-22"
+
+      - id: lfi_rfi
+        name: "Local/Remote File Include"
+        cwe: "CWE-98"
+        patterns:
+          - "include"
+          - "include_once"
+          - "require"
+          - "require_once"
+
+      - id: directory_traversal
+        name: "Directory Traversal"
+        cwe: "CWE-22"
+        patterns:
+          - "../"
+          - "..%2f"
+
+      - id: privilege_escalation_non_admin
+        name: "Privilege Escalation to Non-Admin"
+        cwe: "CWE-269"
+
+      - id: authentication_bypass_non_admin
+        name: "Authentication Bypass to Non-Admin"
+        cwe: "CWE-287"
+
+      - id: information_disclosure
+        name: "Information Disclosure"
+        cwe: "CWE-200"
+
+      - id: ssrf
+        name: "Server-Side Request Forgery"
+        cwe: "CWE-918"
+        patterns:
+          - "wp_remote_get"
+          - "wp_remote_post"
+          - "wp_remote_request"
+          - "file_get_contents"
+          - "curl_exec"
+        notes: "Excludes DNS Rebinding attacks"
+
+      - id: php_object_injection
+        name: "PHP Object Injection"
+        cwe: "CWE-502"
+        patterns:
+          - "unserialize"
+          - "maybe_unserialize"
+
+      - id: intentional_backdoor
+        name: "Intentional Backdoors"
+        cwe: "CWE-506"
+        notes: "Backdoors added by developers accessible to threat actors"
+
+# Out of scope vulnerabilities
+out_of_scope:
+  vulnerabilities:
+    - csv_injection
+    - ip_spoofing
+    - plaintext_secrets_storage
+    - waf_bypasses
+    - css_injection
+    - html_injection
+    - dos_minimal_impact
+    - captcha_bypass
+    - cors_issues
+    - unexploitable_dependencies
+    - admin_required  # PR:H
+    - editor_required
+    - shop_manager_required
+    - unfiltered_html_capability
+    - open_redirect
+    - tabnabbing
+    - race_conditions
+    - cache_poisoning
+    - toctou
+    - self_xss
+    - username_enumeration
+    - theoretical_vulnerabilities
+    - missing_headers
+    - clickjacking
+    - ssrf_dns_rebinding
+    - api_key_issues
+    - full_path_disclosure
+    - csrf_no_impact
+    - outdated_browser_only
+    - cvss_below_4
+    - eol_software_only
+    - sql_injection_no_magic_quotes
+    - local_access_required
+    - admin_grant_required
+    - excessive_bruteforce
+    - embedded_scripts_upload
+    - double_extension_upload
+    - non_sensitive_file_exposure
+    - protected_post_access
+
+# Excluded vendors (have their own bug bounty programs)
+excluded_vendors:
+  - name: "WordPress Core"
+    reason: "Has its own Bug Bounty Program"
+  - name: "Automattic"
+    reason: "Has its own Bug Bounty Program"
+    products:
+      - "jetpack"
+      - "woocommerce"
+      - "akismet"
+  - name: "Facebook"
+    reason: "Has its own Bug Bounty Program"
+  - name: "Google"
+    reason: "Has its own Bug Bounty Program"
+    products:
+      - "site-kit-by-google"
+  - name: "Siteground"
+    reason: "Has its own Bug Bounty Program"
+  - name: "Yoast"
+    reason: "Has its own Bug Bounty Program"
+    products:
+      - "wordpress-seo"
+      - "yoast-seo-premium"
+
+# Additional exclusions
+exclusions:
+  - "Plugins or Themes closed to downloads at time of submission"
+  - "External web services not run locally"
+
+# CVSS requirements
+cvss:
+  minimum_score: 4.0
+  version: "3.1"
+
+# Authentication levels (in order of privilege, low to high)
+auth_levels:
+  in_scope:
+    - id: unauthenticated
+      name: "Unauthenticated"
+      description: "No login required"
+      cvss_pr: "N"
+    - id: subscriber
+      name: "Subscriber"
+      description: "WordPress default minimal role"
+      cvss_pr: "L"
+    - id: customer
+      name: "Customer"
+      description: "WooCommerce customer role"
+      cvss_pr: "L"
+
+  out_of_scope:
+    - id: contributor
+      name: "Contributor"
+      description: "Can write but not publish"
+      cvss_pr: "L"
+    - id: author
+      name: "Author"
+      description: "Can publish own posts"
+      cvss_pr: "L"
+    - id: editor
+      name: "Editor"
+      description: "Can manage all content"
+      cvss_pr: "H"
+    - id: shop_manager
+      name: "Shop Manager"
+      description: "WooCommerce management role"
+      cvss_pr: "H"
+    - id: administrator
+      name: "Administrator"
+      description: "Full site control"
+      cvss_pr: "H"
+
+# wpguard integration commands
+wpguard_commands:
+  search_high_threat: "wpguard search \"{query}\" --min-installs 25"
+  search_common: "wpguard search \"{query}\" --min-installs 500"
+  search_standard: "wpguard search \"{query}\" --min-installs 50000"
+  download: "wpguard download {slug} --svn --extract"
+  plugin_info: "wpguard info {slug}"
+  watch_add: "wpguard watch add {slug}"
