@@ -18,6 +18,7 @@ from wpguard.config import (
     get_discord_webhook,
 )
 from wpguard.core.downloader import PluginDownloader, SVNClient
+from wpguard.core.init import initialize_research_project
 from wpguard.core.watcher import PluginWatcher
 from wpguard.utils.helpers import parse_duration
 
@@ -116,6 +117,32 @@ def cmd_download(args: argparse.Namespace) -> int:
     print(f"\n[+] Download complete. Files saved to: {plugins_dir}")
     print(f"    Structure: {plugins_dir}/<plugin>/{{zip,extracted,svn}}/")
     return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Initialize a research project with agent instructions."""
+    result = initialize_research_project(args.directory)
+
+    if result["success"]:
+        print(f"\n[+] Research project initialized: {result['path']}")
+        print("\n[*] Created structure:")
+        print(f"    CLAUDE.md          - Agent instructions")
+        print(f"    .claude/commands/  - Slash commands")
+        print(f"    targets/           - Plugin source code")
+        print(f"    reports/           - Findings and PoCs")
+        print(f"    state.json         - Scan state tracking")
+        print(f"    findings.json      - Vulnerability findings")
+        print("\n[*] Available slash commands:")
+        for cmd in result["structure"]["commands"]:
+            print(f"    {cmd}")
+        print(f"\n[*] Next steps:")
+        print(f"    cd {result['path']}")
+        print(f"    claude  # Start Claude Code in the project directory")
+        print(f"    /target-research  # Begin target discovery")
+        return 0
+    else:
+        print(f"[ERROR] {result['message']}")
+        return 1
 
 
 def cmd_svn_diff(args: argparse.Namespace) -> int:
@@ -721,6 +748,10 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Initialize a new research project
+  wpguard init autoresearch
+  wpguard init /tmp/my-research
+
   # Download top 10 plugins with 100k+ installs
   wpguard download --min-installs 100000 --count 10
 
@@ -816,6 +847,18 @@ Examples:
         help="Browse category filter",
     )
     dl_parser.set_defaults(func=cmd_download)
+
+    # Init command
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize a research project with agent instructions",
+        description="Create a new security research project with CLAUDE.md, slash commands, and directory structure for Wordfence Bug Bounty research.",
+    )
+    init_parser.add_argument(
+        "directory",
+        help="Directory to initialize (e.g., 'autoresearch' or '/tmp/my-research')",
+    )
+    init_parser.set_defaults(func=cmd_init)
 
     # SVN subcommands
     svn_parser = subparsers.add_parser("svn", help="SVN operations for change tracking")

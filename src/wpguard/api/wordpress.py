@@ -2,6 +2,7 @@
 WordPress Plugin API client.
 """
 
+import sys
 import time
 from typing import Callable
 
@@ -44,9 +45,9 @@ class WordPressPluginAPI:
             if data and "slug" in data:
                 return PluginInfo.from_api_response(data)
         except requests.RequestException as e:
-            print(f"[ERROR] Failed to get plugin info for {slug}: {e}")
+            print(f"[ERROR] Failed to get plugin info for {slug}: {e}", file=sys.stderr)
         except (ValueError, KeyError) as e:
-            print(f"[ERROR] Invalid response for plugin {slug}: {e}")
+            print(f"[ERROR] Invalid response for plugin {slug}: {e}", file=sys.stderr)
 
         return None
 
@@ -98,9 +99,9 @@ class WordPressPluginAPI:
 
             return plugins, total_pages
         except requests.RequestException as e:
-            print(f"[ERROR] Failed to query plugins: {e}")
+            print(f"[ERROR] Failed to query plugins: {e}", file=sys.stderr)
         except (ValueError, KeyError) as e:
-            print(f"[ERROR] Invalid response from API: {e}")
+            print(f"[ERROR] Invalid response from API: {e}", file=sys.stderr)
 
         return [], 0
 

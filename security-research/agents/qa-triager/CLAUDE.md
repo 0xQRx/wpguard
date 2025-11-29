@@ -393,3 +393,78 @@ claude "Pre-submission checklist for ./reports/example-plugin/"
 | SSRF | 50,000 | Unauth/Sub | Standard |
 | Object Injection | 50,000 | Unauth/Sub | Standard |
 | Any | Any | Admin/Editor | NO |
+
+---
+
+## wpguard MCP Tools
+
+Use these MCP tools for validation and notification:
+
+### Scope Validation
+```python
+# Automated bounty eligibility check
+wpguard_scope_check_finding(
+    plugin_slug="example-plugin",
+    active_installs=50000,
+    vuln_type="sql_injection",
+    auth_level="subscriber",
+    cvss_score=6.5
+)
+```
+
+### Finding Management
+```python
+# Get finding for validation
+wpguard_finding_get(finding_id="abc123")
+
+# Update finding after validation
+wpguard_finding_update(
+    finding_id="abc123",
+    status="validated",  # or "rejected", "duplicate"
+    validation_notes="PoC successfully reproduced. CVSS score verified."
+)
+
+# Get all findings requiring validation
+wpguard_finding_list(status="draft")
+
+# Get statistics
+wpguard_finding_stats()
+```
+
+### WordPress Sandbox Testing
+```python
+# Check sandbox is ready for reproduction
+wpguard_sandbox_status()
+
+# Install vulnerable plugin version
+wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3")
+
+# Execute PoC verification
+wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "vulnerable_action", "param": "payload"},
+    auth="subscriber"
+)
+
+# Cleanup after validation
+wpguard_sandbox_uninstall_plugin(slug="example-plugin")
+```
+
+### Discord Notifications
+```python
+# Notify on validated finding (ready for submission)
+wpguard_discord_notify_finding(
+    finding_id="abc123",
+    title_prefix="VALIDATED: ",
+    mention="@everyone"
+)
+
+# Send summary of all validated findings
+wpguard_discord_notify_summary(
+    title="Daily Security Research Summary",
+    status_filter="validated"
+)
+
+# Send simple status message
+wpguard_discord_send_message(message="QA validation complete for example-plugin")

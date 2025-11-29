@@ -5,7 +5,7 @@ Discord webhook notification handler.
 import requests
 
 from wpguard.config import USER_AGENT
-from wpguard.core.models import ChangeReport
+from wpguard.core.models import ChangeReport, Finding
 
 
 class DiscordNotifier:
@@ -177,3 +177,209 @@ class DiscordNotifier:
             True if webhook is working
         """
         return self.send_message("WordPressGuard webhook test successful!")
+
+    # Finding Notification Methods
+
+    # Severity colors for findings
+    SEVERITY_COLORS = {
+        "Critical": 0xFF0000,  # Red
+        "High": 0xFF6600,  # Orange
+        "Medium": 0xFFCC00,  # Yellow
+        "Low": 0x00CC00,  # Green
+    }
+
+    def _build_finding_embed(self, finding: Finding, title_prefix: str = "") -> dict:
+        """
+        Build Discord embed from a security finding.
+
+        Args:
+            finding: Finding to format
+            title_prefix: Optional prefix for title (e.g., "VALIDATED: ")
+
+        Returns:
+            Discord embed dictionary
+        """
+        color = self.SEVERITY_COLORS.get(finding.severity, self.EMBED_COLOR)
+
+        fields = [
+            {
+                "name": "Plugin",
+                "value": f"`{finding.plugin_slug}` v{finding.plugin_version}",
+                "inline": True,
+            },
+            {
+                "name": "Active Installs",
+                "value": f"{finding.active_installs:,}",
+                "inline": True,
+            },
+            {
+                "name": "Vulnerability Type",
+                "value": finding.vuln_type.replace("_", " ").title(),
+                "inline": True,
+            },
+            {
+                "name": "Auth Required",
+                "value": finding.auth_level.title(),
+                "inline": True,
+            },
+            {
+                "name": "CVSS Score",
+                "value": f"**{finding.cvss_score}** ({finding.severity})\n`{finding.cvss_vector}`",
+                "inline": True,
+            },
+            {
+                "name": "Tier",
+                "value": finding.tier.replace("_", " ").title() if finding.tier else "N/A",
+                "inline": True,
+            },
+            {
+                "name": "Affected File",
+                "value": f"`{finding.affected_file}`",
+                "inline": False,
+            },
+        ]
+
+        if finding.affected_function:
+            fields.append({
+                "name": "Function / Line",
+                "value": f"`{finding.affected_function}` (line {finding.affected_line})",
+                "inline": False,
+            })
+
+        if finding.description:
+            # Truncate description if too long
+            desc = finding.description[:500]
+            if len(finding.description) > 500:
+                desc += "..."
+            fields.append({
+                "name": "Description",
+                "value": desc,
+                "inline": False,
+            })
+
+        title = f"{title_prefix}{finding.title}"
+
+        return {
+            "title": title,
+            "description": f"**Finding ID:** `{finding.id}` | **Status:** {finding.status.upper()}",
+            "color": color,
+            "fields": fields,
+            "footer": {"text": "WordPressGuard Security Research"},
+            "timestamp": finding.created_at,
+        }
+
+    def send_finding(
+        self,
+        finding: Finding,
+        title_prefix: str = "",
+        mention: str | None = None,
+        timeout: int = 10,
+    ) -> bool:
+        """
+        Send a finding notification to Discord.
+
+        Args:
+            finding: Finding to send
+            title_prefix: Optional title prefix (e.g., "NEW: ", "VALIDATED: ")
+            mention: Optional mention (e.g., "@everyone", "<@user_id>")
+            timeout: Request timeout in seconds
+
+        Returns:
+            True if sent successfully
+        """
+        payload = {
+            "embeds": [self._build_finding_embed(finding, title_prefix)],
+        }
+
+        if mention:
+            payload["content"] = mention
+
+        try:
+            response = self.session.post(
+                self.webhook_url, json=payload, timeout=timeout
+            )
+            response.raise_for_status()
+            print(f"[+] Discord finding notification sent for {finding.id}")
+            return True
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to send Discord finding notification: {e}")
+            return False
+
+    def send_validated_finding(self, finding: Finding, mention: str | None = "@everyone") -> bool:
+        """
+        Send a validated finding notification (ready for submission).
+
+        Args:
+            finding: Validated finding to send
+            mention: Optional mention for alerting
+
+        Returns:
+            True if sent successfully
+        """
+        return self.send_finding(finding, title_prefix="VALIDATED: ", mention=mention)
+
+    def send_finding_summary(
+        self,
+        findings: list[Finding],
+        title: str = "Security Research Summary",
+        timeout: int = 10,
+    ) -> bool:
+        """
+        Send a summary of multiple findings.
+
+        Args:
+            findings: List of findings to summarize
+            title: Summary title
+            timeout: Request timeout
+
+        Returns:
+            True if sent successfully
+        """
+        if not findings:
+            return True
+
+        # Group by severity
+        by_severity = {}
+        for f in findings:
+            sev = f.severity
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+
+        # Group by status
+        by_status = {}
+        for f in findings:
+            by_status[f.status] = by_status.get(f.status, 0) + 1
+
+        # Build summary
+        severity_text = " | ".join(f"**{k}**: {v}" for k, v in by_severity.items())
+        status_text = " | ".join(f"**{k.title()}**: {v}" for k, v in by_status.items())
+
+        # Top findings by CVSS
+        top_findings = sorted(findings, key=lambda f: f.cvss_score, reverse=True)[:5]
+        top_text = "\n".join(
+            f"• `{f.id}` - {f.plugin_slug} - {f.vuln_type} (CVSS: {f.cvss_score})"
+            for f in top_findings
+        )
+
+        embed = {
+            "title": title,
+            "description": f"**Total Findings:** {len(findings)}",
+            "color": self.EMBED_COLOR,
+            "fields": [
+                {"name": "By Severity", "value": severity_text, "inline": False},
+                {"name": "By Status", "value": status_text, "inline": False},
+                {"name": "Top Findings", "value": top_text, "inline": False},
+            ],
+            "footer": {"text": "WordPressGuard Security Research"},
+        }
+
+        payload = {"embeds": [embed]}
+
+        try:
+            response = self.session.post(
+                self.webhook_url, json=payload, timeout=timeout
+            )
+            response.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f"[ERROR] Failed to send Discord summary: {e}")
+            return False

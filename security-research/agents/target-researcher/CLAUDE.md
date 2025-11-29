@@ -240,12 +240,48 @@ For each selected target, create:
 ## wpguard MCP Tools Available
 
 When running in Claude Code with MCP, these tools are available:
+
+### Plugin Discovery & Download
 - `wpguard_search` - Search WordPress plugin repository
 - `wpguard_plugin_info` - Get detailed plugin information
 - `wpguard_download` - Download a plugin
 - `wpguard_bulk_download` - Download multiple plugins
 - `wpguard_svn_log` - View SVN commit history
 - `wpguard_plugin_versions` - List all available versions
+
+### Scope Validation
+```python
+# Check if plugin is eligible for bounty research
+wpguard_scope_check_plugin(
+    plugin_slug="example-plugin",
+    active_installs=50000,
+    author="Some Author"
+)
+
+# Get all in-scope vulnerability types for a given install count
+wpguard_scope_get_vulns(active_installs=500)
+```
+
+### Scan State Management
+```python
+# Add plugins to pending scan queue
+wpguard_scan_state(add_pending=["plugin-a", "plugin-b", "plugin-c"])
+
+# Mark current target
+wpguard_scan_state(current_plugin="example-plugin")
+
+# Mark plugin as scanned when complete
+wpguard_scan_state(add_scanned="example-plugin")
+
+# Get current scan state
+wpguard_scan_state()
+```
+
+### Finding Management
+```python
+# List any existing findings for a plugin
+wpguard_finding_list(plugin_slug="example-plugin")
+```
 
 ## Example Commands
 

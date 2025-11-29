@@ -694,6 +694,94 @@ if __name__ == "__main__":
 
 ---
 
+## wpguard MCP Tools
+
+Use these MCP tools to support your analysis and persist findings:
+
+### Scope Validation
+```python
+# Check if plugin is in scope for bounty
+wpguard_scope_check_plugin(plugin_slug="example-plugin", active_installs=50000)
+
+# Check if a finding is eligible for submission
+wpguard_scope_check_finding(
+    plugin_slug="example-plugin",
+    active_installs=50000,
+    vuln_type="sql_injection",
+    auth_level="subscriber",
+    cvss_score=6.5
+)
+
+# Get all in-scope vulnerability types for install count
+wpguard_scope_get_vulns(active_installs=500)
+```
+
+### Finding Persistence
+```python
+# Create a new finding
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.2.3",
+    active_installs=50000,
+    vuln_type="sql_injection",
+    title="SQL Injection in search_handler()",
+    description="User input directly concatenated in SQL query...",
+    auth_level="subscriber",
+    cvss_score=6.5,
+    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+    affected_file="includes/ajax.php",
+    affected_function="search_handler",
+    affected_line=145,
+    tier="common_dangerous"
+)
+
+# Update finding status after validation
+wpguard_finding_update(finding_id="abc123", status="validated", validation_notes="PoC confirmed")
+
+# List all findings
+wpguard_finding_list(status="draft")
+```
+
+### WordPress Sandbox Testing
+```python
+# Check sandbox connectivity
+wpguard_sandbox_status()
+
+# Install plugin for PoC testing
+wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3", activate=True)
+
+# Execute HTTP request against sandbox
+wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "vulnerable_action", "param": "payload"},
+    auth="subscriber"
+)
+
+# Get nonce for authenticated requests
+wpguard_sandbox_get_nonce(action="my_nonce_action", auth="subscriber")
+
+# Run WP-CLI command
+wpguard_sandbox_wp_cli(command="plugin list --format=json")
+
+# Uninstall plugin after testing
+wpguard_sandbox_uninstall_plugin(slug="example-plugin")
+```
+
+### Scan State Management
+```python
+# Update scan progress
+wpguard_scan_state(current_plugin="example-plugin")
+
+# Mark plugin as scanned
+wpguard_scan_state(add_scanned="example-plugin")
+
+# Add plugins to pending queue
+wpguard_scan_state(add_pending=["plugin-a", "plugin-b"])
+```
+
+---
+
 ## Commands
 
 ```bash

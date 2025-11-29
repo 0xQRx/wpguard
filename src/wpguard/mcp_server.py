@@ -28,6 +28,11 @@ from wpguard.config import (
 )
 from wpguard.core.downloader import PluginDownloader, SVNClient
 from wpguard.core.watcher import PluginWatcher
+from wpguard.core.sandbox import WordPressSandbox
+from wpguard.core.scope_validator import WorkfenceScopeValidator
+from wpguard.core.findings import FindingsManager
+from wpguard.notifications.discord import DiscordNotifier
+from wpguard.config import DISCORD_WEBHOOK_URL
 
 
 # Initialize the MCP server
@@ -332,6 +337,396 @@ async def list_tools() -> list[Tool]:
                 "required": [],
             },
         ),
+        # WordPress Sandbox Tools
+        Tool(
+            name="wpguard_sandbox_status",
+            description="Check WordPress sandbox connectivity (HTTP, Docker container, WP-CLI)",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_install_plugin",
+            description="Install a plugin in the WordPress sandbox for PoC testing",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Plugin slug from WordPress.org",
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Specific version to install (optional, defaults to latest)",
+                    },
+                    "activate": {
+                        "type": "boolean",
+                        "description": "Activate the plugin after installation (default: true)",
+                        "default": True,
+                    },
+                    "from_zip": {
+                        "type": "string",
+                        "description": "Install from local ZIP file path instead of slug",
+                    },
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_uninstall_plugin",
+            description="Uninstall a plugin from the WordPress sandbox",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Plugin slug to uninstall",
+                    },
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_request",
+            description="Execute an HTTP request against the WordPress sandbox (for PoC testing)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method (GET, POST, PUT, DELETE)",
+                        "enum": ["GET", "POST", "PUT", "DELETE"],
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "URL path (e.g., '/wp-admin/admin-ajax.php')",
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Request data (POST body or query params)",
+                    },
+                    "auth": {
+                        "type": "string",
+                        "description": "Role to authenticate as (subscriber, contributor, author, admin) or null for unauthenticated",
+                        "enum": ["subscriber", "contributor", "author", "admin"],
+                    },
+                    "headers": {
+                        "type": "object",
+                        "description": "Additional HTTP headers",
+                    },
+                },
+                "required": ["method", "path"],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_wp_cli",
+            description="Execute a WP-CLI command in the WordPress sandbox container",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "WP-CLI command without 'wp' prefix (e.g., 'plugin list', 'user list')",
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Command timeout in seconds (default: 60)",
+                        "default": 60,
+                    },
+                },
+                "required": ["command"],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_get_nonce",
+            description="Get a WordPress nonce for an action (needed for protected AJAX calls)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Nonce action name",
+                    },
+                    "auth": {
+                        "type": "string",
+                        "description": "Role to authenticate as for nonce generation",
+                        "enum": ["subscriber", "contributor", "author", "admin"],
+                    },
+                },
+                "required": ["action"],
+            },
+        ),
+        # Wordfence Scope Validation Tools
+        Tool(
+            name="wpguard_scope_check_plugin",
+            description="Check if a plugin is eligible for Wordfence bounty research (vendor exclusion, install count, availability)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {
+                        "type": "string",
+                        "description": "Plugin slug to check",
+                    },
+                    "active_installs": {
+                        "type": "integer",
+                        "description": "Number of active installations",
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Plugin author name (for vendor exclusion check)",
+                    },
+                    "is_available": {
+                        "type": "boolean",
+                        "description": "Whether plugin is available for download (default: true)",
+                        "default": True,
+                    },
+                },
+                "required": ["plugin_slug", "active_installs"],
+            },
+        ),
+        Tool(
+            name="wpguard_scope_check_finding",
+            description="Validate if a vulnerability finding is eligible for Wordfence bounty submission",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {
+                        "type": "string",
+                        "description": "Plugin slug",
+                    },
+                    "active_installs": {
+                        "type": "integer",
+                        "description": "Number of active installations",
+                    },
+                    "vuln_type": {
+                        "type": "string",
+                        "description": "Vulnerability type (e.g., 'sql_injection', 'stored_xss', 'rce')",
+                    },
+                    "auth_level": {
+                        "type": "string",
+                        "description": "Required authentication level",
+                        "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
+                    },
+                    "cvss_score": {
+                        "type": "number",
+                        "description": "CVSS 3.1 score",
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Plugin author name",
+                    },
+                },
+                "required": ["plugin_slug", "active_installs", "vuln_type", "auth_level", "cvss_score"],
+            },
+        ),
+        Tool(
+            name="wpguard_scope_get_vulns",
+            description="Get all in-scope vulnerability types for a given install count",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "active_installs": {
+                        "type": "integer",
+                        "description": "Number of active installations",
+                    },
+                },
+                "required": ["active_installs"],
+            },
+        ),
+        # Finding Persistence Tools
+        Tool(
+            name="wpguard_finding_create",
+            description="Create a new security vulnerability finding",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {"type": "string", "description": "Plugin slug"},
+                    "plugin_version": {"type": "string", "description": "Plugin version"},
+                    "active_installs": {"type": "integer", "description": "Active installations"},
+                    "vuln_type": {"type": "string", "description": "Vulnerability type (e.g., sql_injection, stored_xss)"},
+                    "title": {"type": "string", "description": "Finding title"},
+                    "description": {"type": "string", "description": "Detailed description"},
+                    "auth_level": {
+                        "type": "string",
+                        "description": "Required auth level",
+                        "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
+                    },
+                    "cvss_score": {"type": "number", "description": "CVSS 3.1 score"},
+                    "cvss_vector": {"type": "string", "description": "CVSS vector string"},
+                    "affected_file": {"type": "string", "description": "Path to affected file"},
+                    "affected_function": {"type": "string", "description": "Affected function name"},
+                    "affected_line": {"type": "integer", "description": "Line number"},
+                    "poc_path": {"type": "string", "description": "Path to PoC script"},
+                    "tier": {"type": "string", "description": "Bounty tier"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": ["plugin_slug", "plugin_version", "active_installs", "vuln_type", "title", "description", "auth_level", "cvss_score", "cvss_vector", "affected_file"],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_update",
+            description="Update an existing finding (status, validation notes, etc.)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "finding_id": {"type": "string", "description": "Finding ID to update"},
+                    "status": {
+                        "type": "string",
+                        "description": "New status",
+                        "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
+                    },
+                    "validation_notes": {"type": "string", "description": "Validation notes"},
+                    "submission_id": {"type": "string", "description": "Submission ID if submitted"},
+                    "poc_path": {"type": "string", "description": "Path to PoC script"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": ["finding_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_get",
+            description="Get a finding by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "finding_id": {"type": "string", "description": "Finding ID"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": ["finding_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_list",
+            description="List findings with optional filters",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {"type": "string", "description": "Filter by plugin"},
+                    "status": {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
+                    },
+                    "vuln_type": {"type": "string", "description": "Filter by vulnerability type"},
+                    "min_cvss": {"type": "number", "description": "Minimum CVSS score"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_delete",
+            description="Delete a finding",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "finding_id": {"type": "string", "description": "Finding ID to delete"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": ["finding_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_stats",
+            description="Get statistics about all findings",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_scan_state",
+            description="Get or update scan state (current plugin, pending plugins, etc.)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "current_plugin": {"type": "string", "description": "Set currently scanning plugin"},
+                    "add_scanned": {"type": "string", "description": "Add plugin to scanned list"},
+                    "add_pending": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Add plugins to pending list",
+                    },
+                    "remove_pending": {"type": "string", "description": "Remove plugin from pending"},
+                    "clear_pending": {"type": "boolean", "description": "Clear all pending plugins"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": [],
+            },
+        ),
+        # Discord Notification Tools
+        Tool(
+            name="wpguard_discord_notify_finding",
+            description="Send a finding notification to Discord (use when a finding is validated and ready for review)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "finding_id": {"type": "string", "description": "Finding ID to notify about"},
+                    "title_prefix": {
+                        "type": "string",
+                        "description": "Optional title prefix (e.g., 'NEW: ', 'VALIDATED: ')",
+                    },
+                    "mention": {
+                        "type": "string",
+                        "description": "Optional mention (e.g., '@everyone', '<@user_id>')",
+                    },
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": ["finding_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_discord_notify_summary",
+            description="Send a summary of findings to Discord",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Summary title (default: 'Security Research Summary')",
+                    },
+                    "status_filter": {
+                        "type": "string",
+                        "description": "Filter findings by status",
+                        "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
+                    },
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_discord_send_message",
+            description="Send a simple text message to Discord",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Message content to send"},
+                },
+                "required": ["message"],
+            },
+        ),
+        # Project Initialization
+        Tool(
+            name="wpguard_init_research",
+            description="Initialize a new wpguard research project with agent instructions and directory structure. Creates CLAUDE.md, slash commands, and folders for targets/reports.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Directory to create research project in (default: ./wpguard-research)",
+                        "default": "./wpguard-research",
+                    },
+                },
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -417,6 +812,151 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_state_info":
         return await _state_info(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
+
+    # WordPress Sandbox Tools
+    elif name == "wpguard_sandbox_status":
+        return await _sandbox_status()
+
+    elif name == "wpguard_sandbox_install_plugin":
+        return await _sandbox_install_plugin(
+            arguments["slug"],
+            arguments.get("version"),
+            arguments.get("activate", True),
+            arguments.get("from_zip"),
+        )
+
+    elif name == "wpguard_sandbox_uninstall_plugin":
+        return await _sandbox_uninstall_plugin(arguments["slug"])
+
+    elif name == "wpguard_sandbox_request":
+        return await _sandbox_request(
+            arguments["method"],
+            arguments["path"],
+            arguments.get("data"),
+            arguments.get("auth"),
+            arguments.get("headers"),
+        )
+
+    elif name == "wpguard_sandbox_wp_cli":
+        return await _sandbox_wp_cli(
+            arguments["command"],
+            arguments.get("timeout", 60),
+        )
+
+    elif name == "wpguard_sandbox_get_nonce":
+        return await _sandbox_get_nonce(
+            arguments["action"],
+            arguments.get("auth"),
+        )
+
+    # Wordfence Scope Validation Tools
+    elif name == "wpguard_scope_check_plugin":
+        return await _scope_check_plugin(
+            arguments["plugin_slug"],
+            arguments["active_installs"],
+            arguments.get("author"),
+            arguments.get("is_available", True),
+        )
+
+    elif name == "wpguard_scope_check_finding":
+        return await _scope_check_finding(
+            arguments["plugin_slug"],
+            arguments["active_installs"],
+            arguments["vuln_type"],
+            arguments["auth_level"],
+            arguments["cvss_score"],
+            arguments.get("author"),
+        )
+
+    elif name == "wpguard_scope_get_vulns":
+        return await _scope_get_vulns(arguments["active_installs"])
+
+    # Finding Persistence Tools
+    elif name == "wpguard_finding_create":
+        return await _finding_create(
+            arguments["plugin_slug"],
+            arguments["plugin_version"],
+            arguments["active_installs"],
+            arguments["vuln_type"],
+            arguments["title"],
+            arguments["description"],
+            arguments["auth_level"],
+            arguments["cvss_score"],
+            arguments["cvss_vector"],
+            arguments["affected_file"],
+            arguments.get("affected_function", ""),
+            arguments.get("affected_line", 0),
+            arguments.get("poc_path", ""),
+            arguments.get("tier", ""),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_update":
+        return await _finding_update(
+            arguments["finding_id"],
+            arguments.get("status"),
+            arguments.get("validation_notes"),
+            arguments.get("submission_id"),
+            arguments.get("poc_path"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_get":
+        return await _finding_get(
+            arguments["finding_id"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_list":
+        return await _finding_list(
+            arguments.get("plugin_slug"),
+            arguments.get("status"),
+            arguments.get("vuln_type"),
+            arguments.get("min_cvss"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_delete":
+        return await _finding_delete(
+            arguments["finding_id"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_stats":
+        return await _finding_stats(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
+
+    elif name == "wpguard_scan_state":
+        return await _scan_state(
+            arguments.get("current_plugin"),
+            arguments.get("add_scanned"),
+            arguments.get("add_pending"),
+            arguments.get("remove_pending"),
+            arguments.get("clear_pending", False),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    # Discord Notification Tools
+    elif name == "wpguard_discord_notify_finding":
+        return await _discord_notify_finding(
+            arguments["finding_id"],
+            arguments.get("title_prefix", ""),
+            arguments.get("mention"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_discord_notify_summary":
+        return await _discord_notify_summary(
+            arguments.get("title", "Security Research Summary"),
+            arguments.get("status_filter"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_discord_send_message":
+        return await _discord_send_message(arguments["message"])
+
+    # Project Initialization
+    elif name == "wpguard_init_research":
+        return await _init_research(arguments.get("output_dir", "./wpguard-research"))
 
     else:
         raise ValueError(f"Unknown tool: {name}")
@@ -796,6 +1336,577 @@ def _state_info_sync(output_dir: str) -> dict[str, Any]:
 async def _state_info(output_dir: str) -> dict[str, Any]:
     """Get current state information."""
     return await run_in_executor(_state_info_sync, output_dir)
+
+
+# WordPress Sandbox Tool Implementations
+
+# Singleton sandbox instance for session management
+_sandbox_instance: WordPressSandbox | None = None
+
+
+def _get_sandbox() -> WordPressSandbox:
+    """Get or create the sandbox instance."""
+    global _sandbox_instance
+    if _sandbox_instance is None:
+        _sandbox_instance = WordPressSandbox()
+    return _sandbox_instance
+
+
+def _sandbox_status_sync() -> dict[str, Any]:
+    """Check sandbox status (sync version)."""
+    sandbox = _get_sandbox()
+    status = sandbox.check_connection()
+
+    # Add WordPress info if accessible
+    if status["all_ok"]:
+        wp_info = sandbox.get_wordpress_info()
+        status["wordpress_version"] = wp_info.get("version")
+        status["site_url"] = wp_info.get("site_url")
+
+        # Get installed plugins
+        plugins = sandbox.get_plugin_list()
+        status["installed_plugins"] = len(plugins)
+        status["active_plugins"] = len([p for p in plugins if p.get("status") == "active"])
+
+    return status
+
+
+async def _sandbox_status() -> dict[str, Any]:
+    """Check sandbox status."""
+    return await run_in_executor(_sandbox_status_sync)
+
+
+def _sandbox_install_plugin_sync(
+    slug: str,
+    version: str | None,
+    activate: bool,
+    from_zip: str | None,
+) -> dict[str, Any]:
+    """Install plugin in sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.install_plugin(
+        slug=slug,
+        version=version,
+        activate=activate,
+        from_zip=from_zip,
+    )
+
+
+async def _sandbox_install_plugin(
+    slug: str,
+    version: str | None,
+    activate: bool,
+    from_zip: str | None,
+) -> dict[str, Any]:
+    """Install plugin in sandbox."""
+    return await run_in_executor(
+        _sandbox_install_plugin_sync, slug, version, activate, from_zip
+    )
+
+
+def _sandbox_uninstall_plugin_sync(slug: str) -> dict[str, Any]:
+    """Uninstall plugin from sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.uninstall_plugin(slug)
+
+
+async def _sandbox_uninstall_plugin(slug: str) -> dict[str, Any]:
+    """Uninstall plugin from sandbox."""
+    return await run_in_executor(_sandbox_uninstall_plugin_sync, slug)
+
+
+def _sandbox_request_sync(
+    method: str,
+    path: str,
+    data: dict[str, Any] | None,
+    auth: str | None,
+    headers: dict[str, str] | None,
+) -> dict[str, Any]:
+    """Execute HTTP request against sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.request(
+        method=method,
+        path=path,
+        data=data,
+        auth=auth,
+        headers=headers,
+    )
+
+
+async def _sandbox_request(
+    method: str,
+    path: str,
+    data: dict[str, Any] | None,
+    auth: str | None,
+    headers: dict[str, str] | None,
+) -> dict[str, Any]:
+    """Execute HTTP request against sandbox."""
+    return await run_in_executor(
+        _sandbox_request_sync, method, path, data, auth, headers
+    )
+
+
+def _sandbox_wp_cli_sync(command: str, timeout: int) -> dict[str, Any]:
+    """Execute WP-CLI command in sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.wp_cli(command, timeout=timeout)
+
+
+async def _sandbox_wp_cli(command: str, timeout: int) -> dict[str, Any]:
+    """Execute WP-CLI command in sandbox."""
+    return await run_in_executor(_sandbox_wp_cli_sync, command, timeout)
+
+
+def _sandbox_get_nonce_sync(action: str, auth: str | None) -> dict[str, Any]:
+    """Get WordPress nonce (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.get_nonce(action=action, auth=auth)
+
+
+async def _sandbox_get_nonce(action: str, auth: str | None) -> dict[str, Any]:
+    """Get WordPress nonce."""
+    return await run_in_executor(_sandbox_get_nonce_sync, action, auth)
+
+
+# Wordfence Scope Validation Tool Implementations
+
+# Singleton validator instance
+_scope_validator: WorkfenceScopeValidator | None = None
+
+
+def _get_scope_validator() -> WorkfenceScopeValidator:
+    """Get or create the scope validator instance."""
+    global _scope_validator
+    if _scope_validator is None:
+        _scope_validator = WorkfenceScopeValidator()
+    return _scope_validator
+
+
+def _scope_check_plugin_sync(
+    plugin_slug: str,
+    active_installs: int,
+    author: str | None,
+    is_available: bool,
+) -> dict[str, Any]:
+    """Check plugin eligibility (sync version)."""
+    validator = _get_scope_validator()
+    result = validator.validate_plugin_eligibility(
+        plugin_slug=plugin_slug,
+        active_installs=active_installs,
+        author=author,
+        is_available=is_available,
+    )
+    return result.to_dict()
+
+
+async def _scope_check_plugin(
+    plugin_slug: str,
+    active_installs: int,
+    author: str | None,
+    is_available: bool,
+) -> dict[str, Any]:
+    """Check plugin eligibility."""
+    return await run_in_executor(
+        _scope_check_plugin_sync, plugin_slug, active_installs, author, is_available
+    )
+
+
+def _scope_check_finding_sync(
+    plugin_slug: str,
+    active_installs: int,
+    vuln_type: str,
+    auth_level: str,
+    cvss_score: float,
+    author: str | None,
+) -> dict[str, Any]:
+    """Check finding eligibility (sync version)."""
+    validator = _get_scope_validator()
+    result = validator.validate_finding_eligibility(
+        plugin_slug=plugin_slug,
+        active_installs=active_installs,
+        vuln_type=vuln_type,
+        auth_level=auth_level,
+        cvss_score=cvss_score,
+        author=author,
+    )
+    return result.to_dict()
+
+
+async def _scope_check_finding(
+    plugin_slug: str,
+    active_installs: int,
+    vuln_type: str,
+    auth_level: str,
+    cvss_score: float,
+    author: str | None,
+) -> dict[str, Any]:
+    """Check finding eligibility."""
+    return await run_in_executor(
+        _scope_check_finding_sync,
+        plugin_slug,
+        active_installs,
+        vuln_type,
+        auth_level,
+        cvss_score,
+        author,
+    )
+
+
+def _scope_get_vulns_sync(active_installs: int) -> dict[str, Any]:
+    """Get in-scope vulnerabilities (sync version)."""
+    validator = _get_scope_validator()
+    vulns = validator.get_in_scope_vulns_for_installs(active_installs)
+    return {
+        "active_installs": active_installs,
+        "in_scope_vulnerabilities": vulns,
+        "total_vuln_types": sum(len(v) for v in vulns.values()),
+    }
+
+
+async def _scope_get_vulns(active_installs: int) -> dict[str, Any]:
+    """Get in-scope vulnerabilities."""
+    return await run_in_executor(_scope_get_vulns_sync, active_installs)
+
+
+# Finding Persistence Tool Implementations
+
+def _finding_create_sync(
+    plugin_slug: str,
+    plugin_version: str,
+    active_installs: int,
+    vuln_type: str,
+    title: str,
+    description: str,
+    auth_level: str,
+    cvss_score: float,
+    cvss_vector: str,
+    affected_file: str,
+    affected_function: str,
+    affected_line: int,
+    poc_path: str,
+    tier: str,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Create a new finding (sync version)."""
+    manager = FindingsManager(output_dir)
+    finding = manager.create_finding(
+        plugin_slug=plugin_slug,
+        plugin_version=plugin_version,
+        active_installs=active_installs,
+        vuln_type=vuln_type,
+        title=title,
+        description=description,
+        auth_level=auth_level,
+        cvss_score=cvss_score,
+        cvss_vector=cvss_vector,
+        affected_file=affected_file,
+        affected_function=affected_function,
+        affected_line=affected_line,
+        poc_path=poc_path,
+        tier=tier,
+    )
+    return {
+        "success": True,
+        "finding_id": finding.id,
+        "finding": finding.to_dict(),
+    }
+
+
+async def _finding_create(
+    plugin_slug: str,
+    plugin_version: str,
+    active_installs: int,
+    vuln_type: str,
+    title: str,
+    description: str,
+    auth_level: str,
+    cvss_score: float,
+    cvss_vector: str,
+    affected_file: str,
+    affected_function: str,
+    affected_line: int,
+    poc_path: str,
+    tier: str,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Create a new finding."""
+    return await run_in_executor(
+        _finding_create_sync,
+        plugin_slug, plugin_version, active_installs, vuln_type, title,
+        description, auth_level, cvss_score, cvss_vector, affected_file,
+        affected_function, affected_line, poc_path, tier, output_dir,
+    )
+
+
+def _finding_update_sync(
+    finding_id: str,
+    status: str | None,
+    validation_notes: str | None,
+    submission_id: str | None,
+    poc_path: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Update a finding (sync version)."""
+    manager = FindingsManager(output_dir)
+    finding = manager.update_finding(
+        finding_id=finding_id,
+        status=status,
+        validation_notes=validation_notes,
+        submission_id=submission_id,
+        poc_path=poc_path,
+    )
+    if finding:
+        return {"success": True, "finding": finding.to_dict()}
+    return {"success": False, "error": f"Finding {finding_id} not found"}
+
+
+async def _finding_update(
+    finding_id: str,
+    status: str | None,
+    validation_notes: str | None,
+    submission_id: str | None,
+    poc_path: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Update a finding."""
+    return await run_in_executor(
+        _finding_update_sync, finding_id, status, validation_notes,
+        submission_id, poc_path, output_dir,
+    )
+
+
+def _finding_get_sync(finding_id: str, output_dir: str) -> dict[str, Any]:
+    """Get a finding (sync version)."""
+    manager = FindingsManager(output_dir)
+    finding = manager.get_finding(finding_id)
+    if finding:
+        return {"success": True, "finding": finding.to_dict()}
+    return {"success": False, "error": f"Finding {finding_id} not found"}
+
+
+async def _finding_get(finding_id: str, output_dir: str) -> dict[str, Any]:
+    """Get a finding."""
+    return await run_in_executor(_finding_get_sync, finding_id, output_dir)
+
+
+def _finding_list_sync(
+    plugin_slug: str | None,
+    status: str | None,
+    vuln_type: str | None,
+    min_cvss: float | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """List findings (sync version)."""
+    manager = FindingsManager(output_dir)
+    findings = manager.list_findings(
+        plugin_slug=plugin_slug,
+        status=status,
+        vuln_type=vuln_type,
+        min_cvss=min_cvss,
+    )
+    return {
+        "count": len(findings),
+        "findings": [f.to_dict() for f in findings],
+    }
+
+
+async def _finding_list(
+    plugin_slug: str | None,
+    status: str | None,
+    vuln_type: str | None,
+    min_cvss: float | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """List findings."""
+    return await run_in_executor(
+        _finding_list_sync, plugin_slug, status, vuln_type, min_cvss, output_dir,
+    )
+
+
+def _finding_delete_sync(finding_id: str, output_dir: str) -> dict[str, Any]:
+    """Delete a finding (sync version)."""
+    manager = FindingsManager(output_dir)
+    deleted = manager.delete_finding(finding_id)
+    if deleted:
+        return {"success": True, "message": f"Finding {finding_id} deleted"}
+    return {"success": False, "error": f"Finding {finding_id} not found"}
+
+
+async def _finding_delete(finding_id: str, output_dir: str) -> dict[str, Any]:
+    """Delete a finding."""
+    return await run_in_executor(_finding_delete_sync, finding_id, output_dir)
+
+
+def _finding_stats_sync(output_dir: str) -> dict[str, Any]:
+    """Get finding statistics (sync version)."""
+    manager = FindingsManager(output_dir)
+    return manager.get_stats()
+
+
+async def _finding_stats(output_dir: str) -> dict[str, Any]:
+    """Get finding statistics."""
+    return await run_in_executor(_finding_stats_sync, output_dir)
+
+
+def _scan_state_sync(
+    current_plugin: str | None,
+    add_scanned: str | None,
+    add_pending: list[str] | None,
+    remove_pending: str | None,
+    clear_pending: bool,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Get or update scan state (sync version)."""
+    manager = FindingsManager(output_dir)
+
+    # If no updates, just get current state
+    if all(x is None for x in [current_plugin, add_scanned, add_pending, remove_pending]) and not clear_pending:
+        return manager.get_scan_state()
+
+    return manager.update_scan_state(
+        current_plugin=current_plugin,
+        add_scanned=add_scanned,
+        add_pending=add_pending,
+        remove_pending=remove_pending,
+        clear_pending=clear_pending,
+    )
+
+
+async def _scan_state(
+    current_plugin: str | None,
+    add_scanned: str | None,
+    add_pending: list[str] | None,
+    remove_pending: str | None,
+    clear_pending: bool,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Get or update scan state."""
+    return await run_in_executor(
+        _scan_state_sync, current_plugin, add_scanned, add_pending,
+        remove_pending, clear_pending, output_dir,
+    )
+
+
+# Discord Notification Tool Implementations
+
+def _discord_notify_finding_sync(
+    finding_id: str,
+    title_prefix: str,
+    mention: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Send finding notification to Discord (sync version)."""
+    if not DISCORD_WEBHOOK_URL:
+        return {
+            "success": False,
+            "error": "Discord webhook URL not configured. Set DISCORD_WEBHOOK_URL environment variable.",
+        }
+
+    manager = FindingsManager(output_dir)
+    finding = manager.get_finding(finding_id)
+
+    if not finding:
+        return {"success": False, "error": f"Finding {finding_id} not found"}
+
+    notifier = DiscordNotifier(DISCORD_WEBHOOK_URL)
+    success = notifier.send_finding(finding, title_prefix=title_prefix, mention=mention)
+
+    return {
+        "success": success,
+        "finding_id": finding_id,
+        "message": "Notification sent" if success else "Failed to send notification",
+    }
+
+
+async def _discord_notify_finding(
+    finding_id: str,
+    title_prefix: str,
+    mention: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Send finding notification to Discord."""
+    return await run_in_executor(
+        _discord_notify_finding_sync, finding_id, title_prefix, mention, output_dir,
+    )
+
+
+def _discord_notify_summary_sync(
+    title: str,
+    status_filter: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Send findings summary to Discord (sync version)."""
+    if not DISCORD_WEBHOOK_URL:
+        return {
+            "success": False,
+            "error": "Discord webhook URL not configured. Set DISCORD_WEBHOOK_URL environment variable.",
+        }
+
+    manager = FindingsManager(output_dir)
+    findings = manager.list_findings(status=status_filter)
+
+    if not findings:
+        return {
+            "success": True,
+            "message": "No findings to summarize",
+            "findings_count": 0,
+        }
+
+    notifier = DiscordNotifier(DISCORD_WEBHOOK_URL)
+    success = notifier.send_finding_summary(findings, title=title)
+
+    return {
+        "success": success,
+        "findings_count": len(findings),
+        "message": "Summary sent" if success else "Failed to send summary",
+    }
+
+
+async def _discord_notify_summary(
+    title: str,
+    status_filter: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Send findings summary to Discord."""
+    return await run_in_executor(
+        _discord_notify_summary_sync, title, status_filter, output_dir,
+    )
+
+
+def _discord_send_message_sync(message: str) -> dict[str, Any]:
+    """Send simple message to Discord (sync version)."""
+    if not DISCORD_WEBHOOK_URL:
+        return {
+            "success": False,
+            "error": "Discord webhook URL not configured. Set DISCORD_WEBHOOK_URL environment variable.",
+        }
+
+    notifier = DiscordNotifier(DISCORD_WEBHOOK_URL)
+    success = notifier.send_message(message)
+
+    return {
+        "success": success,
+        "message": "Message sent" if success else "Failed to send message",
+    }
+
+
+async def _discord_send_message(message: str) -> dict[str, Any]:
+    """Send simple message to Discord."""
+    return await run_in_executor(_discord_send_message_sync, message)
+
+
+# Project Initialization Tool Implementation
+
+def _init_research_sync(output_dir: str) -> dict[str, Any]:
+    """Initialize research project (sync version)."""
+    from wpguard.core.init import initialize_research_project
+
+    return initialize_research_project(output_dir)
+
+
+async def _init_research(output_dir: str) -> dict[str, Any]:
+    """Initialize research project directory with agent instructions."""
+    return await run_in_executor(_init_research_sync, output_dir)
 
 
 async def run_server():

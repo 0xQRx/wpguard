@@ -4,6 +4,7 @@ Plugin downloading functionality for ZIP and SVN sources.
 
 import shutil
 import subprocess
+import sys
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -312,11 +313,11 @@ class PluginDownloader:
 
         # Skip if already downloaded
         if filepath.exists():
-            print(f"[*] ZIP already exists: {filepath}")
+            print(f"[*] ZIP already exists: {filepath}", file=sys.stderr)
             return filepath
 
         try:
-            print(f"[*] Downloading {plugin.slug} v{target_version}...")
+            print(f"[*] Downloading {plugin.slug} v{target_version}...", file=sys.stderr)
             response = self.session.get(download_url, stream=True, timeout=timeout)
             response.raise_for_status()
 
@@ -330,19 +331,19 @@ class PluginDownloader:
                     downloaded += len(chunk)
                     if total_size:
                         percent = (downloaded / total_size) * 100
-                        print(f"\r[*] Progress: {percent:.1f}%", end="", flush=True)
+                        print(f"\r[*] Progress: {percent:.1f}%", end="", flush=True, file=sys.stderr)
 
             if total_size:
-                print()  # Newline after progress
+                print(file=sys.stderr)  # Newline after progress
 
-            print(f"[+] Downloaded: {filepath}")
+            print(f"[+] Downloaded: {filepath}", file=sys.stderr)
             return filepath
 
         except requests.RequestException as e:
-            print(f"[ERROR] Failed to download {plugin.slug}: {e}")
+            print(f"[ERROR] Failed to download {plugin.slug}: {e}", file=sys.stderr)
             return None
         except IOError as e:
-            print(f"[ERROR] Failed to save {plugin.slug}: {e}")
+            print(f"[ERROR] Failed to save {plugin.slug}: {e}", file=sys.stderr)
             return None
 
     def download_zip_by_url(
@@ -364,11 +365,11 @@ class PluginDownloader:
         filepath = zip_dir / f"{version}.zip"
 
         if filepath.exists():
-            print(f"[*] ZIP already exists: {filepath}")
+            print(f"[*] ZIP already exists: {filepath}", file=sys.stderr)
             return filepath
 
         try:
-            print(f"[*] Downloading {slug} v{version}...")
+            print(f"[*] Downloading {slug} v{version}...", file=sys.stderr)
             response = self.session.get(url, stream=True, timeout=timeout)
             response.raise_for_status()
 
@@ -376,11 +377,11 @@ class PluginDownloader:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            print(f"[+] Downloaded: {filepath}")
+            print(f"[+] Downloaded: {filepath}", file=sys.stderr)
             return filepath
 
         except (requests.RequestException, IOError) as e:
-            print(f"[ERROR] Failed to download {slug}: {e}")
+            print(f"[ERROR] Failed to download {slug}: {e}", file=sys.stderr)
             return None
 
     def download_svn(
@@ -412,22 +413,22 @@ class PluginDownloader:
                 cmd.extend(["-r", revision])
             cmd.extend([svn_url, str(dest_dir)])
 
-            print(f"[*] SVN checkout {slug} ({branch})...")
+            print(f"[*] SVN checkout {slug} ({branch})...", file=sys.stderr)
             subprocess.run(
                 cmd, check=True, capture_output=True, text=True, timeout=300
             )
 
-            print(f"[+] SVN checkout complete: {dest_dir}")
+            print(f"[+] SVN checkout complete: {dest_dir}", file=sys.stderr)
             return dest_dir
 
         except subprocess.CalledProcessError as e:
-            print(f"[ERROR] SVN checkout failed for {slug}: {e.stderr}")
+            print(f"[ERROR] SVN checkout failed for {slug}: {e.stderr}", file=sys.stderr)
             return None
         except subprocess.TimeoutExpired:
-            print(f"[ERROR] SVN checkout timed out for {slug}")
+            print(f"[ERROR] SVN checkout timed out for {slug}", file=sys.stderr)
             return None
         except FileNotFoundError:
-            print("[ERROR] SVN not installed. Install with: apt install subversion")
+            print("[ERROR] SVN not installed. Install with: apt install subversion", file=sys.stderr)
             return None
 
     def download_svn_tag(self, slug: str, tag: str) -> Path | None:
@@ -462,11 +463,11 @@ class PluginDownloader:
 
         # Skip if already extracted
         if version_dir.exists():
-            print(f"[*] Already extracted: {version_dir}")
+            print(f"[*] Already extracted: {version_dir}", file=sys.stderr)
             return self.get_plugin_files_dir(version_dir, slug)
 
         try:
-            print(f"[*] Extracting {zip_path.name}...")
+            print(f"[*] Extracting {zip_path.name}...", file=sys.stderr)
 
             # Extract to temp location first
             temp_extract = extracted_dir / f"_temp_{version}"
@@ -487,14 +488,14 @@ class PluginDownloader:
                 # Multiple items or files - move the whole temp dir
                 shutil.move(str(temp_extract), str(version_dir))
 
-            print(f"[+] Extracted to: {version_dir}")
+            print(f"[+] Extracted to: {version_dir}", file=sys.stderr)
             return version_dir
 
         except zipfile.BadZipFile:
-            print(f"[ERROR] Invalid ZIP file: {zip_path}")
+            print(f"[ERROR] Invalid ZIP file: {zip_path}", file=sys.stderr)
             return None
         except IOError as e:
-            print(f"[ERROR] Failed to extract {zip_path}: {e}")
+            print(f"[ERROR] Failed to extract {zip_path}: {e}", file=sys.stderr)
             return None
 
     def get_plugin_files_dir(self, extracted_path: Path, slug: str) -> Path:

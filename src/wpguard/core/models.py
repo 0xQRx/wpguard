@@ -163,3 +163,101 @@ class ChangeReport:
         )
 
         return "\n".join(lines)
+
+
+@dataclass
+class Finding:
+    """Represents a security vulnerability finding."""
+
+    id: str
+    plugin_slug: str
+    plugin_version: str
+    active_installs: int
+    vuln_type: str
+    title: str
+    description: str
+    auth_level: str
+    cvss_score: float
+    cvss_vector: str
+    affected_file: str
+    affected_function: str = ""
+    affected_line: int = 0
+    poc_path: str = ""
+    status: str = "draft"  # draft, validated, submitted, rejected, duplicate
+    tier: str = ""  # high_threat, common_dangerous, standard
+    created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    validation_notes: str = ""
+    submission_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "id": self.id,
+            "plugin_slug": self.plugin_slug,
+            "plugin_version": self.plugin_version,
+            "active_installs": self.active_installs,
+            "vuln_type": self.vuln_type,
+            "title": self.title,
+            "description": self.description,
+            "auth_level": self.auth_level,
+            "cvss_score": self.cvss_score,
+            "cvss_vector": self.cvss_vector,
+            "affected_file": self.affected_file,
+            "affected_function": self.affected_function,
+            "affected_line": self.affected_line,
+            "poc_path": self.poc_path,
+            "status": self.status,
+            "tier": self.tier,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "validation_notes": self.validation_notes,
+            "submission_id": self.submission_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Finding":
+        """Create Finding from dictionary."""
+        return cls(
+            id=data["id"],
+            plugin_slug=data["plugin_slug"],
+            plugin_version=data["plugin_version"],
+            active_installs=data.get("active_installs", 0),
+            vuln_type=data["vuln_type"],
+            title=data["title"],
+            description=data.get("description", ""),
+            auth_level=data["auth_level"],
+            cvss_score=data["cvss_score"],
+            cvss_vector=data.get("cvss_vector", ""),
+            affected_file=data["affected_file"],
+            affected_function=data.get("affected_function", ""),
+            affected_line=data.get("affected_line", 0),
+            poc_path=data.get("poc_path", ""),
+            status=data.get("status", "draft"),
+            tier=data.get("tier", ""),
+            created_at=data.get("created_at", ""),
+            updated_at=data.get("updated_at", ""),
+            validation_notes=data.get("validation_notes", ""),
+            submission_id=data.get("submission_id", ""),
+        )
+
+    @property
+    def severity(self) -> str:
+        """Get severity based on CVSS score."""
+        if self.cvss_score >= 9.0:
+            return "Critical"
+        elif self.cvss_score >= 7.0:
+            return "High"
+        elif self.cvss_score >= 4.0:
+            return "Medium"
+        else:
+            return "Low"
+
+    @property
+    def is_eligible(self) -> bool:
+        """Check if finding meets basic eligibility criteria."""
+        return (
+            self.cvss_score >= 4.0
+            and self.auth_level in ("unauthenticated", "subscriber", "customer")
+            and self.status not in ("rejected", "duplicate")
+        )

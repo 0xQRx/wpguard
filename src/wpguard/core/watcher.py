@@ -3,6 +3,7 @@ Plugin watching and change detection.
 """
 
 import json
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -85,7 +86,7 @@ class PluginWatcher:
         """
         plugin = self.api.get_plugin_info(slug)
         if not plugin:
-            print(f"[ERROR] Plugin '{slug}' not found")
+            print(f"[ERROR] Plugin '{slug}' not found", file=sys.stderr)
             return False
 
         # Download and compute initial hashes
@@ -108,11 +109,11 @@ class PluginWatcher:
             "added_at": datetime.now(timezone.utc).isoformat(),
         }
         self._save_state()
-        print(f"[+] Added {plugin.name} ({slug}) v{plugin.version} to watchlist")
+        print(f"[+] Added {plugin.name} ({slug}) v{plugin.version} to watchlist", file=sys.stderr)
         if svn_revision:
-            print(f"    SVN revision: r{svn_revision}")
+            print(f"    SVN revision: r{svn_revision}", file=sys.stderr)
         if result.extracted_path:
-            print(f"    Files: {result.extracted_path}")
+            print(f"    Files: {result.extracted_path}", file=sys.stderr)
         return True
 
     def remove_plugin(self, slug: str) -> bool:
@@ -129,10 +130,10 @@ class PluginWatcher:
             name = self.state["plugins"][slug].get("name", slug)
             del self.state["plugins"][slug]
             self._save_state()
-            print(f"[-] Removed {name} ({slug}) from watchlist")
+            print(f"[-] Removed {name} ({slug}) from watchlist", file=sys.stderr)
             return True
         else:
-            print(f"[!] Plugin '{slug}' not in watchlist")
+            print(f"[!] Plugin '{slug}' not in watchlist", file=sys.stderr)
             return False
 
     def list_watched(self) -> list[dict[str, Any]]:
@@ -160,18 +161,18 @@ class PluginWatcher:
         plugins = self.list_watched()
 
         if not plugins:
-            print("[*] No plugins being watched")
+            print("[*] No plugins being watched", file=sys.stderr)
             return
 
-        print("\n[*] Watched Plugins:")
-        print("-" * 70)
+        print("\n[*] Watched Plugins:", file=sys.stderr)
+        print("-" * 70, file=sys.stderr)
         for p in plugins:
             svn_info = f" (r{p['svn_revision']})" if p.get("svn_revision") else ""
-            print(f"  * {p['name']} ({p['slug']}) - v{p['version']}{svn_info}")
-        print("-" * 70)
+            print(f"  * {p['name']} ({p['slug']}) - v{p['version']}{svn_info}", file=sys.stderr)
+        print("-" * 70, file=sys.stderr)
 
         if self.state.get("last_check"):
-            print(f"Last check: {self.state['last_check']}")
+            print(f"Last check: {self.state['last_check']}", file=sys.stderr)
 
     def _compare_versions(
         self, slug: str, old_hashes: dict[str, str], new_dir: Path
@@ -262,7 +263,7 @@ class PluginWatcher:
         with open(report_path, "w") as f:
             json.dump(report_data, f, indent=2)
 
-        print(f"[+] Report saved: {report_path}")
+        print(f"[+] Report saved: {report_path}", file=sys.stderr)
         return report_path
 
     def check_updates(
@@ -288,17 +289,18 @@ class PluginWatcher:
             if progress_callback:
                 progress_callback(f"Checking {slug}...")
             else:
-                print(f"[*] Checking {slug}...")
+                print(f"[*] Checking {slug}...", file=sys.stderr)
 
             current_info = self.api.get_plugin_info(slug)
             if not current_info:
-                print(f"[!] Could not fetch info for {slug}")
+                print(f"[!] Could not fetch info for {slug}", file=sys.stderr)
                 continue
 
             if current_info.version != stored_info["version"]:
                 print(
                     f"[!] Update found: {slug} "
-                    f"{stored_info['version']} -> {current_info.version}"
+                    f"{stored_info['version']} -> {current_info.version}",
+                    file=sys.stderr,
                 )
 
                 # Get SVN diff if we have previous revision
@@ -307,7 +309,7 @@ class PluginWatcher:
                 new_svn_rev = self.svn.get_latest_revision(slug)
 
                 if use_svn_diff and old_svn_rev and new_svn_rev:
-                    print(f"[*] Getting SVN diff (r{old_svn_rev} -> r{new_svn_rev})...")
+                    print(f"[*] Getting SVN diff (r{old_svn_rev} -> r{new_svn_rev})...", file=sys.stderr)
                     svn_change = self.svn.compare_revisions(slug, old_svn_rev, new_svn_rev)
 
                 # Download new version for analysis
@@ -355,7 +357,7 @@ class PluginWatcher:
 
                     reports.append((report, svn_change))
             else:
-                print(f"[*] {slug} is up to date (v{current_info.version})")
+                print(f"[*] {slug} is up to date (v{current_info.version})", file=sys.stderr)
 
         self._save_state()
         return reports
@@ -400,32 +402,32 @@ class PluginWatcher:
         else:
             interval_str = f"{interval}s"
 
-        print(f"[*] Starting watch mode (interval: {interval_str})")
-        print(f"[*] Watching {len(self.state['plugins'])} plugins")
-        print("[*] Press Ctrl+C to stop\n")
+        print(f"[*] Starting watch mode (interval: {interval_str})", file=sys.stderr)
+        print(f"[*] Watching {len(self.state['plugins'])} plugins", file=sys.stderr)
+        print("[*] Press Ctrl+C to stop\n", file=sys.stderr)
 
         try:
             while True:
                 results = self.check_updates(progress_callback)
 
                 for report, svn_change in results:
-                    print(report.format_console_report())
+                    print(report.format_console_report(), file=sys.stderr)
 
                     # Print SVN commit log if available
                     if svn_change and svn_change.log_entries:
-                        print("\n[SVN Commit Log]")
+                        print("\n[SVN Commit Log]", file=sys.stderr)
                         for entry in svn_change.log_entries[:5]:
                             msg = entry.get("message", "").strip()[:60]
-                            print(f"   r{entry['revision']} - {msg}")
+                            print(f"   r{entry['revision']} - {msg}", file=sys.stderr)
 
                     if send_reports and self.notifier:
                         self.send_report(report)
 
-                print(f"[*] Next check in {interval_str}...")
+                print(f"[*] Next check in {interval_str}...", file=sys.stderr)
                 time.sleep(interval)
 
         except KeyboardInterrupt:
-            print("\n[*] Watch mode stopped")
+            print("\n[*] Watch mode stopped", file=sys.stderr)
 
     def get_state_info(self) -> dict[str, Any]:
         """Get current state information."""
