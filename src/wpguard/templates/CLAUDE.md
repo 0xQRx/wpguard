@@ -58,8 +58,8 @@ project/
 │   └── {plugin_slug}/
 │       ├── finding_001.md      # Vulnerability report
 │       └── poc.py              # Proof of concept script
-├── state.json                  # Scan state (progress tracking)
-└── findings.json               # All findings database
+├── wpguard_scan_state.json     # Scan state (progress tracking)
+└── wpguard_findings.json       # All findings database
 ```
 
 ## Quick Start

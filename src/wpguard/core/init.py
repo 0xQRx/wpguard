@@ -7,6 +7,8 @@ Templates are loaded from the templates/ directory for easy modification.
 import json
 from pathlib import Path
 
+from wpguard.core.findings import FINDINGS_FILENAME, SCAN_STATE_FILENAME
+
 
 # Template directory relative to this file
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
@@ -84,29 +86,24 @@ def initialize_research_project(output_dir: str) -> dict:
             get_qa_triager_instructions()
         )
 
-        # Initialize empty state.json
+        # Initialize empty scan state file (matches FindingsManager schema)
         initial_state = {
+            "current_plugin": None,
             "plugins_scanned": [],
             "plugins_pending": [],
-            "current_plugin": None,
-            "statistics": {
-                "total_scanned": 0,
-                "findings_count": 0,
-                "validated_count": 0,
-            },
+            "last_activity": None,
+            "session_start": None,
         }
-        (root / "state.json").write_text(json.dumps(initial_state, indent=2))
+        (root / SCAN_STATE_FILENAME).write_text(json.dumps(initial_state, indent=2))
 
-        # Initialize empty findings.json
+        # Initialize empty findings file (matches FindingsManager schema)
         initial_findings = {
+            "version": "1.0",
+            "updated_at": None,
+            "total_findings": 0,
             "findings": [],
-            "metadata": {
-                "total_findings": 0,
-                "validated_count": 0,
-                "reported_count": 0,
-            },
         }
-        (root / "findings.json").write_text(json.dumps(initial_findings, indent=2))
+        (root / FINDINGS_FILENAME).write_text(json.dumps(initial_findings, indent=2))
 
         return {
             "success": True,
@@ -122,7 +119,7 @@ def initialize_research_project(output_dir: str) -> dict:
                     "reports/{plugin_slug}/",
                     ".claude/commands/",
                 ],
-                "files": ["state.json", "findings.json"],
+                "files": [SCAN_STATE_FILENAME, FINDINGS_FILENAME],
             },
         }
 
