@@ -21,12 +21,15 @@ from mcp.types import Tool, TextContent
 
 from wpguard.api.wordpress import WordPressPluginAPI
 from wpguard.config import (
-    DEFAULT_OUTPUT_DIR,
     PLUGINS_SUBDIR,
     WP_PLUGINS_SVN,
     WP_PLUGINS_URL,
 )
 from wpguard.core.downloader import PluginDownloader, SVNClient
+
+# MCP-specific default: use current directory so tools work in initialized project root
+# CLI uses DEFAULT_OUTPUT_DIR from config (./wpguard_output) for standalone usage
+DEFAULT_OUTPUT_DIR = "."
 from wpguard.core.watcher import PluginWatcher
 from wpguard.core.sandbox import WordPressSandbox
 from wpguard.core.scope_validator import WorkfenceScopeValidator
