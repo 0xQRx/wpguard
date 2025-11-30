@@ -44,6 +44,9 @@ The best vulnerabilities are often in places that aren't obvious - edge cases, e
 ```
 COMMONLY MISSED AREAS:
 ======================
+0. Race Conditions
+   - Race Condition (TOCTOU)
+   - Document finding, regardless of exploitation success
 1. Error/Exception Handlers
    - Error messages leaking sensitive info
    - Different code paths on failure
