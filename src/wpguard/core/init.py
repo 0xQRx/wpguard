@@ -90,6 +90,11 @@ def get_qa_triager_instructions() -> str:
     return _load_template("qa-triage.md")
 
 
+def get_poc_creator_instructions() -> str:
+    """Get PoC creator agent instructions for changelog analysis."""
+    return _load_template("poc-creator.md")
+
+
 def initialize_research_project(output_dir: str) -> dict:
     """
     Create research project with agent instructions.
@@ -121,6 +126,9 @@ def initialize_research_project(output_dir: str) -> dict:
         )
         (root / ".claude" / "commands" / "qa-triage.md").write_text(
             get_qa_triager_instructions()
+        )
+        (root / ".claude" / "commands" / "poc-creator.md").write_text(
+            get_poc_creator_instructions()
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -160,7 +168,7 @@ def initialize_research_project(output_dir: str) -> dict:
             "message": f"Research project initialized at {root}",
             "structure": {
                 "claude_md": str(root / "CLAUDE.md"),
-                "commands": ["/target-research", "/security-research", "/qa-triage"],
+                "commands": ["/target-research", "/security-research", "/qa-triage", "/poc-creator"],
                 "directories": [
                     "targets/",
                     "targets/{plugin_slug}/",

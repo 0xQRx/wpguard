@@ -7,6 +7,7 @@ This is a wpguard security research project for the Wordfence Bug Bounty Program
 - `/target-research` - Find and scope WordPress plugins for analysis
 - `/security-research` - Analyze plugins for vulnerabilities
 - `/qa-triage` - Validate and submit findings
+- `/poc-creator` - Analyze changelogs for security fixes and create PoCs for patched vulnerabilities
 
 ## MCP Tools Available
 
