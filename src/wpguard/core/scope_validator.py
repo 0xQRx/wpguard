@@ -31,10 +31,13 @@ class AuthLevel(Enum):
 
 
 # In-scope authentication levels for bounty eligibility
+# All levels up to and including Author are in scope for Wordfence
 IN_SCOPE_AUTH_LEVELS = {
     AuthLevel.UNAUTHENTICATED,
     AuthLevel.SUBSCRIBER,
     AuthLevel.CUSTOMER,
+    AuthLevel.CONTRIBUTOR,
+    AuthLevel.AUTHOR,
 }
 
 # Minimum install requirements per tier

@@ -54,7 +54,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-wpguard = ["py.typed"]
+wpguard = ["py.typed", "templates/*.md"]
 
 [tool.black]
 line-length = 100
