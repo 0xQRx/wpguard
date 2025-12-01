@@ -3,6 +3,7 @@ Configuration constants and Discord webhook from environment.
 """
 
 import os
+from pathlib import Path
 
 # API endpoints
 WP_API_BASE = "https://api.wordpress.org/plugins/info/1.2/"
@@ -13,6 +14,9 @@ WP_PLUGINS_URL = "https://wordpress.org/plugins/"
 WP_SANDBOX_HOST = os.environ.get("WP_SANDBOX_HOST", "172.17.0.1")
 WP_SANDBOX_PORT = int(os.environ.get("WP_SANDBOX_PORT", "8000"))
 WP_CONTAINER_NAME = os.environ.get("WP_CONTAINER_NAME", "wp_app")
+
+# WordPress Sandbox Docker Compose directory (relative to package)
+WP_SANDBOX_COMPOSE_DIR = Path(__file__).parent.parent.parent / "wordpress_instance"
 
 # WordPress Test Credentials (role -> (username, password))
 # All roles up to Author are IN SCOPE for Wordfence Bug Bounty

@@ -34,6 +34,11 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_sandbox_request",
     "mcp__wpguard__wpguard_sandbox_wp_cli",
     "mcp__wpguard__wpguard_sandbox_get_nonce",
+    # Sandbox management tools
+    "mcp__wpguard__wpguard_sandbox_start",
+    "mcp__wpguard__wpguard_sandbox_stop",
+    "mcp__wpguard__wpguard_sandbox_restart",
+    "mcp__wpguard__wpguard_sandbox_destroy",
     "mcp__wpguard__wpguard_scope_check_plugin",
     "mcp__wpguard__wpguard_scope_check_finding",
     "mcp__wpguard__wpguard_scope_get_vulns",

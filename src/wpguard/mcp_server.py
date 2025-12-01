@@ -461,6 +461,60 @@ async def list_tools() -> list[Tool]:
                 "required": ["action"],
             },
         ),
+        # Sandbox Management Tools
+        Tool(
+            name="wpguard_sandbox_start",
+            description="Start the WordPress sandbox Docker containers (builds if needed). Use this if sandbox_status shows the sandbox is not running.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wait_ready": {
+                        "type": "boolean",
+                        "description": "Wait for WordPress to be fully ready (default: true)",
+                        "default": True,
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Max seconds to wait for WordPress to be ready (default: 120)",
+                        "default": 120,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_stop",
+            description="Stop the WordPress sandbox Docker containers",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_restart",
+            description="Restart the WordPress sandbox (stop then start)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "wait_ready": {
+                        "type": "boolean",
+                        "description": "Wait for WordPress to be fully ready (default: true)",
+                        "default": True,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_destroy",
+            description="Stop and remove all sandbox data (volumes). This completely resets WordPress.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
         # Wordfence Scope Validation Tools
         Tool(
             name="wpguard_scope_check_plugin",
@@ -917,6 +971,22 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["action"],
             arguments.get("auth"),
         )
+
+    # Sandbox Management Tools
+    elif name == "wpguard_sandbox_start":
+        return await _sandbox_start(
+            arguments.get("wait_ready", True),
+            arguments.get("timeout", 120),
+        )
+
+    elif name == "wpguard_sandbox_stop":
+        return await _sandbox_stop()
+
+    elif name == "wpguard_sandbox_restart":
+        return await _sandbox_restart(arguments.get("wait_ready", True))
+
+    elif name == "wpguard_sandbox_destroy":
+        return await _sandbox_destroy()
 
     # Wordfence Scope Validation Tools
     elif name == "wpguard_scope_check_plugin":
@@ -1553,6 +1623,52 @@ def _sandbox_get_nonce_sync(action: str, auth: str | None) -> dict[str, Any]:
 async def _sandbox_get_nonce(action: str, auth: str | None) -> dict[str, Any]:
     """Get WordPress nonce."""
     return await run_in_executor(_sandbox_get_nonce_sync, action, auth)
+
+
+# Sandbox Management Tool Implementations
+
+def _sandbox_start_sync(wait_ready: bool, timeout: int) -> dict[str, Any]:
+    """Start sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.sandbox_start(wait_ready=wait_ready, timeout=timeout)
+
+
+async def _sandbox_start(wait_ready: bool, timeout: int) -> dict[str, Any]:
+    """Start the WordPress sandbox."""
+    return await run_in_executor(_sandbox_start_sync, wait_ready, timeout)
+
+
+def _sandbox_stop_sync() -> dict[str, Any]:
+    """Stop sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.sandbox_stop()
+
+
+async def _sandbox_stop() -> dict[str, Any]:
+    """Stop the WordPress sandbox."""
+    return await run_in_executor(_sandbox_stop_sync)
+
+
+def _sandbox_restart_sync(wait_ready: bool) -> dict[str, Any]:
+    """Restart sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.sandbox_restart(wait_ready=wait_ready)
+
+
+async def _sandbox_restart(wait_ready: bool) -> dict[str, Any]:
+    """Restart the WordPress sandbox."""
+    return await run_in_executor(_sandbox_restart_sync, wait_ready)
+
+
+def _sandbox_destroy_sync() -> dict[str, Any]:
+    """Destroy sandbox (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.sandbox_destroy()
+
+
+async def _sandbox_destroy() -> dict[str, Any]:
+    """Destroy the WordPress sandbox."""
+    return await run_in_executor(_sandbox_destroy_sync)
 
 
 # Wordfence Scope Validation Tool Implementations

@@ -29,6 +29,12 @@ All `wpguard_*` tools are available via MCP:
 - `wpguard_sandbox_wp_cli` - Run WP-CLI commands
 - `wpguard_sandbox_get_nonce` - Get WordPress nonce for actions
 
+### Sandbox Management
+- `wpguard_sandbox_start` - Start sandbox Docker containers (builds if needed)
+- `wpguard_sandbox_stop` - Stop sandbox containers
+- `wpguard_sandbox_restart` - Restart sandbox
+- `wpguard_sandbox_destroy` - Reset sandbox (removes all data)
+
 ### Scope Validation
 - `wpguard_scope_check_plugin` - Check if plugin is in scope
 - `wpguard_scope_check_finding` - Validate finding eligibility

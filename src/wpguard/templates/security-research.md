@@ -495,7 +495,11 @@ PoC must show:
 
 ```python
 # Check sandbox is ready
-wpguard_sandbox_status()
+status = wpguard_sandbox_status()
+
+# If sandbox is not running, start it
+if not status.get("all_ok"):
+    wpguard_sandbox_start()  # Builds and starts Docker containers
 
 # Install plugin
 wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3")

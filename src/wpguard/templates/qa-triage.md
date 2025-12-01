@@ -69,8 +69,12 @@ python3 poc.py --url http://172.17.0.1:8000 -u author -p author
 **Test at the documented auth level AND verify lower levels don't work:**
 
 ```python
-# Check sandbox
-wpguard_sandbox_status()
+# Check sandbox is ready
+status = wpguard_sandbox_status()
+
+# If sandbox is not running, start it
+if not status.get("all_ok"):
+    wpguard_sandbox_start()  # Builds and starts Docker containers
 
 # Install vulnerable version
 wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3")
@@ -104,7 +108,9 @@ wpguard_sandbox_uninstall_plugin(slug="example-plugin")
 | Contributor | contributor | contributor |
 | Author | author | author |
 
-### Step 4: Update Finding Status
+### Step 4: Update Finding Status & Send Discord Notification
+
+**IMPORTANT: After successful validation, you MUST update the finding status AND send a Discord notification.**
 
 ```python
 # Get finding
@@ -116,21 +122,39 @@ wpguard_finding_update(
     status="validated",
     validation_notes="PoC successfully reproduced. CVSS verified."
 )
-```
 
-### Step 5: Notify on Discord
-
-```python
-# Send validated finding notification
+# REQUIRED: Send Discord notification for validated finding
 wpguard_discord_notify_finding(
     finding_id="abc123",
     title_prefix="VALIDATED: ",
     mention="@everyone"
 )
+```
 
-# Or send summary
+**Always send Discord notification when:**
+- Finding is validated (status changed to "validated")
+- Finding is rejected (status changed to "rejected") - use title_prefix="REJECTED: "
+- Finding is marked as duplicate (status changed to "duplicate")
+
+```python
+# Example: Rejected finding notification
+wpguard_finding_update(
+    finding_id="abc123",
+    status="rejected",
+    validation_notes="Could not reproduce - endpoint returns 403"
+)
+wpguard_discord_notify_finding(
+    finding_id="abc123",
+    title_prefix="REJECTED: "
+)
+```
+
+### Step 5: End-of-Session Summary (Optional)
+
+```python
+# Send summary of all validated findings
 wpguard_discord_notify_summary(
-    title="Daily Security Research Summary",
+    title="QA Session Summary",
     status_filter="validated"
 )
 ```

@@ -20,6 +20,7 @@ from wpguard.config import (
     WP_SANDBOX_PORT,
     WP_CONTAINER_NAME,
     WP_CREDENTIALS,
+    WP_SANDBOX_COMPOSE_DIR,
 )
 
 
@@ -555,4 +556,176 @@ class WordPressSandbox:
             "version": version_result["stdout"] if version_result["success"] else None,
             "site_url": site_url_result["stdout"] if site_url_result["success"] else None,
             "home_url": home_url_result["stdout"] if home_url_result["success"] else None,
+        }
+
+    # =========================================================================
+    # Docker Compose Management Methods
+    # =========================================================================
+
+    def _run_compose(
+        self,
+        command: str,
+        timeout: int = 300,
+    ) -> dict[str, Any]:
+        """
+        Run a docker-compose command.
+
+        Args:
+            command: docker-compose subcommand and args (e.g., "up -d")
+            timeout: Command timeout in seconds
+
+        Returns:
+            dict with success, stdout, stderr
+        """
+        compose_file = WP_SANDBOX_COMPOSE_DIR / "docker-compose.yaml"
+
+        if not compose_file.exists():
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"docker-compose.yaml not found at {compose_file}",
+                "return_code": -1,
+            }
+
+        try:
+            cmd_parts = [
+                "docker-compose",
+                "-f", str(compose_file),
+            ] + command.split()
+
+            result = subprocess.run(
+                cmd_parts,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(WP_SANDBOX_COMPOSE_DIR),
+            )
+
+            return {
+                "success": result.returncode == 0,
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+                "return_code": result.returncode,
+            }
+
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"Command timed out after {timeout} seconds",
+                "return_code": -1,
+            }
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": "docker-compose not found. Ensure Docker Compose is installed.",
+                "return_code": -1,
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": str(e),
+                "return_code": -1,
+            }
+
+    def sandbox_start(self, wait_ready: bool = True, timeout: int = 120) -> dict[str, Any]:
+        """
+        Start the WordPress sandbox (builds if needed).
+
+        Args:
+            wait_ready: Wait for WordPress to be accessible
+            timeout: Max seconds to wait for WordPress to be ready
+
+        Returns:
+            dict with success status and connection info
+        """
+        # Build and start containers
+        result = self._run_compose("up -d --build", timeout=300)
+
+        if not result["success"]:
+            return {
+                "success": False,
+                "message": f"Failed to start sandbox: {result['stderr']}",
+                "compose_output": result["stdout"],
+            }
+
+        # Wait for WordPress to be ready
+        if wait_ready:
+            import time
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                status = self.check_connection()
+                if status["all_ok"]:
+                    return {
+                        "success": True,
+                        "message": "Sandbox started and WordPress is ready",
+                        "base_url": self.base_url,
+                        "container": self.container,
+                    }
+                time.sleep(2)
+
+            return {
+                "success": False,
+                "message": f"Sandbox started but WordPress not ready after {timeout}s",
+                "base_url": self.base_url,
+                "status": self.check_connection(),
+            }
+
+        return {
+            "success": True,
+            "message": "Sandbox containers started (not waiting for ready)",
+            "base_url": self.base_url,
+        }
+
+    def sandbox_stop(self) -> dict[str, Any]:
+        """
+        Stop the WordPress sandbox containers.
+
+        Returns:
+            dict with success status
+        """
+        result = self._run_compose("down", timeout=60)
+
+        return {
+            "success": result["success"],
+            "message": "Sandbox stopped" if result["success"] else f"Failed to stop: {result['stderr']}",
+        }
+
+    def sandbox_restart(self, wait_ready: bool = True) -> dict[str, Any]:
+        """
+        Restart the WordPress sandbox.
+
+        Args:
+            wait_ready: Wait for WordPress to be accessible after restart
+
+        Returns:
+            dict with success status
+        """
+        stop_result = self.sandbox_stop()
+        if not stop_result["success"]:
+            return {
+                "success": False,
+                "message": f"Failed to stop sandbox: {stop_result['message']}",
+            }
+
+        return self.sandbox_start(wait_ready=wait_ready)
+
+    def sandbox_destroy(self) -> dict[str, Any]:
+        """
+        Stop and remove all sandbox data (volumes).
+        This resets the WordPress installation completely.
+
+        Returns:
+            dict with success status
+        """
+        result = self._run_compose("down -v", timeout=60)
+
+        # Clear any cached sessions
+        self._sessions.clear()
+
+        return {
+            "success": result["success"],
+            "message": "Sandbox destroyed (all data removed)" if result["success"] else f"Failed: {result['stderr']}",
         }
