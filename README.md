@@ -13,6 +13,45 @@ A defensive security research tool for downloading, monitoring, and analyzing Wo
 - **Continuous Monitoring**: Background watch mode with tmux support
 - **SVN Commands**: Direct access to SVN log and diff for any plugin
 - **MCP Server**: Integration with Claude Code and other AI assistants via Model Context Protocol
+- **WordPress Sandbox**: Docker-based WordPress instance for PoC testing with authenticated requests
+- **Wordfence Scope Validation**: Automatic bounty eligibility checking for plugins and findings
+- **Finding Management**: Track and manage vulnerability findings with CVSS scores
+- **CVE Database**: Search Wordfence vulnerability database for known issues
+- **Automated Pipeline**: Multi-stage research pipeline with Claude Code agents
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Claude Code                               │
+│              (Orchestrator / Decision Maker)                     │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ MCP Protocol
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     wpguard MCP Server                           │
+│                        (49 tools)                                │
+│                                                                  │
+│  Plugin Tools    Sandbox Tools    Finding Tools    Pipeline      │
+│  - search        - status         - create         - start       │
+│  - download      - install        - update         - stop        │
+│  - svn_log       - request        - list           - status      │
+│  - watch_*       - wp_cli         - stats          - logs        │
+│                                                                  │
+│  Scope Tools     Discord Tools    CVE Tools                      │
+│  - check_plugin  - notify         - download                     │
+│  - check_finding - summary        - search                       │
+│  - get_vulns     - message        - get/stats                    │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │
+          ┌───────────────┼───────────────┐
+          ▼               ▼               ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  WordPress   │  │    JSON      │  │   Discord    │
+│   Sandbox    │  │    State     │  │   Webhook    │
+│   (Docker)   │  │    Files     │  │              │
+└──────────────┘  └──────────────┘  └──────────────┘
+```
 
 ## Installation
 
@@ -449,21 +488,99 @@ Add to `~/.claude/settings.json` (user) or `.claude/settings.json` (project):
 
 ### Available MCP Tools
 
+#### Plugin Discovery & Information (6 tools)
+
 | Tool | Description |
 |------|-------------|
-| `wpguard_plugin_info` | Get detailed info about a specific plugin |
-| `wpguard_search` | Search for plugins in the WordPress repository |
-| `wpguard_download` | Download a single plugin (ZIP + optional SVN) |
-| `wpguard_bulk_download` | Bulk download plugins with install filters |
-| `wpguard_watch_add` | Add plugins to the watchlist |
+| `wpguard_search` | Search for WordPress plugins in the official repository |
+| `wpguard_plugin_info` | Get detailed information about a specific plugin |
+| `wpguard_download` | Download a WordPress plugin (ZIP and optionally SVN) |
+| `wpguard_bulk_download` | Download multiple plugins with filtering by active installations |
+| `wpguard_plugin_versions` | Get all available versions for a WordPress plugin |
+| `wpguard_state_info` | Get current state information (watched plugins count, last check) |
+
+#### SVN Operations (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_svn_log` | Get SVN commit history for a WordPress plugin |
+| `wpguard_svn_diff` | Compare changes between SVN revisions for a plugin |
+| `wpguard_svn_revision` | Get the latest SVN revision number for a plugin |
+
+#### Watch/Monitor (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_watch_add` | Add plugins to the watchlist for update monitoring |
 | `wpguard_watch_remove` | Remove plugins from the watchlist |
-| `wpguard_watch_list` | List all watched plugins |
-| `wpguard_watch_check` | Check watched plugins for updates |
-| `wpguard_svn_log` | Get SVN commit history for a plugin |
-| `wpguard_svn_diff` | Compare changes between SVN revisions |
-| `wpguard_svn_revision` | Get latest SVN revision number |
-| `wpguard_plugin_versions` | Get all available versions of a plugin |
-| `wpguard_state_info` | Get current watcher state info |
+| `wpguard_watch_list` | List all plugins currently being watched |
+| `wpguard_watch_check` | Check watched plugins for updates (single check) |
+
+#### WordPress Sandbox (10 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_sandbox_status` | Check WordPress sandbox connectivity |
+| `wpguard_sandbox_start` | Start the WordPress sandbox Docker containers |
+| `wpguard_sandbox_stop` | Stop the WordPress sandbox Docker containers |
+| `wpguard_sandbox_restart` | Restart the WordPress sandbox |
+| `wpguard_sandbox_destroy` | Stop and remove all sandbox data (volumes) |
+| `wpguard_sandbox_install_plugin` | Install a plugin in the WordPress sandbox |
+| `wpguard_sandbox_uninstall_plugin` | Uninstall a plugin from the WordPress sandbox |
+| `wpguard_sandbox_request` | Execute an HTTP request against the WordPress sandbox |
+| `wpguard_sandbox_wp_cli` | Execute a WP-CLI command in the sandbox container |
+| `wpguard_sandbox_get_nonce` | Get a WordPress nonce for an action |
+
+#### Wordfence Scope Validation (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_scope_check_plugin` | Check if a plugin is eligible for Wordfence bounty research |
+| `wpguard_scope_check_finding` | Validate if a vulnerability finding is eligible for bounty |
+| `wpguard_scope_get_vulns` | Get all in-scope vulnerability types for a given install count |
+
+#### Finding Management (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_finding_create` | Create a new security vulnerability finding |
+| `wpguard_finding_update` | Update an existing finding (status, validation notes) |
+| `wpguard_finding_get` | Get a finding by ID |
+| `wpguard_finding_list` | List findings with optional filters |
+| `wpguard_finding_delete` | Delete a finding |
+| `wpguard_finding_stats` | Get statistics about all findings |
+| `wpguard_scan_state` | Get or update scan state (current plugin, pending plugins) |
+
+#### Discord Notifications (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_discord_notify_finding` | Send a finding notification to Discord |
+| `wpguard_discord_notify_summary` | Send a summary of findings to Discord |
+| `wpguard_discord_send_message` | Send a simple text message to Discord |
+
+#### CVE Database (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_cve_download` | Download/refresh the Wordfence vulnerability database |
+| `wpguard_cve_search` | Search Wordfence CVE database by plugin slug or keyword |
+| `wpguard_cve_get` | Get detailed CVE info by Wordfence ID or CVE ID |
+| `wpguard_cve_stats` | Get statistics about the Wordfence vulnerability database |
+
+#### Pipeline Automation (9 tools)
+
+| Tool | Description |
+|------|-------------|
+| `wpguard_pipeline_start` | Start the security research pipeline daemon |
+| `wpguard_pipeline_stop` | Stop the pipeline daemon |
+| `wpguard_pipeline_status` | Get current pipeline status and metrics |
+| `wpguard_pipeline_pause` | Pause the pipeline |
+| `wpguard_pipeline_resume` | Resume a paused pipeline |
+| `wpguard_pipeline_config` | Get or update pipeline configuration |
+| `wpguard_pipeline_logs` | Get logs from a worker session |
+| `wpguard_pipeline_attach` | Get the tmux attach command for a stage |
+| `wpguard_init_research` | Initialize a new wpguard research project |
 
 ### Running the MCP Server Standalone
 
@@ -471,13 +588,181 @@ Add to `~/.claude/settings.json` (user) or `.claude/settings.json` (project):
 wpguard-mcp
 ```
 
+## Automated Security Research Pipeline
+
+WordPressGuard includes a fully automated pipeline for continuous WordPress plugin vulnerability research using Claude Code agents.
+
+### Pipeline Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Pipeline Daemon                          │
+│                  (Background Process)                       │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│ tmux session  │ │ tmux session  │ │ tmux session  │
+│  Claude Code  │ │  Claude Code  │ │  Claude Code  │
+│ /target-      │ │ /security-    │ │ /qa-triage    │
+│  research     │ │  research     │ │               │
+└───────┬───────┘ └───────┬───────┘ └───────┬───────┘
+        │                 │                 │
+        ▼                 ▼                 ▼
+   Find plugins     Analyze code      Validate
+   matching         for vulns         findings
+   criteria                           in sandbox
+        │                 │                 │
+        ▼                 ▼                 ▼
+   plugins_pending   findings.json    Discord notify
+```
+
+### Three Stages
+
+1. **Target Research**: Find WordPress plugins matching criteria, verify Wordfence eligibility, download source code
+2. **Security Research**: Analyze plugin code for vulnerabilities, create findings with PoCs, test against sandbox
+3. **QA/Triage**: Validate findings, verify CVSS scores, reproduce vulnerabilities, send Discord notifications
+
+### Pipeline Modes
+
+| Mode | Description |
+|------|-------------|
+| `continuous` | Loop forever: targets → research → QA → repeat |
+| `single` | One complete cycle through target batch, then stop |
+| `targets-only` | Just find and download targets, no analysis |
+
+### Pipeline Quick Start
+
+```bash
+# Initialize research project
+wpguard_init_research()
+
+# Start pipeline
+wpguard_pipeline_start(mode="continuous", target_count=5)
+
+# Monitor progress
+wpguard_pipeline_status(include_logs=True)
+
+# View live worker
+wpguard_pipeline_attach(stage="security-research")
+```
+
+### Pipeline Control Commands
+
+```bash
+wpguard_pipeline_pause()              # Pause after current stage completes
+wpguard_pipeline_resume()             # Resume paused pipeline
+wpguard_pipeline_stop()               # Graceful stop
+wpguard_pipeline_stop(force=True)     # Force kill all workers
+```
+
+### Target Criteria Examples
+
+```bash
+# By install count
+"plugins with 500-5000 active installs"
+"plugins with 10000+ installs"
+
+# By category
+"gallery plugins with 1000+ installs"
+"e-commerce plugins, avoid WooCommerce, 500+ installs"
+
+# By features (high-value targets)
+"plugins with file upload functionality"
+"plugins with user registration features"
+"plugins with AJAX endpoints"
+```
+
+### Pipeline Directory Structure
+
+```
+project/
+├── .claude/commands/           # Slash command templates
+│   ├── target-research.md
+│   ├── security-research.md
+│   └── qa-triage.md
+├── targets/                    # Downloaded plugins
+│   └── {plugin-slug}/extracted/
+├── reports/                    # Findings and PoCs
+│   └── {plugin-slug}/
+├── wpguard_findings.json       # Vulnerability findings
+├── wpguard_scan_state.json     # Scan progress
+├── wpguard_pipeline_state.json # Pipeline state
+└── wpguard_pipeline_logs/      # Worker logs
+```
+
+## Three-Phase Workflow
+
+### Phase 1: Target Research
+
+Find plugins worth analyzing:
+1. `wpguard_search(query="...", min_installs=500)`
+2. `wpguard_plugin_info(slug="...")` for each result
+3. `wpguard_scope_check_plugin(...)` to verify Wordfence eligibility
+4. `wpguard_download(slug="...", extract=true)` for eligible plugins
+5. `wpguard_scan_state(add_pending=[...])` to queue for analysis
+
+### Phase 2: Security Research
+
+Find and validate vulnerabilities:
+1. `wpguard_scan_state(current_plugin="...")` to track progress
+2. Read PHP files looking for:
+   - SQL injection (unsanitized `$wpdb->query`)
+   - XSS (unescaped output)
+   - File upload (missing validation)
+   - Auth bypass (missing capability checks)
+3. When finding is discovered:
+   - `wpguard_finding_create(...)` with CVSS details
+   - `wpguard_sandbox_install_plugin(slug, version)`
+   - `wpguard_sandbox_request(method, path, data, auth)` to test PoC
+4. `wpguard_scan_state(add_scanned="...")` when complete
+
+### Phase 3: QA & Notification
+
+Validate and report findings:
+1. `wpguard_finding_list(status="draft")`
+2. For each finding:
+   - Verify CVSS score calculation
+   - Reproduce in sandbox
+   - `wpguard_scope_check_finding(...)` for final eligibility
+   - `wpguard_finding_update(finding_id, status="validated")`
+3. `wpguard_discord_notify_finding(finding_id, mention="@everyone")`
+4. `wpguard_discord_notify_summary(title="Daily Summary")`
+
+## Wordfence Bounty Scope
+
+### Vulnerability Tiers & Installation Requirements
+
+| Tier | Min Installs | Vulnerabilities |
+|------|--------------|-----------------|
+| **High Threat** | 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass → Admin, Priv Esc → Admin |
+| **Common/Dangerous** | 500 | SQL Injection, Stored XSS |
+| **Standard** | 50,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, PHP Object Injection |
+| **Resourceful** | 10,000 | Same as Standard |
+| **1337** | 500 | Same as Standard |
+
+### Authentication Constraints
+
+**In Scope:** Unauthenticated, Subscriber, Customer, Contributor, Author
+
+**Out of Scope:** Editor, Administrator
+
+### Excluded Vendors
+
+WordPress Core, Automattic (Jetpack, WooCommerce, Akismet), Facebook, Google, Siteground, Yoast
+
+See [WORDFENCE_SCOPE.md](WORDFENCE_SCOPE.md) for complete program rules.
+
 ## Requirements
 
 - Python 3.9+
 - `requests` library
 - `mcp` library (for MCP server functionality)
 - `svn` command-line tool (optional, for SVN downloads and change tracking)
-- `tmux` (optional, for background watch mode)
+- `tmux` (required for pipeline automation and background watch mode)
+- `Docker` (required for WordPress sandbox testing)
+- `claude` CLI (required for pipeline automation)
 
 ## License
 
