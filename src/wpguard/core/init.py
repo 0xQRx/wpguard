@@ -48,6 +48,11 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_discord_notify_summary",
     "mcp__wpguard__wpguard_discord_send_message",
     "mcp__wpguard__wpguard_init_research",
+    # Wordfence CVE database tools
+    "mcp__wpguard__wpguard_cve_download",
+    "mcp__wpguard__wpguard_cve_search",
+    "mcp__wpguard__wpguard_cve_get",
+    "mcp__wpguard__wpguard_cve_stats",
 ]
 
 # Slash commands for agent workflows
@@ -177,10 +182,20 @@ def initialize_research_project(output_dir: str) -> dict:
         }
         (root / FINDINGS_FILENAME).write_text(json.dumps(initial_findings, indent=2))
 
+        # Download Wordfence vulnerability database (non-blocking, cached)
+        wordfence_status = None
+        try:
+            from wpguard.api.wordfence import WorkfenceVulnDB
+            wf_db = WorkfenceVulnDB()
+            wordfence_status = wf_db.download()
+        except Exception as e:
+            wordfence_status = {"success": False, "error": str(e)}
+
         return {
             "success": True,
             "path": str(root),
             "message": f"Research project initialized at {root}",
+            "wordfence_db": wordfence_status,
             "structure": {
                 "claude_md": str(root / "CLAUDE.md"),
                 "commands": ["/target-research", "/security-research", "/qa-triage", "/poc-creator"],

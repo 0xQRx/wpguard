@@ -585,11 +585,63 @@ Before submitting a changelog-based finding:
 
 ---
 
+## Using the Wordfence CVE Database
+
+The Wordfence vulnerability database is automatically downloaded to `/tmp/wordfence_vulns.json` during project initialization. Use it to find known CVEs for target plugins and identify vulnerabilities to recreate via SVN diffing.
+
+### Search CVEs by Plugin Slug
+
+```python
+# Get all known vulnerabilities for a specific plugin
+wpguard_cve_search(slug="contact-form-7")
+
+# Returns: CVE IDs, affected versions, patched versions, CVSS scores
+```
+
+### Search by Keyword or Type
+
+```python
+# Search for SQL injection vulnerabilities
+wpguard_cve_search(query="sql injection", limit=20)
+
+# Filter by vulnerability type
+wpguard_cve_search(vuln_type="XSS", limit=50)
+```
+
+### Get Detailed CVE Information
+
+```python
+# Get full details by CVE ID
+wpguard_cve_get(vuln_id="CVE-2024-1234")
+
+# Or by Wordfence vulnerability ID (UUID)
+wpguard_cve_get(vuln_id="abc123-def456-...")
+```
+
+### Refresh the Database
+
+```python
+# Force re-download (normally cached for 24 hours)
+wpguard_cve_download(force=True)
+
+# Get database statistics
+wpguard_cve_stats()
+```
+
+### Workflow Integration
+
+1. **Target Selection**: Use `wpguard_cve_search(slug="plugin-name")` to check if a plugin has known CVEs
+2. **Version Identification**: CVE data includes `affected_versions` and `patched_versions`
+3. **SVN Diffing**: Use the version info to `wpguard_svn_diff()` between vulnerable and patched
+4. **PoC Recreation**: Analyze the diff to understand the vulnerability and recreate it
+
+---
+
 ## Pro Tips
 
 1. **Search for credited researchers** - If a changelog credits "John Doe", search for their public disclosures for more details.
 
-2. **Check Wordfence/Patchstack databases** - They may have published details about the vulnerability.
+2. **Use the CVE database** - Run `wpguard_cve_search(slug="plugin-name")` to find known vulnerabilities with exact version info.
 
 3. **Multiple fixes = Multiple vulns** - A changelog entry like "Fixed multiple security issues" means multiple findings.
 

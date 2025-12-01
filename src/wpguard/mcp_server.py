@@ -730,6 +730,72 @@ async def list_tools() -> list[Tool]:
                 "required": [],
             },
         ),
+        # Wordfence CVE Database Tools
+        Tool(
+            name="wpguard_cve_download",
+            description="Download/refresh the Wordfence vulnerability database (cached in /tmp/wordfence_vulns.json)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "force": {
+                        "type": "boolean",
+                        "description": "Force re-download even if cache is fresh (default: false)",
+                        "default": False,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_cve_search",
+            description="Search Wordfence CVE database by plugin slug or keyword. Use this to find known vulnerabilities for target plugins.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Plugin slug to get all CVEs for (e.g., 'contact-form-7')",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (searches title and description)",
+                    },
+                    "vuln_type": {
+                        "type": "string",
+                        "description": "Filter by vulnerability type (e.g., 'XSS', 'SQL Injection')",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results to return (default: 50)",
+                        "default": 50,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_cve_get",
+            description="Get detailed CVE info by Wordfence ID or CVE ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vuln_id": {
+                        "type": "string",
+                        "description": "Wordfence vulnerability ID (UUID) or CVE ID (e.g., 'CVE-2024-1234')",
+                    },
+                },
+                "required": ["vuln_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_cve_stats",
+            description="Get statistics about the Wordfence vulnerability database",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -960,6 +1026,24 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     # Project Initialization
     elif name == "wpguard_init_research":
         return await _init_research(arguments.get("output_dir", "./wpguard-research"))
+
+    # Wordfence CVE Database Tools
+    elif name == "wpguard_cve_download":
+        return await _cve_download(arguments.get("force", False))
+
+    elif name == "wpguard_cve_search":
+        return await _cve_search(
+            arguments.get("slug"),
+            arguments.get("query"),
+            arguments.get("vuln_type"),
+            arguments.get("limit", 50),
+        )
+
+    elif name == "wpguard_cve_get":
+        return await _cve_get(arguments["vuln_id"])
+
+    elif name == "wpguard_cve_stats":
+        return await _cve_stats()
 
     else:
         raise ValueError(f"Unknown tool: {name}")
@@ -1910,6 +1994,103 @@ def _init_research_sync(output_dir: str) -> dict[str, Any]:
 async def _init_research(output_dir: str) -> dict[str, Any]:
     """Initialize research project directory with agent instructions."""
     return await run_in_executor(_init_research_sync, output_dir)
+
+
+# Wordfence CVE Database Tool Implementations
+
+# Singleton instance for CVE database
+_wordfence_db: "WorkfenceVulnDB | None" = None
+
+
+def _get_wordfence_db():
+    """Get or create the Wordfence vulnerability database instance."""
+    global _wordfence_db
+    if _wordfence_db is None:
+        from wpguard.api.wordfence import WorkfenceVulnDB
+        _wordfence_db = WorkfenceVulnDB()
+    return _wordfence_db
+
+
+def _cve_download_sync(force: bool) -> dict[str, Any]:
+    """Download CVE database (sync version)."""
+    db = _get_wordfence_db()
+    return db.download(force=force)
+
+
+async def _cve_download(force: bool) -> dict[str, Any]:
+    """Download CVE database."""
+    return await run_in_executor(_cve_download_sync, force)
+
+
+def _cve_search_sync(
+    slug: str | None,
+    query: str | None,
+    vuln_type: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    """Search CVE database (sync version)."""
+    db = _get_wordfence_db()
+
+    # If slug is provided, get all vulns for that plugin
+    if slug:
+        vulns = db.get_vulns_for_slug(slug)
+        return {
+            "search_type": "by_slug",
+            "slug": slug,
+            "results_count": len(vulns),
+            "results": vulns[:limit],
+        }
+
+    # Otherwise, do keyword/type search
+    vulns = db.search_vulns(query=query, vuln_type=vuln_type, limit=limit)
+    return {
+        "search_type": "by_query",
+        "query": query,
+        "vuln_type": vuln_type,
+        "results_count": len(vulns),
+        "results": vulns,
+    }
+
+
+async def _cve_search(
+    slug: str | None,
+    query: str | None,
+    vuln_type: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    """Search CVE database."""
+    return await run_in_executor(_cve_search_sync, slug, query, vuln_type, limit)
+
+
+def _cve_get_sync(vuln_id: str) -> dict[str, Any]:
+    """Get CVE by ID (sync version)."""
+    db = _get_wordfence_db()
+
+    # Check if it's a CVE ID (starts with CVE-)
+    if vuln_id.upper().startswith("CVE-"):
+        vuln = db.get_vuln_by_cve(vuln_id)
+    else:
+        vuln = db.get_vuln_by_id(vuln_id)
+
+    if vuln:
+        return {"success": True, "vulnerability": vuln}
+    return {"success": False, "error": f"Vulnerability '{vuln_id}' not found"}
+
+
+async def _cve_get(vuln_id: str) -> dict[str, Any]:
+    """Get CVE by ID."""
+    return await run_in_executor(_cve_get_sync, vuln_id)
+
+
+def _cve_stats_sync() -> dict[str, Any]:
+    """Get CVE database stats (sync version)."""
+    db = _get_wordfence_db()
+    return db.get_stats()
+
+
+async def _cve_stats() -> dict[str, Any]:
+    """Get CVE database stats."""
+    return await run_in_executor(_cve_stats_sync)
 
 
 async def run_server():

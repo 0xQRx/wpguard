@@ -48,6 +48,12 @@ All `wpguard_*` tools are available via MCP:
 - `wpguard_discord_notify_summary` - Send findings summary
 - `wpguard_discord_send_message` - Send simple message
 
+### Wordfence CVE Database
+- `wpguard_cve_download` - Download/refresh vulnerability database
+- `wpguard_cve_search` - Search CVEs by plugin slug or keyword
+- `wpguard_cve_get` - Get detailed CVE info by ID
+- `wpguard_cve_stats` - Get database statistics
+
 ## Directory Structure
 
 ```
