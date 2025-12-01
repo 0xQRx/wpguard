@@ -50,6 +50,21 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_init_research",
 ]
 
+# Slash commands for agent workflows
+WPGUARD_SLASH_COMMANDS = [
+    "SlashCommand(/target-research)",
+    "SlashCommand(/security-research)",
+    "SlashCommand(/qa-triage)",
+    "SlashCommand(/poc-creator)",
+]
+
+# Common bash commands needed for research
+WPGUARD_BASH_COMMANDS = [
+    "Bash(mkdir:*)",
+    "Bash(curl:*)",
+    "Bash(python3:*)",
+]
+
 
 def _load_template(name: str) -> str:
     """
@@ -134,7 +149,7 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write settings.local.json with MCP tool permissions
         settings_local = {
             "permissions": {
-                "allow": WPGUARD_MCP_TOOLS,
+                "allow": WPGUARD_MCP_TOOLS + WPGUARD_SLASH_COMMANDS + WPGUARD_BASH_COMMANDS,
                 "deny": [],
                 "ask": [],
             }
