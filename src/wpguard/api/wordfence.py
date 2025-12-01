@@ -288,7 +288,8 @@ class WorkfenceVulnDB:
 
         cve_upper = cve_id.upper()
         for vuln_id, vuln in self._data.items():
-            if vuln.get("cve", "").upper() == cve_upper:
+            vuln_cve = vuln.get("cve")
+            if vuln_cve and vuln_cve.upper() == cve_upper:
                 return {
                     "id": vuln_id,
                     **vuln,
