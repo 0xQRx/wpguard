@@ -58,6 +58,15 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_cve_search",
     "mcp__wpguard__wpguard_cve_get",
     "mcp__wpguard__wpguard_cve_stats",
+    # Pipeline automation tools
+    "mcp__wpguard__wpguard_pipeline_start",
+    "mcp__wpguard__wpguard_pipeline_stop",
+    "mcp__wpguard__wpguard_pipeline_status",
+    "mcp__wpguard__wpguard_pipeline_pause",
+    "mcp__wpguard__wpguard_pipeline_resume",
+    "mcp__wpguard__wpguard_pipeline_config",
+    "mcp__wpguard__wpguard_pipeline_logs",
+    "mcp__wpguard__wpguard_pipeline_attach",
 ]
 
 # Slash commands for agent workflows
@@ -73,6 +82,22 @@ WPGUARD_BASH_COMMANDS = [
     "Bash(mkdir:*)",
     "Bash(curl:*)",
     "Bash(python3:*)",
+    "Bash(ls:*)",
+    "Bash(grep:*)",
+]
+
+# Core Claude tools needed for autonomous operation
+WPGUARD_CORE_TOOLS = [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Task",
+    "WebFetch",
+    "WebSearch",
+    "TodoWrite",
+    "NotebookEdit",
 ]
 
 
@@ -159,7 +184,7 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write settings.local.json with MCP tool permissions
         settings_local = {
             "permissions": {
-                "allow": WPGUARD_MCP_TOOLS + WPGUARD_SLASH_COMMANDS + WPGUARD_BASH_COMMANDS,
+                "allow": WPGUARD_CORE_TOOLS + WPGUARD_MCP_TOOLS + WPGUARD_SLASH_COMMANDS + WPGUARD_BASH_COMMANDS,
                 "deny": [],
                 "ask": [],
             }

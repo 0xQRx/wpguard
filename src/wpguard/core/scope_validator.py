@@ -14,7 +14,9 @@ class VulnerabilityTier(Enum):
 
     HIGH_THREAT = "high_threat"
     COMMON_DANGEROUS = "common_dangerous"
-    STANDARD = "standard"
+    STANDARD = "standard"  # >= 50,000 installs
+    RESOURCEFUL = "resourceful"  # >= 10,000 installs
+    ELITE_1337 = "elite_1337"  # >= 500 installs
 
 
 class AuthLevel(Enum):
@@ -44,7 +46,9 @@ IN_SCOPE_AUTH_LEVELS = {
 TIER_MIN_INSTALLS = {
     VulnerabilityTier.HIGH_THREAT: 25,
     VulnerabilityTier.COMMON_DANGEROUS: 500,
-    VulnerabilityTier.STANDARD: 50000,
+    VulnerabilityTier.STANDARD: 50000,  # Standard Researchers
+    VulnerabilityTier.RESOURCEFUL: 10000,  # Resourceful Researchers
+    VulnerabilityTier.ELITE_1337: 500,  # 1337 Researchers
 }
 
 # Vulnerability types per tier
@@ -63,6 +67,7 @@ COMMON_DANGEROUS_VULNS = {
     "stored_xss",
 }
 
+# Standard tier vulns (also apply to Resourceful and 1337 tiers)
 STANDARD_VULNS = {
     "reflected_xss",
     "csrf",
@@ -79,6 +84,10 @@ STANDARD_VULNS = {
     "php_object_injection",
     "intentional_backdoor",
 }
+
+# Resourceful and 1337 tiers use the same vuln types as Standard
+RESOURCEFUL_VULNS = STANDARD_VULNS
+ELITE_1337_VULNS = STANDARD_VULNS
 
 # Out of scope vulnerability types
 OUT_OF_SCOPE_VULNS = {
@@ -173,10 +182,17 @@ class WorkfenceScopeValidator:
             if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.COMMON_DANGEROUS]:
                 return VulnerabilityTier.COMMON_DANGEROUS
 
-        # Check standard tier
+        # Check standard tier vulns - assign to best applicable tier based on installs
         if vuln_type in STANDARD_VULNS:
+            # Standard Researchers: >= 50,000
             if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.STANDARD]:
                 return VulnerabilityTier.STANDARD
+            # Resourceful Researchers: >= 10,000
+            if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.RESOURCEFUL]:
+                return VulnerabilityTier.RESOURCEFUL
+            # 1337 Researchers: >= 500
+            if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.ELITE_1337]:
+                return VulnerabilityTier.ELITE_1337
 
         return None
 
@@ -299,6 +315,10 @@ class WorkfenceScopeValidator:
             applicable_tiers.append(VulnerabilityTier.COMMON_DANGEROUS)
         if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.STANDARD]:
             applicable_tiers.append(VulnerabilityTier.STANDARD)
+        if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.RESOURCEFUL]:
+            applicable_tiers.append(VulnerabilityTier.RESOURCEFUL)
+        if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.ELITE_1337]:
+            applicable_tiers.append(VulnerabilityTier.ELITE_1337)
 
         if applicable_tiers:
             result.tier = applicable_tiers[0]  # Best tier
@@ -416,6 +436,12 @@ class WorkfenceScopeValidator:
         if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.STANDARD]:
             result["standard"] = sorted(STANDARD_VULNS)
 
+        if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.RESOURCEFUL]:
+            result["resourceful"] = sorted(RESOURCEFUL_VULNS)
+
+        if active_installs >= TIER_MIN_INSTALLS[VulnerabilityTier.ELITE_1337]:
+            result["elite_1337"] = sorted(ELITE_1337_VULNS)
+
         return result
 
     def get_minimum_installs_for_vuln(self, vuln_type: str) -> int | None:
@@ -434,7 +460,8 @@ class WorkfenceScopeValidator:
             return TIER_MIN_INSTALLS[VulnerabilityTier.HIGH_THREAT]
         if vuln_type in COMMON_DANGEROUS_VULNS:
             return TIER_MIN_INSTALLS[VulnerabilityTier.COMMON_DANGEROUS]
+        # Standard vulns now eligible at 1337/Resourceful tier (500 installs minimum)
         if vuln_type in STANDARD_VULNS:
-            return TIER_MIN_INSTALLS[VulnerabilityTier.STANDARD]
+            return TIER_MIN_INSTALLS[VulnerabilityTier.ELITE_1337]
 
         return None

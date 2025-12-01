@@ -711,6 +711,10 @@ async def list_tools() -> list[Tool]:
                     },
                     "remove_pending": {"type": "string", "description": "Remove plugin from pending"},
                     "clear_pending": {"type": "boolean", "description": "Clear all pending plugins"},
+                    "stage_completed": {
+                        "type": "string",
+                        "description": "Signal pipeline stage completion (target-research, security-research, qa-triage). Pipeline will kill tmux session and proceed to next stage.",
+                    },
                     "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
                 },
                 "required": [],
@@ -848,6 +852,191 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {},
                 "required": [],
+            },
+        ),
+        # Pipeline Automation Tools
+        Tool(
+            name="wpguard_pipeline_start",
+            description="Start the security research pipeline daemon. Spawns Claude workers in tmux sessions for target-research -> security-research -> qa-triage.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["continuous", "single", "targets-only"],
+                        "description": "Pipeline mode: 'continuous' (loop), 'single' (one cycle), 'targets-only' (just find targets)",
+                        "default": "continuous",
+                    },
+                    "target_count": {
+                        "type": "integer",
+                        "description": "Number of targets per cycle (default: 5)",
+                        "default": 5,
+                    },
+                    "restart_mode": {
+                        "type": "string",
+                        "enum": ["deeper", "next", "configurable"],
+                        "description": "How to handle security-research restarts: 'deeper' (same plugin), 'next' (move on), 'configurable' (auto)",
+                        "default": "deeper",
+                    },
+                    "max_restarts": {
+                        "type": "integer",
+                        "description": "Max restarts per plugin for security-research (default: 3)",
+                        "default": 3,
+                    },
+                    "target_criteria": {
+                        "type": "string",
+                        "description": "Custom criteria/arguments to pass to /target-research (e.g., 'browse:updated min_installs:1000')",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_stop",
+            description="Stop the pipeline daemon. Set force=true for immediate stop.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "force": {
+                        "type": "boolean",
+                        "description": "Force immediate stop without cleanup (default: false)",
+                        "default": False,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_status",
+            description="Get current pipeline status: daemon state, worker progress, metrics.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "include_logs": {
+                        "type": "boolean",
+                        "description": "Include recent worker output (default: false)",
+                        "default": False,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_pause",
+            description="Pause the pipeline. Current stage completes, next won't start.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_resume",
+            description="Resume a paused pipeline.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_config",
+            description="Get or update pipeline configuration.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "restart_mode": {
+                        "type": "string",
+                        "enum": ["deeper", "next", "configurable"],
+                        "description": "Update restart mode",
+                    },
+                    "max_restarts": {
+                        "type": "integer",
+                        "description": "Update max restarts",
+                    },
+                    "notify_discord": {
+                        "type": "boolean",
+                        "description": "Enable/disable Discord notifications",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_logs",
+            description="Get logs from a worker session.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stage": {
+                        "type": "string",
+                        "enum": ["target-research", "security-research", "qa-triage"],
+                        "description": "Pipeline stage to get logs for",
+                    },
+                    "lines": {
+                        "type": "integer",
+                        "description": "Number of lines to return (default: 100)",
+                        "default": 100,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": ["stage"],
+            },
+        ),
+        Tool(
+            name="wpguard_pipeline_attach",
+            description="Get the tmux attach command for a stage. Use to manually watch a worker.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "stage": {
+                        "type": "string",
+                        "enum": ["target-research", "security-research", "qa-triage"],
+                        "description": "Pipeline stage",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Project directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": ["stage"],
             },
         ),
     ]
@@ -1071,6 +1260,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("add_pending"),
             arguments.get("remove_pending"),
             arguments.get("clear_pending", False),
+            arguments.get("stage_completed"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
 
@@ -1114,6 +1304,56 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_cve_stats":
         return await _cve_stats()
+
+    # Pipeline Automation Tools
+    elif name == "wpguard_pipeline_start":
+        return await _pipeline_start(
+            arguments.get("mode", "continuous"),
+            arguments.get("target_count", 5),
+            arguments.get("restart_mode", "deeper"),
+            arguments.get("max_restarts", 3),
+            arguments.get("target_criteria"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_pipeline_stop":
+        return await _pipeline_stop(
+            arguments.get("force", False),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_pipeline_status":
+        return await _pipeline_status(
+            arguments.get("include_logs", False),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_pipeline_pause":
+        return await _pipeline_pause(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
+
+    elif name == "wpguard_pipeline_resume":
+        return await _pipeline_resume(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
+
+    elif name == "wpguard_pipeline_config":
+        return await _pipeline_config(
+            arguments.get("restart_mode"),
+            arguments.get("max_restarts"),
+            arguments.get("notify_discord"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_pipeline_logs":
+        return await _pipeline_logs(
+            arguments["stage"],
+            arguments.get("lines", 100),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_pipeline_attach":
+        return await _pipeline_attach(
+            arguments["stage"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
 
     else:
         raise ValueError(f"Unknown tool: {name}")
@@ -1957,13 +2197,14 @@ def _scan_state_sync(
     add_pending: list[str] | None,
     remove_pending: str | None,
     clear_pending: bool,
+    stage_completed: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Get or update scan state (sync version)."""
     manager = FindingsManager(output_dir)
 
     # If no updates, just get current state
-    if all(x is None for x in [current_plugin, add_scanned, add_pending, remove_pending]) and not clear_pending:
+    if all(x is None for x in [current_plugin, add_scanned, add_pending, remove_pending, stage_completed]) and not clear_pending:
         return manager.get_scan_state()
 
     return manager.update_scan_state(
@@ -1972,6 +2213,7 @@ def _scan_state_sync(
         add_pending=add_pending,
         remove_pending=remove_pending,
         clear_pending=clear_pending,
+        stage_completed=stage_completed,
     )
 
 
@@ -1981,12 +2223,13 @@ async def _scan_state(
     add_pending: list[str] | None,
     remove_pending: str | None,
     clear_pending: bool,
+    stage_completed: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Get or update scan state."""
     return await run_in_executor(
         _scan_state_sync, current_plugin, add_scanned, add_pending,
-        remove_pending, clear_pending, output_dir,
+        remove_pending, clear_pending, stage_completed, output_dir,
     )
 
 
@@ -2207,6 +2450,150 @@ def _cve_stats_sync() -> dict[str, Any]:
 async def _cve_stats() -> dict[str, Any]:
     """Get CVE database stats."""
     return await run_in_executor(_cve_stats_sync)
+
+
+# Pipeline Automation Tool Implementations
+
+def _pipeline_start_sync(
+    mode: str,
+    target_count: int,
+    restart_mode: str,
+    max_restarts: int,
+    target_criteria: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Start pipeline daemon (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.start(
+        mode=mode,
+        target_count=target_count,
+        restart_mode=restart_mode,
+        max_restarts=max_restarts,
+        target_criteria=target_criteria,
+    )
+
+
+async def _pipeline_start(
+    mode: str,
+    target_count: int,
+    restart_mode: str,
+    max_restarts: int,
+    target_criteria: str | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Start pipeline daemon."""
+    return await run_in_executor(
+        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, target_criteria, output_dir
+    )
+
+
+def _pipeline_stop_sync(force: bool, output_dir: str) -> dict[str, Any]:
+    """Stop pipeline daemon (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.stop(force=force)
+
+
+async def _pipeline_stop(force: bool, output_dir: str) -> dict[str, Any]:
+    """Stop pipeline daemon."""
+    return await run_in_executor(_pipeline_stop_sync, force, output_dir)
+
+
+def _pipeline_status_sync(include_logs: bool, output_dir: str) -> dict[str, Any]:
+    """Get pipeline status (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.get_status(include_logs=include_logs)
+
+
+async def _pipeline_status(include_logs: bool, output_dir: str) -> dict[str, Any]:
+    """Get pipeline status."""
+    return await run_in_executor(_pipeline_status_sync, include_logs, output_dir)
+
+
+def _pipeline_pause_sync(output_dir: str) -> dict[str, Any]:
+    """Pause pipeline (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.pause()
+
+
+async def _pipeline_pause(output_dir: str) -> dict[str, Any]:
+    """Pause pipeline."""
+    return await run_in_executor(_pipeline_pause_sync, output_dir)
+
+
+def _pipeline_resume_sync(output_dir: str) -> dict[str, Any]:
+    """Resume pipeline (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.resume()
+
+
+async def _pipeline_resume(output_dir: str) -> dict[str, Any]:
+    """Resume pipeline."""
+    return await run_in_executor(_pipeline_resume_sync, output_dir)
+
+
+def _pipeline_config_sync(
+    restart_mode: str | None,
+    max_restarts: int | None,
+    notify_discord: bool | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Get or update pipeline config (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+
+    # If no updates, just return current config
+    updates = {}
+    if restart_mode is not None:
+        updates["restart_mode"] = restart_mode
+    if max_restarts is not None:
+        updates["max_restarts"] = max_restarts
+    if notify_discord is not None:
+        updates["notify_discord"] = notify_discord
+
+    if updates:
+        return {"config": daemon.update_config(**updates), "updated": True}
+    return {"config": daemon.get_config(), "updated": False}
+
+
+async def _pipeline_config(
+    restart_mode: str | None,
+    max_restarts: int | None,
+    notify_discord: bool | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Get or update pipeline config."""
+    return await run_in_executor(
+        _pipeline_config_sync, restart_mode, max_restarts, notify_discord, output_dir
+    )
+
+
+def _pipeline_logs_sync(stage: str, lines: int, output_dir: str) -> dict[str, Any]:
+    """Get worker logs (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.get_worker_logs(stage, lines=lines)
+
+
+async def _pipeline_logs(stage: str, lines: int, output_dir: str) -> dict[str, Any]:
+    """Get worker logs."""
+    return await run_in_executor(_pipeline_logs_sync, stage, lines, output_dir)
+
+
+def _pipeline_attach_sync(stage: str, output_dir: str) -> dict[str, Any]:
+    """Get attach command (sync version)."""
+    from wpguard.core.pipeline import PipelineDaemon
+    daemon = PipelineDaemon(output_dir)
+    return daemon.get_attach_command(stage)
+
+
+async def _pipeline_attach(stage: str, output_dir: str) -> dict[str, Any]:
+    """Get attach command."""
+    return await run_in_executor(_pipeline_attach_sync, stage, output_dir)
 
 
 async def run_server():

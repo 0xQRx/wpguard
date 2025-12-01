@@ -302,6 +302,7 @@ class FindingsManager:
         add_pending: list[str] | None = None,
         remove_pending: str | None = None,
         clear_pending: bool = False,
+        stage_completed: str | None = None,
     ) -> dict[str, Any]:
         """
         Update scan state.
@@ -312,6 +313,7 @@ class FindingsManager:
             add_pending: Plugins to add to pending list
             remove_pending: Plugin to remove from pending
             clear_pending: Clear all pending plugins
+            stage_completed: Signal that a pipeline stage has completed
 
         Returns:
             Updated state
@@ -339,6 +341,10 @@ class FindingsManager:
 
         if clear_pending:
             state["plugins_pending"] = []
+
+        if stage_completed is not None:
+            # Empty string clears the marker, non-empty sets it
+            state["stage_completed"] = stage_completed if stage_completed else None
 
         state["last_activity"] = datetime.utcnow().isoformat() + "Z"
 

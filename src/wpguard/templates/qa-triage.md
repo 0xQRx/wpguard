@@ -196,3 +196,19 @@ wpguard_discord_notify_summary(
 - SSRF via DNS Rebinding
 - CSRF without impact
 - Race Conditions (unless easily replicable)
+
+---
+
+## Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed:
+
+```python
+# After completing QA triage, signal completion
+wpguard_scan_state(stage_completed="qa-triage")
+```
+
+This will:
+1. Tell the pipeline daemon you're done
+2. Pipeline will automatically kill this tmux session
+3. Pipeline will move to the next plugin or start a new target-research cycle

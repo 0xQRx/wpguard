@@ -60,6 +60,16 @@ All `wpguard_*` tools are available via MCP:
 - `wpguard_cve_get` - Get detailed CVE info by ID
 - `wpguard_cve_stats` - Get database statistics
 
+### Pipeline Automation
+- `wpguard_pipeline_start` - Start automated research pipeline daemon
+- `wpguard_pipeline_stop` - Stop the pipeline daemon
+- `wpguard_pipeline_status` - Get current pipeline status and progress
+- `wpguard_pipeline_pause` - Pause after current stage completes
+- `wpguard_pipeline_resume` - Resume paused pipeline
+- `wpguard_pipeline_config` - Get/update pipeline configuration
+- `wpguard_pipeline_logs` - Get worker output logs
+- `wpguard_pipeline_attach` - Get tmux attach command for a stage
+
 ## Directory Structure
 
 ```
@@ -99,7 +109,9 @@ project/
 |------|--------------|---------------------|
 | High Threat | 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc |
 | Common/Dangerous | 500 | SQL Injection, Stored XSS |
-| Standard | 50,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
+| Standard Researchers | 50,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
+| Resourceful Researchers | 10,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
+| 1337 Researchers | 500 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
 
 ## Authentication Levels to Audit
 
@@ -116,3 +128,73 @@ project/
 | Administrator | - | - | NO | Out of scope |
 
 **Key Point:** Always test each vulnerability at EVERY applicable auth level. A finding exploitable by Author is still valuable - document it with the correct auth_level.
+
+## Pipeline Automation
+
+The pipeline automates the full research workflow: target-research -> security-research -> qa-triage
+
+### Starting the Pipeline
+
+```python
+# Start overnight continuous run
+wpguard_pipeline_start(
+    mode="continuous",     # Loop: find targets -> research -> qa -> repeat
+    target_count=10,       # Plugins per cycle
+    restart_mode="deeper", # Restart security-research on same plugin to find more vulns
+    max_restarts=3         # Max restart attempts per plugin
+)
+
+# Single cycle (one batch of targets)
+wpguard_pipeline_start(mode="single", target_count=5)
+
+# Just find targets (no analysis)
+wpguard_pipeline_start(mode="targets-only", target_count=20)
+```
+
+### Monitoring Progress
+
+```python
+# Check status
+wpguard_pipeline_status()
+
+# Get detailed status with recent worker output
+wpguard_pipeline_status(include_logs=True)
+
+# Get logs for a specific stage
+wpguard_pipeline_logs(stage="security-research", lines=100)
+
+# Attach to watch a worker live (returns tmux command)
+wpguard_pipeline_attach(stage="security-research")
+# Then in terminal: tmux attach -t wpguard_security_research_abc123
+```
+
+### Controlling the Pipeline
+
+```python
+# Pause (current stage finishes, next won't start)
+wpguard_pipeline_pause()
+
+# Resume paused pipeline
+wpguard_pipeline_resume()
+
+# Change configuration mid-run
+wpguard_pipeline_config(restart_mode="next", max_restarts=5)
+
+# Stop the pipeline
+wpguard_pipeline_stop()
+
+# Force stop (kills workers immediately)
+wpguard_pipeline_stop(force=True)
+```
+
+### Restart Modes
+
+- **`deeper`**: After QA, restart security-research on the same plugin to explore different code paths
+- **`next`**: After QA, move to the next plugin in the queue
+- **`configurable`**: Auto-mode (deeper for first 2 restarts, then move to next)
+
+### Pipeline State Files
+
+- `wpguard_pipeline_state.json` - Daemon state, worker status, progress
+- `wpguard_daemon.pid` - Process ID file
+- `wpguard_pipeline_logs/` - Worker output logs

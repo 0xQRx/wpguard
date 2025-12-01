@@ -792,3 +792,21 @@ Before submitting a finding, verify:
 - [ ] CVSS score calculated correctly
 - [ ] Real-world impact described
 - [ ] Chained impact considered (if applicable)
+
+---
+
+## Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed:
+
+```python
+# After completing security research on the plugin, mark it as scanned and signal completion
+wpguard_scan_state(add_scanned="plugin-slug")
+wpguard_scan_state(stage_completed="security-research")
+```
+
+This will:
+1. Mark the plugin as scanned in the state
+2. Tell the pipeline daemon you're done
+3. Pipeline will automatically kill this tmux session
+4. Pipeline will start qa-triage for this plugin

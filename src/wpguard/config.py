@@ -52,3 +52,16 @@ USER_AGENT = "WordPressGuard/1.0 (Security Research Tool)"
 def get_discord_webhook(cli_webhook: str | None = None) -> str | None:
     """Get Discord webhook URL from CLI or environment."""
     return cli_webhook or DISCORD_WEBHOOK_URL
+
+
+# Pipeline automation configuration
+# NOTE: Discord notifications are handled by qa-triage agent (wpguard_discord_notify_finding)
+# The pipeline daemon does NOT send notifications - only validated/rejected findings are reported
+PIPELINE_CONFIG = {
+    "heartbeat_interval": 30,        # Seconds between heartbeats
+    "worker_check_interval": 10,     # Seconds between worker checks
+    "max_restarts": 3,               # Max restarts per plugin for security-research
+    "restart_mode": "deeper",        # "deeper", "next", or "configurable"
+    "target_count": 5,               # Targets per cycle
+    "min_installs": 500,             # Minimum installs for targets
+}

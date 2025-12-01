@@ -20,8 +20,10 @@ This agent operates within an authorized bug bounty program. All research target
 | Vulnerability Tier | Min Installs | Notes |
 |-------------------|--------------|-------|
 | High Threat | 25 | Must be on WordPress.org for 25-999 |
-| Common/Dangerous | 500 | Must be on WordPress.org for 500-999 |
-| Standard | 50,000 | For Standard tier researchers |
+| Common/Dangerous | 500 | SQLi, Stored XSS |
+| Standard Researchers | 50,000 | Reflected XSS, CSRF, IDOR, etc. |
+| Resourceful Researchers | 10,000 | Reflected XSS, CSRF, IDOR, etc. |
+| 1337 Researchers | 500 | Reflected XSS, CSRF, IDOR, etc. |
 
 ## Workflow
 
@@ -41,8 +43,10 @@ wpguard_search(query="backup", min_installs=25)
 wpguard_search(query="form builder", min_installs=500)
 wpguard_search(query="contact form", min_installs=500)
 
-# Standard tier targets
-wpguard_search(query="membership", min_installs=50000)
+# 1337/Resourceful tier targets (500+ installs for standard vulns)
+wpguard_search(query="membership", min_installs=500)
+wpguard_search(query="gallery", min_installs=500)
+wpguard_search(query="slider", min_installs=500)
 ```
 
 **High-Priority Functionality Keywords:**
@@ -324,6 +328,20 @@ wpguard_scan_state(current_plugin="example-plugin")
 # Mark plugin as scanned when complete
 wpguard_scan_state(add_scanned="example-plugin")
 ```
+
+### Step 7: Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed to the next stage:
+
+```python
+# After adding all targets to pending queue, signal completion
+wpguard_scan_state(stage_completed="target-research")
+```
+
+This will:
+1. Tell the pipeline daemon you're done
+2. Pipeline will automatically kill this tmux session
+3. Pipeline will start security-research on the first pending plugin
 
 ## Output Requirements
 
