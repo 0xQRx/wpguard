@@ -365,9 +365,58 @@ Path Traversal + File Write: 9.8 Critical
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential file/RCE vulnerability via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="arbitrary_file_upload",
+    title="[DRAFT] Potential File Upload RCE via Extension Bypass",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows file upload with bypassable extension check.
+
+## Code Location
+File: includes/upload.php:145
+Function: handle_upload()
+Sink: move_uploaded_file() with insufficient validation
+
+## What Was Tried
+1. Double extension (file.php.jpg) - rejected
+2. Case variation (.PhP) - rejected
+3. Null byte injection - rejected
+4. Alternative extensions (.phtml, .phar) - not tested in sandbox
+
+## Why PoC Failed
+- Server may have additional protections
+- Apache config may differ from expected
+- Need to test alternative extension handlers
+
+## Recommendation for QA
+The code pattern is dangerous. Consider:
+1. Testing on different server configs
+2. Checking for .htaccess upload possibility
+3. Looking for race condition window
+    """,
+    auth_level="subscriber",
+    cvss_score=8.8,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential RCE is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_file_rce_{short_id}.py`

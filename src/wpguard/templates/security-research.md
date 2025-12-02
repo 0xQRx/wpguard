@@ -761,9 +761,60 @@ Result: Password hashes leaked in search results
 )
 ```
 
-### 6.2 PoC Requirements
+### 6.2 Draft Findings (No Working PoC)
 
-**Every finding MUST include a standalone Python3 PoC that demonstrates the complete exploitation flow.**
+**CRITICAL: If you identify a potential vulnerability via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+# When PoC doesn't work or exploitation is unclear
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.2.3",
+    active_installs=50000,
+    vuln_type="sql_injection",
+    title="[DRAFT] Potential SQL Injection in Search Handler",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows unsanitized user input reaching SQL query.
+
+## Code Location
+File: includes/search.php:145
+Function: handle_search()
+Sink: $wpdb->get_results($query) without prepare()
+
+## What Was Tried
+1. Basic SQLi payloads - blocked by WAF or encoding issue
+2. Time-based blind SQLi - inconclusive results
+3. Error-based SQLi - errors suppressed
+
+## Why PoC Failed
+- Possible WAF blocking payloads
+- Encoding/charset issues
+- May require specific application state
+
+## Recommendation for QA
+Manual review needed. The code pattern is dangerous but exploitation
+was not confirmed. Consider:
+1. Different payload encodings
+2. Testing without WAF
+3. Checking if feature requires specific setup
+
+## Raw Analysis
+[Include relevant code snippets and flow analysis]
+    """,
+    auth_level="subscriber",
+    cvss_score=6.5,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings will be reviewed by QA and included in Discord notifications so no potential vulnerability is missed.**
+
+### 6.3 PoC Requirements (When Exploitation Works)
+
+**When exploitation is successful, include a standalone Python3 PoC that demonstrates the complete exploitation flow.**
 
 PoC must show:
 1. Entry point interaction

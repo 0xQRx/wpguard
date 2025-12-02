@@ -409,9 +409,58 @@ Self-XSS: Usually out of scope (UI:R, S:U)
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential XSS via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="stored_xss",
+    title="[DRAFT] Potential Stored XSS in User Profile",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows user input stored and echoed without proper escaping.
+
+## Code Location
+File: includes/profile.php:89
+Function: display_bio()
+Sink: echo $bio - no esc_html()
+
+## What Was Tried
+1. Basic XSS (<script>alert(1)</script>) - filtered
+2. Event handlers (onerror, onload) - filtered
+3. SVG-based XSS - filtered
+4. Encoding bypass attempts - failed
+
+## Why PoC Failed
+- Input sanitization on save may be blocking
+- Content Security Policy headers
+- WAF blocking common patterns
+
+## Recommendation for QA
+The output is unescaped. Consider:
+1. Unicode encoding bypasses
+2. Different tag/event combinations
+3. Checking if sanitization is bypassable
+    """,
+    auth_level="subscriber",
+    cvss_score=5.4,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential XSS is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_xss_{short_id}.py`

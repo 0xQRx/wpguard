@@ -464,9 +464,58 @@ http://metadata/          # GCP alternative
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential SSRF via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="ssrf",
+    title="[DRAFT] Potential SSRF in URL Fetch Feature",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows wp_remote_get() with user-controlled URL.
+
+## Code Location
+File: includes/fetch.php:89
+Function: fetch_remote_content()
+Sink: wp_remote_get($url) where $url from $_POST['url']
+
+## What Was Tried
+1. Localhost access (127.0.0.1) - blocked
+2. Cloud metadata (169.254.169.254) - blocked
+3. DNS rebinding - timeout
+4. URL scheme tricks (file://, gopher://) - blocked
+
+## Why PoC Failed
+- wp_http_validate_url() may be filtering
+- WordPress blocks private IPs by default
+- DNS rebinding needs more testing time
+
+## Recommendation for QA
+The sink exists. Consider:
+1. Bypassing wp_http_validate_url()
+2. IPv6 bypass attempts (::1)
+3. URL parser differential exploits
+    """,
+    auth_level="subscriber",
+    cvss_score=6.5,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential SSRF is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_ssrf_{short_id}.py`

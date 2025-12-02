@@ -351,9 +351,58 @@ ORDER BY/LIMIT injection (limited impact): 4.3-6.5 depending on data exposed
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential SQL injection via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="sql_injection",
+    title="[DRAFT] Potential SQL Injection in Search Handler",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows user input reaching $wpdb->query() without prepare().
+
+## Code Location
+File: includes/search.php:145
+Function: search_products()
+Sink: $wpdb->get_results($query) - no prepare()
+
+## What Was Tried
+1. UNION-based injection - syntax errors
+2. Time-based blind (SLEEP) - inconclusive
+3. Error-based injection - errors suppressed
+4. Stacked queries - not supported
+
+## Why PoC Failed
+- Query structure may limit injection point
+- Encoding/quoting issues
+- Need different injection technique
+
+## Recommendation for QA
+The code pattern is dangerous. Consider:
+1. Boolean-based blind SQLi testing
+2. Different encoding techniques
+3. Second-order injection possibilities
+    """,
+    auth_level="subscriber",
+    cvss_score=6.5,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential SQLi is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_sqli_{short_id}.py`

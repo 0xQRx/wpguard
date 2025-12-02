@@ -368,12 +368,15 @@ class PipelineDaemon:
         else:
             initial_prompt = f"/{stage}"
 
-        # Build command - slash commands load their own templates from .claude/commands/
-        # so we don't need --system-prompt (which also causes quote escaping issues)
+        # Build command with explicit system prompt from template file
+        # This ensures the full template is loaded for each stage
+        template_file = f"./.claude/commands/{stage}.md"
+
         cmd_parts = [
             f"cd {self.project_dir}",
             "&&",
             "claude",
+            f'--system-prompt "$(cat {template_file})"',
             "--permission-mode", "dontAsk",
             f"'{initial_prompt}'",
         ]

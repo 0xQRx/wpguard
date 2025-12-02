@@ -430,9 +430,57 @@ Authentication Bypass (login bypass): 9.8 Critical
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential auth bypass/missing authz via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="missing_authorization",
+    title="[DRAFT] Potential Missing Authorization in Settings Update",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows AJAX handler missing capability check.
+
+## Code Location
+File: includes/ajax.php:234
+Function: update_settings()
+Issue: No current_user_can() check before updating options
+
+## What Was Tried
+1. Direct AJAX call as subscriber - got error
+2. Checked for hidden nonce requirement - unclear
+3. Attempted with different user roles - blocked
+
+## Why PoC Failed
+- May have auth check in calling function
+- Nonce may be enforced elsewhere
+- WordPress core may be adding protection
+
+## Recommendation for QA
+The code lacks visible auth check. Consider:
+1. Tracing full call path for hidden checks
+2. Testing with fresh user accounts
+3. Checking if action is registered correctly
+    """,
+    auth_level="subscriber",
+    cvss_score=6.5,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential auth issue is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_auth_{short_id}.py`

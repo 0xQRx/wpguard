@@ -441,9 +441,57 @@ Object Injection without gadget: 4.0-6.0 (potential impact)
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential object injection via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="object_injection",
+    title="[DRAFT] Potential Object Injection via Import Feature",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows unserialize() called on user-controlled data.
+
+## Code Location
+File: includes/import.php:67
+Function: import_settings()
+Sink: unserialize($data) where $data comes from uploaded file
+
+## What Was Tried
+1. Basic gadget chains (WordPress core) - no __destruct fired
+2. Plugin-specific gadgets - no suitable classes found
+3. Phar deserialization - phar:// wrapper blocked
+
+## Why PoC Failed
+- No exploitable gadget chains found in codebase
+- Need to find classes with dangerous __destruct/__wakeup
+- May need chained gadget across multiple plugins
+
+## Recommendation for QA
+The sink exists. Consider:
+1. Searching for gadget chains in common plugins
+2. Testing with different WordPress versions
+3. Checking for POP chain construction possibilities
+    """,
+    auth_level="subscriber",
+    cvss_score=8.0,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential object injection is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_object_injection_{short_id}.py`

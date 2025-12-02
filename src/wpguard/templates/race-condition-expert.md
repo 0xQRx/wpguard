@@ -96,7 +96,18 @@ if ($valid) {
 }
 ```
 
-### TOCTOU - Sequential Deletion TOCTOU Window (HIGH PRIORITY - Potential RCE)
+### TOCTOU - Archive extraction (HIGH PRIORITY - Potential RCE)
+
+Atomic Extraction (Line 1104)
+
+```php
+// Extract ALL files at once
+$response = unzip_file( $file, $unzip_path );
+```
+
+**Issue:** Extracts ALL files atomically, including invalid/malicious files, before any validation occurs.
+
+Sequential Deletion TOCTOU Window (Lines 1116-1121)
 
 ```php
 // Delete invalid files ONE BY ONE
@@ -538,9 +549,57 @@ Nonce Reuse Race: 4.3-6.5 Medium
 
 ---
 
-## PoC Script Creation (REQUIRED)
+## Draft Findings (When PoC Fails)
 
-**When you find a vulnerability, you MUST create a standalone PoC script.**
+**CRITICAL: If you identify a potential race condition via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+
+```python
+wpguard_finding_create(
+    plugin_slug="example-plugin",
+    plugin_version="1.0.0",
+    active_installs=50000,
+    vuln_type="race_condition",
+    title="[DRAFT] Potential TOCTOU Race in File Upload",
+    description="""
+## Status: DRAFT - PoC Not Working
+
+## Why This Is Flagged
+Static analysis shows check-then-act pattern without locking.
+
+## Code Location
+File: includes/upload.php:156
+Function: handle_upload()
+Pattern: file_exists() check followed by move_uploaded_file()
+
+## What Was Tried
+1. Concurrent upload requests (100 threads) - no collision
+2. Timing window exploitation - window too small
+3. Filesystem delay injection - not possible remotely
+
+## Why PoC Failed
+- Race window is very small
+- Server may be too fast
+- Need more concurrent threads or specific timing
+
+## Recommendation for QA
+The TOCTOU pattern exists. Consider:
+1. Higher concurrency testing (1000+ threads)
+2. Testing on slower systems
+3. Looking for larger race windows in related code
+    """,
+    auth_level="subscriber",
+    cvss_score=6.0,
+    status="draft"  # IMPORTANT: Mark as draft
+)
+```
+
+**Draft findings ensure no potential race condition is missed and will be reviewed by QA.**
+
+---
+
+## PoC Script Creation (When Exploitation Works)
+
+**When you find a working vulnerability, you MUST create a standalone PoC script.**
 
 ### File Location
 Save PoC to: `reports/{plugin_slug}/poc_race_condition_{short_id}.py`
