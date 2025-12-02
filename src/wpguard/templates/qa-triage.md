@@ -412,7 +412,79 @@ writeup_path = f"reports/{plugin_slug}/{finding['vuln_type']}_{finding['id'][:8]
 - [ ] Added validation notes and final status
 - [ ] Included remediation recommendations
 
-### Step 6: End-of-Session Summary (Optional)
+### Step 6: Create Engagement Summary (REQUIRED)
+
+**Create a brief summary document in the main project folder: `SUMMARY_{plugin_slug}.md`**
+
+This provides a quick overview of the entire engagement for this plugin.
+
+```markdown
+# {Plugin Name} - Engagement Summary
+
+**Plugin:** {plugin_slug} v{version}
+**Installs:** {active_installs}
+**Date:** {date}
+
+## Results
+
+| # | Vulnerability | Auth | CVSS | Status |
+|---|--------------|------|------|--------|
+| 1 | {title} | {auth} | {score} | {status} |
+| 2 | {title} | {auth} | {score} | {status} |
+
+## Validated ({count})
+
+- **{vuln_type}**: {one-line description} → {auth_level}, CVSS {score}
+
+## Rejected ({count})
+
+- **{vuln_type}**: {reason for rejection}
+
+## Needs Review ({count})
+
+- **{vuln_type}**: {what needs investigation}
+
+## Files
+
+- `reports/{plugin_slug}/` - Detailed writeups and PoCs
+```
+
+**Example:**
+
+```markdown
+# Gallery Pro - Engagement Summary
+
+**Plugin:** gallery-pro v2.1.4
+**Installs:** 15,000
+**Date:** 2024-01-15
+
+## Results
+
+| # | Vulnerability | Auth | CVSS | Status |
+|---|--------------|------|------|--------|
+| 1 | SQL Injection in search | Subscriber | 8.8 | Validated |
+| 2 | Stored XSS in caption | Contributor | 6.4 | Validated |
+| 3 | Path traversal in export | Author | - | Rejected |
+
+## Validated (2)
+
+- **SQLi**: Search endpoint passes user input to $wpdb->query() unsanitized → Subscriber, CVSS 8.8
+- **Stored XSS**: Image caption not escaped on gallery page → Contributor, CVSS 6.4
+
+## Rejected (1)
+
+- **Path Traversal**: Export function has basename() check, path traversal not possible
+
+## Needs Review (0)
+
+None
+
+## Files
+
+- `reports/gallery-pro/` - Detailed writeups and PoCs
+```
+
+### Step 7: Send Discord Summary (Optional)
 
 ```python
 # Send summary of all validated findings
@@ -474,8 +546,9 @@ wpguard_scan_state(stage_completed="qa-triage")
 **Before signaling completion, ensure:**
 1. All findings have been triaged (validated/rejected/draft)
 2. All findings have writeups saved to `reports/{plugin-slug}/`
-3. Discord notifications sent for all findings
-4. PoC scripts are saved alongside writeups
+3. Engagement summary saved to `SUMMARY_{plugin_slug}.md`
+4. Discord notifications sent for all findings
+5. PoC scripts are saved alongside writeups
 
 This will:
 1. Tell the pipeline daemon you're done
