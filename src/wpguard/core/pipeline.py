@@ -344,8 +344,17 @@ class PipelineDaemon:
             else:
                 initial_prompt = f"/security-research {plugin_slug}"
         elif stage in EXPERT_STAGES:
-            # Expert agents - invoke with plugin slug
-            initial_prompt = f"/{stage} {plugin_slug}"
+            # Expert agents - include restart context if on a pipeline restart cycle
+            if is_resume and restart_count > 0:
+                initial_prompt = (
+                    f"Resume /{stage} for {plugin_slug}. "
+                    f"This is pipeline restart #{restart_count}. "
+                    f"Found {findings_count} findings so far. "
+                    f"Focus on different attack vectors than previous runs. "
+                    f"Check wpguard_findings.json to avoid duplicate findings."
+                )
+            else:
+                initial_prompt = f"/{stage} {plugin_slug}"
         elif stage == "qa-triage":
             initial_prompt = f"/qa-triage {plugin_slug}"
         else:
@@ -383,8 +392,17 @@ class PipelineDaemon:
 
         # Build Claude command
         plugin_slug = state["pipeline"].get("current_plugin")
-        worker = state["workers"][stage]
-        is_resume = worker["restart_count"] > 0
+
+        # For expert stages, use security-research's restart count (pipeline-level restart)
+        # Expert stages have their own restart_count=0, but they should know about pipeline restarts
+        if stage in EXPERT_STAGES:
+            pipeline_restart_count = state["workers"]["security-research"]["restart_count"]
+            is_resume = pipeline_restart_count > 0
+            restart_count = pipeline_restart_count
+        else:
+            worker = state["workers"][stage]
+            is_resume = worker["restart_count"] > 0
+            restart_count = worker["restart_count"]
 
         # Get findings count for resume context
         findings_count = 0
@@ -396,7 +414,7 @@ class PipelineDaemon:
             state=state,
             plugin_slug=plugin_slug,
             is_resume=is_resume,
-            restart_count=worker["restart_count"],
+            restart_count=restart_count,
             findings_count=findings_count,
         )
 
