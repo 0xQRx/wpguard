@@ -351,10 +351,17 @@ class PipelineDaemon:
                     f"This is pipeline restart #{restart_count}. "
                     f"Found {findings_count} findings so far. "
                     f"Focus on different attack vectors than previous runs. "
-                    f"Check wpguard_findings.json to avoid duplicate findings."
+                    f"Check wpguard_findings.json to avoid duplicate findings. "
+                    f"Be EXTREMELY thorough - do NOT skip anything that looks even remotely promising. "
+                    f"Exhaust ALL possibilities before marking complete."
                 )
             else:
-                initial_prompt = f"/{stage} {plugin_slug}"
+                initial_prompt = (
+                    f"/{stage} {plugin_slug} - "
+                    f"Be EXTREMELY thorough in your analysis. "
+                    f"Do NOT skip anything that looks even remotely promising. "
+                    f"Exhaust ALL attack vectors and bypass techniques before marking complete."
+                )
         elif stage == "qa-triage":
             initial_prompt = f"/qa-triage {plugin_slug}"
         else:
