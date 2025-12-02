@@ -79,6 +79,7 @@ WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/auth-expert)",
     "SlashCommand(/object-injection-expert)",
     "SlashCommand(/ssrf-expert)",
+    "SlashCommand(/race-condition-expert)",
     "SlashCommand(/qa-triage)",
     "SlashCommand(/poc-creator)",
 ]
@@ -181,6 +182,11 @@ def get_ssrf_expert_instructions() -> str:
     return _load_template("ssrf-expert.md")
 
 
+def get_race_condition_expert_instructions() -> str:
+    """Get race condition expert agent instructions."""
+    return _load_template("race-condition-expert.md")
+
+
 def initialize_research_project(output_dir: str) -> dict:
     """
     Create research project with agent instructions.
@@ -235,6 +241,9 @@ def initialize_research_project(output_dir: str) -> dict:
         )
         (root / ".claude" / "commands" / "ssrf-expert.md").write_text(
             get_ssrf_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "race-condition-expert.md").write_text(
+            get_race_condition_expert_instructions()
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -293,6 +302,7 @@ def initialize_research_project(output_dir: str) -> dict:
                     "/auth-expert",
                     "/object-injection-expert",
                     "/ssrf-expert",
+                    "/race-condition-expert",
                     "/qa-triage",
                     "/poc-creator",
                 ],

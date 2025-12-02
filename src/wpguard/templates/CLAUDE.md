@@ -17,6 +17,7 @@ This is a wpguard security research project for the Wordfence Bug Bounty Program
 - `/auth-expert` - Auth bypass, privilege escalation, IDOR, missing authz
 - `/object-injection-expert` - PHP object injection, phar deserialization
 - `/ssrf-expert` - Server-side request forgery, cloud metadata access
+- `/race-condition-expert` - TOCTOU, database races, double-spend, limit bypass
 
 ## MCP Tools Available
 
@@ -143,7 +144,7 @@ project/
 The pipeline automates the full research workflow with expert agents:
 
 ```
-target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → qa-triage
+target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → race-condition-expert → qa-triage
 ```
 
 Each plugin goes through ALL stages sequentially for maximum coverage.
