@@ -18,6 +18,12 @@ This is a wpguard security research project for the Wordfence Bug Bounty Program
 - `/object-injection-expert` - PHP object injection, phar deserialization
 - `/ssrf-expert` - Server-side request forgery, cloud metadata access
 - `/race-condition-expert` - TOCTOU, database races, double-spend, limit bypass
+- `/csrf-expert` - Cross-Site Request Forgery, missing nonce validation
+- `/lfi-rfi-expert` - Local/Remote File Inclusion, path traversal
+- `/xxe-expert` - XML External Entity injection, SVG/XML processing
+- `/deserialization-expert` - JSON/YAML parsing, property injection, type juggling
+- `/logic-flaw-expert` - Business logic bugs, payment bypass, workflow manipulation
+- `/info-disclosure-expert` - Sensitive data exposure, debug endpoints, user enumeration
 
 ## MCP Tools Available
 
@@ -144,10 +150,10 @@ project/
 The pipeline automates the full research workflow with expert agents:
 
 ```
-target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → race-condition-expert → qa-triage
+target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → race-condition-expert → csrf-expert → lfi-rfi-expert → xxe-expert → deserialization-expert → logic-flaw-expert → info-disclosure-expert → qa-triage
 ```
 
-Each plugin goes through ALL stages sequentially for maximum coverage.
+Each plugin goes through ALL 13 expert stages sequentially for maximum coverage.
 
 ### Starting the Pipeline
 
@@ -219,8 +225,8 @@ Controls how many restart cycles include expert agents:
 
 Example with `max_restarts=2, expert_restarts=2` (default):
 ```
-Round 1: security-research → all 7 experts → qa-triage
-Round 2: security-research → all 7 experts → qa-triage
+Round 1: security-research → all 13 experts → qa-triage
+Round 2: security-research → all 13 experts → qa-triage
 ```
 
 ### Pipeline State Files

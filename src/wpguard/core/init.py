@@ -80,6 +80,12 @@ WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/object-injection-expert)",
     "SlashCommand(/ssrf-expert)",
     "SlashCommand(/race-condition-expert)",
+    "SlashCommand(/csrf-expert)",
+    "SlashCommand(/lfi-rfi-expert)",
+    "SlashCommand(/xxe-expert)",
+    "SlashCommand(/deserialization-expert)",
+    "SlashCommand(/logic-flaw-expert)",
+    "SlashCommand(/info-disclosure-expert)",
     "SlashCommand(/qa-triage)",
     "SlashCommand(/poc-creator)",
 ]
@@ -187,6 +193,36 @@ def get_race_condition_expert_instructions() -> str:
     return _load_template("race-condition-expert.md")
 
 
+def get_csrf_expert_instructions() -> str:
+    """Get CSRF expert agent instructions."""
+    return _load_template("csrf-expert.md")
+
+
+def get_lfi_rfi_expert_instructions() -> str:
+    """Get LFI/RFI expert agent instructions."""
+    return _load_template("lfi-rfi-expert.md")
+
+
+def get_xxe_expert_instructions() -> str:
+    """Get XXE expert agent instructions."""
+    return _load_template("xxe-expert.md")
+
+
+def get_deserialization_expert_instructions() -> str:
+    """Get deserialization expert agent instructions."""
+    return _load_template("deserialization-expert.md")
+
+
+def get_logic_flaw_expert_instructions() -> str:
+    """Get business logic flaw expert agent instructions."""
+    return _load_template("logic-flaw-expert.md")
+
+
+def get_info_disclosure_expert_instructions() -> str:
+    """Get information disclosure expert agent instructions."""
+    return _load_template("info-disclosure-expert.md")
+
+
 def initialize_research_project(output_dir: str) -> dict:
     """
     Create research project with agent instructions.
@@ -244,6 +280,24 @@ def initialize_research_project(output_dir: str) -> dict:
         )
         (root / ".claude" / "commands" / "race-condition-expert.md").write_text(
             get_race_condition_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "csrf-expert.md").write_text(
+            get_csrf_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "lfi-rfi-expert.md").write_text(
+            get_lfi_rfi_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "xxe-expert.md").write_text(
+            get_xxe_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "deserialization-expert.md").write_text(
+            get_deserialization_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "logic-flaw-expert.md").write_text(
+            get_logic_flaw_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "info-disclosure-expert.md").write_text(
+            get_info_disclosure_expert_instructions()
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -303,6 +357,12 @@ def initialize_research_project(output_dir: str) -> dict:
                     "/object-injection-expert",
                     "/ssrf-expert",
                     "/race-condition-expert",
+                    "/csrf-expert",
+                    "/lfi-rfi-expert",
+                    "/xxe-expert",
+                    "/deserialization-expert",
+                    "/logic-flaw-expert",
+                    "/info-disclosure-expert",
                     "/qa-triage",
                     "/poc-creator",
                 ],

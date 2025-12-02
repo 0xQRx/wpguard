@@ -37,6 +37,12 @@ STAGE_ORDER = [
     "object-injection-expert",
     "ssrf-expert",
     "race-condition-expert",
+    "csrf-expert",
+    "lfi-rfi-expert",
+    "xxe-expert",
+    "deserialization-expert",
+    "logic-flaw-expert",
+    "info-disclosure-expert",
     "qa-triage",
 ]
 
@@ -49,6 +55,12 @@ EXPERT_STAGES = [
     "object-injection-expert",
     "ssrf-expert",
     "race-condition-expert",
+    "csrf-expert",
+    "lfi-rfi-expert",
+    "xxe-expert",
+    "deserialization-expert",
+    "logic-flaw-expert",
+    "info-disclosure-expert",
 ]
 
 # State and PID files
