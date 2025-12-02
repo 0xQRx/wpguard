@@ -122,6 +122,14 @@ wpguard_scan_state(add_pending=["plugin-a", "plugin-b", "plugin-c"])
 wpguard_scan_state(stage_completed="target-research")
 ```
 
+**Before signaling completion, ensure:**
+1. ALL target plugins have been downloaded to `./targets/{slug}/extracted/`
+2. ALL plugins added to pending queue via `wpguard_scan_state(add_pending=[...])`
+3. ALL plugins verified to be in scope (install count, vulnerability types)
+4. Target count matches requested amount (or maximum available)
+
+**DO NOT signal completion if you haven't found and queued the requested number of targets. The pipeline trusts your signal.**
+
 This will:
 1. Tell the pipeline daemon you're done
 2. Pipeline will automatically kill this tmux session

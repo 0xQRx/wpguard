@@ -546,11 +546,22 @@ Every PoC MUST have:
 
 ---
 
-## Signal Completion
+## Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed to the next stage:
 
 ```python
 # After exhausting ALL SQL injection possibilities
 wpguard_scan_state(stage_completed="sqli-expert")
 ```
+
+**Before signaling completion, ensure:**
+1. ALL database query sinks have been analyzed ($wpdb, raw SQL)
+2. ALL injection techniques tested (UNION, blind, time-based, error-based)
+3. ALL user inputs traced to query sinks
+4. Findings created for any discovered vulnerabilities
+5. PoC scripts saved to `reports/{plugin_slug}/`
+
+**DO NOT signal completion if you haven't thoroughly tested everything. The pipeline trusts your signal.**
 
 **Remember: The vulnerability IS there. Your job is to find it. Don't give up.**

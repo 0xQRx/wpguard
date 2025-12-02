@@ -649,11 +649,24 @@ Every PoC MUST have:
 
 ---
 
-## Signal Completion
+## Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed to the next stage:
 
 ```python
 # After exhausting ALL auth/authz bypass possibilities
 wpguard_scan_state(stage_completed="auth-expert")
 ```
+
+**Before signaling completion, ensure:**
+1. ALL AJAX actions tested for missing capability checks
+2. ALL REST endpoints tested for auth bypass
+3. ALL IDOR vectors tested (user IDs, post IDs, etc.)
+4. ALL privilege escalation paths analyzed
+5. ALL nonce verification gaps identified
+6. Findings created for any discovered vulnerabilities
+7. PoC scripts saved to `reports/{plugin_slug}/`
+
+**DO NOT signal completion if you haven't thoroughly tested everything. The pipeline trusts your signal.**
 
 **Remember: The vulnerability IS there. Your job is to find it. Don't give up.**

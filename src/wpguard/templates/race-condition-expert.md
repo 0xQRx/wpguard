@@ -729,11 +729,24 @@ Every PoC MUST have:
 
 ---
 
-## Signal Completion
+## Signal Completion (REQUIRED for Pipeline)
+
+**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed to the next stage:
 
 ```python
 # After exhausting ALL race condition attack vectors
 wpguard_scan_state(stage_completed="race-condition-expert")
 ```
+
+**Before signaling completion, ensure:**
+1. ALL TOCTOU patterns analyzed (file operations, permission checks)
+2. ALL non-atomic database operations tested (read-modify-write)
+3. ALL counter/limit bypasses attempted with concurrent requests
+4. ALL double-spend/double-action vectors tested
+5. ALL nonce reuse in race windows checked
+6. Findings created for any discovered vulnerabilities
+7. PoC scripts saved to `reports/{plugin_slug}/`
+
+**DO NOT signal completion if you haven't thoroughly tested everything. The pipeline trusts your signal.**
 
 **Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
