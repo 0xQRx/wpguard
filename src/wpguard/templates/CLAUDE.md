@@ -157,7 +157,8 @@ wpguard_pipeline_start(
     mode="continuous",     # Loop: find targets -> research -> qa -> repeat
     target_count=10,       # Plugins per cycle
     restart_mode="deeper", # Restart security-research on same plugin to find more vulns
-    max_restarts=3         # Max restart attempts per plugin
+    max_restarts=2,        # Max restart attempts per plugin (default: 2)
+    expert_restarts=2      # How many iterations experts run (default: 2)
 )
 
 # Single cycle (one batch of targets)
@@ -194,7 +195,7 @@ wpguard_pipeline_pause()
 wpguard_pipeline_resume()
 
 # Change configuration mid-run
-wpguard_pipeline_config(restart_mode="next", max_restarts=5)
+wpguard_pipeline_config(restart_mode="next", max_restarts=5, expert_restarts=2)
 
 # Stop the pipeline
 wpguard_pipeline_stop()
@@ -208,6 +209,19 @@ wpguard_pipeline_stop(force=True)
 - **`deeper`**: After QA, restart security-research on the same plugin to explore different code paths
 - **`next`**: After QA, move to the next plugin in the queue
 - **`configurable`**: Auto-mode (deeper for first 2 restarts, then move to next)
+
+### Expert Iterations (`expert_restarts`)
+
+Controls how many restart cycles include expert agents:
+- **`expert_restarts=1`**: Experts run only on first round, restarts skip them
+- **`expert_restarts=2`** (default): Experts run on first two rounds
+- **`expert_restarts=3`**: Experts run on all rounds
+
+Example with `max_restarts=2, expert_restarts=2` (default):
+```
+Round 1: security-research → all 7 experts → qa-triage
+Round 2: security-research → all 7 experts → qa-triage
+```
 
 ### Pipeline State Files
 

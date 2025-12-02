@@ -880,8 +880,13 @@ async def list_tools() -> list[Tool]:
                     },
                     "max_restarts": {
                         "type": "integer",
-                        "description": "Max restarts per plugin for security-research (default: 3)",
-                        "default": 3,
+                        "description": "Max restarts per plugin for security-research (default: 2)",
+                        "default": 2,
+                    },
+                    "expert_restarts": {
+                        "type": "integer",
+                        "description": "Number of iterations experts run (1 = first round only, 2 = first two, etc. Default: 2)",
+                        "default": 2,
                     },
                     "target_criteria": {
                         "type": "string",
@@ -979,7 +984,11 @@ async def list_tools() -> list[Tool]:
                     },
                     "max_restarts": {
                         "type": "integer",
-                        "description": "Update max restarts",
+                        "description": "Update max restarts for security-research",
+                    },
+                    "expert_restarts": {
+                        "type": "integer",
+                        "description": "Number of iterations experts run (1 = first round only, 2 = first two rounds, etc.)",
                     },
                     "notify_discord": {
                         "type": "boolean",
@@ -1311,7 +1320,8 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("mode", "continuous"),
             arguments.get("target_count", 5),
             arguments.get("restart_mode", "deeper"),
-            arguments.get("max_restarts", 3),
+            arguments.get("max_restarts", 2),
+            arguments.get("expert_restarts", 2),
             arguments.get("target_criteria"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
@@ -1338,6 +1348,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _pipeline_config(
             arguments.get("restart_mode"),
             arguments.get("max_restarts"),
+            arguments.get("expert_restarts"),
             arguments.get("notify_discord"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
@@ -2459,6 +2470,7 @@ def _pipeline_start_sync(
     target_count: int,
     restart_mode: str,
     max_restarts: int,
+    expert_restarts: int,
     target_criteria: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
@@ -2470,6 +2482,7 @@ def _pipeline_start_sync(
         target_count=target_count,
         restart_mode=restart_mode,
         max_restarts=max_restarts,
+        expert_restarts=expert_restarts,
         target_criteria=target_criteria,
     )
 
@@ -2479,12 +2492,13 @@ async def _pipeline_start(
     target_count: int,
     restart_mode: str,
     max_restarts: int,
+    expert_restarts: int,
     target_criteria: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Start pipeline daemon."""
     return await run_in_executor(
-        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, target_criteria, output_dir
+        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, expert_restarts, target_criteria, output_dir
     )
 
 
@@ -2539,6 +2553,7 @@ async def _pipeline_resume(output_dir: str) -> dict[str, Any]:
 def _pipeline_config_sync(
     restart_mode: str | None,
     max_restarts: int | None,
+    expert_restarts: int | None,
     notify_discord: bool | None,
     output_dir: str,
 ) -> dict[str, Any]:
@@ -2552,6 +2567,8 @@ def _pipeline_config_sync(
         updates["restart_mode"] = restart_mode
     if max_restarts is not None:
         updates["max_restarts"] = max_restarts
+    if expert_restarts is not None:
+        updates["expert_restarts"] = expert_restarts
     if notify_discord is not None:
         updates["notify_discord"] = notify_discord
 
@@ -2563,12 +2580,13 @@ def _pipeline_config_sync(
 async def _pipeline_config(
     restart_mode: str | None,
     max_restarts: int | None,
+    expert_restarts: int | None,
     notify_discord: bool | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Get or update pipeline config."""
     return await run_in_executor(
-        _pipeline_config_sync, restart_mode, max_restarts, notify_discord, output_dir
+        _pipeline_config_sync, restart_mode, max_restarts, expert_restarts, notify_discord, output_dir
     )
 
 

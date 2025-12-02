@@ -96,6 +96,18 @@ if ($valid) {
 }
 ```
 
+### TOCTOU - Sequential Deletion TOCTOU Window (HIGH PRIORITY - Potential RCE)
+
+```php
+// Delete invalid files ONE BY ONE
+foreach ( $invalid_files as $invalid_path ) {
+    $file_to_delete = $unzip_path . '/' . $invalid_path;
+    if ( $wp_filesystem->exists( $file_to_delete ) ) {
+        $wp_filesystem->delete( $file_to_delete, false, 'f' );  // Sequential!
+    }
+}
+```
+
 ### TOCTOU - Permission Checks (HIGH PRIORITY)
 ```php
 // Permission can change between check and action

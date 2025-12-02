@@ -62,7 +62,8 @@ PIPELINE_LOG_DIR = "wpguard_pipeline_logs"
 DEFAULT_PIPELINE_CONFIG = {
     "heartbeat_interval": 30,
     "worker_check_interval": 10,
-    "max_restarts": 3,
+    "max_restarts": 2,
+    "expert_restarts": 2,  # Number of iterations experts run (1 = only first round, 2 = first two rounds, etc.)
     "restart_mode": "deeper",  # "deeper", "next", or "configurable"
     "target_count": 5,
     "min_installs": 500,
@@ -1048,8 +1049,15 @@ class PipelineDaemon:
             return None
 
         elif current == "security-research":
-            # After security-research, go to first expert stage
-            return "file-rce-expert"
+            # Check if experts should run this iteration
+            restart_count = state["workers"]["security-research"]["restart_count"]
+            expert_restarts = state["config"].get("expert_restarts", 1)
+            if restart_count < expert_restarts:
+                # Run experts for first N iterations (configurable)
+                return "file-rce-expert"
+            else:
+                # Skip experts on later restarts - they already ran enough
+                return "qa-triage"
 
         elif current in EXPERT_STAGES:
             # Get next stage in order
