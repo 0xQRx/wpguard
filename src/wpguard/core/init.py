@@ -73,6 +73,12 @@ WPGUARD_MCP_TOOLS = [
 WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/target-research)",
     "SlashCommand(/security-research)",
+    "SlashCommand(/file-rce-expert)",
+    "SlashCommand(/sqli-expert)",
+    "SlashCommand(/xss-expert)",
+    "SlashCommand(/auth-expert)",
+    "SlashCommand(/object-injection-expert)",
+    "SlashCommand(/ssrf-expert)",
     "SlashCommand(/qa-triage)",
     "SlashCommand(/poc-creator)",
 ]
@@ -145,6 +151,36 @@ def get_poc_creator_instructions() -> str:
     return _load_template("poc-creator.md")
 
 
+def get_file_rce_expert_instructions() -> str:
+    """Get file operations & RCE expert agent instructions."""
+    return _load_template("file-rce-expert.md")
+
+
+def get_sqli_expert_instructions() -> str:
+    """Get SQL injection expert agent instructions."""
+    return _load_template("sqli-expert.md")
+
+
+def get_xss_expert_instructions() -> str:
+    """Get XSS expert agent instructions."""
+    return _load_template("xss-expert.md")
+
+
+def get_auth_expert_instructions() -> str:
+    """Get authentication/authorization expert agent instructions."""
+    return _load_template("auth-expert.md")
+
+
+def get_object_injection_expert_instructions() -> str:
+    """Get object injection expert agent instructions."""
+    return _load_template("object-injection-expert.md")
+
+
+def get_ssrf_expert_instructions() -> str:
+    """Get SSRF expert agent instructions."""
+    return _load_template("ssrf-expert.md")
+
+
 def initialize_research_project(output_dir: str) -> dict:
     """
     Create research project with agent instructions.
@@ -179,6 +215,26 @@ def initialize_research_project(output_dir: str) -> dict:
         )
         (root / ".claude" / "commands" / "poc-creator.md").write_text(
             get_poc_creator_instructions()
+        )
+
+        # Write expert agent slash commands
+        (root / ".claude" / "commands" / "file-rce-expert.md").write_text(
+            get_file_rce_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "sqli-expert.md").write_text(
+            get_sqli_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "xss-expert.md").write_text(
+            get_xss_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "auth-expert.md").write_text(
+            get_auth_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "object-injection-expert.md").write_text(
+            get_object_injection_expert_instructions()
+        )
+        (root / ".claude" / "commands" / "ssrf-expert.md").write_text(
+            get_ssrf_expert_instructions()
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -228,7 +284,18 @@ def initialize_research_project(output_dir: str) -> dict:
             "wordfence_db": wordfence_status,
             "structure": {
                 "claude_md": str(root / "CLAUDE.md"),
-                "commands": ["/target-research", "/security-research", "/qa-triage", "/poc-creator"],
+                "commands": [
+                    "/target-research",
+                    "/security-research",
+                    "/file-rce-expert",
+                    "/sqli-expert",
+                    "/xss-expert",
+                    "/auth-expert",
+                    "/object-injection-expert",
+                    "/ssrf-expert",
+                    "/qa-triage",
+                    "/poc-creator",
+                ],
                 "directories": [
                     "targets/",
                     "targets/{plugin_slug}/",

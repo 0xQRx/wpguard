@@ -27,7 +27,27 @@ ANSI_ESCAPE_PATTERN = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
 # Pipeline stage order
-STAGE_ORDER = ["target-research", "security-research", "qa-triage"]
+STAGE_ORDER = [
+    "target-research",
+    "security-research",
+    "file-rce-expert",
+    "sqli-expert",
+    "xss-expert",
+    "auth-expert",
+    "object-injection-expert",
+    "ssrf-expert",
+    "qa-triage",
+]
+
+# Expert stages (subset of STAGE_ORDER between security-research and qa-triage)
+EXPERT_STAGES = [
+    "file-rce-expert",
+    "sqli-expert",
+    "xss-expert",
+    "auth-expert",
+    "object-injection-expert",
+    "ssrf-expert",
+]
 
 # State and PID files
 PIPELINE_STATE_FILENAME = "wpguard_pipeline_state.json"
@@ -321,6 +341,9 @@ class PipelineDaemon:
                 )
             else:
                 initial_prompt = f"/security-research {plugin_slug}"
+        elif stage in EXPERT_STAGES:
+            # Expert agents - invoke with plugin slug
+            initial_prompt = f"/{stage} {plugin_slug}"
         elif stage == "qa-triage":
             initial_prompt = f"/qa-triage {plugin_slug}"
         else:
@@ -353,9 +376,8 @@ class PipelineDaemon:
         session_id = uuid.uuid4().hex[:8]
         session_name = f"wpguard_{stage.replace('-', '_')}_{session_id}"
 
-        # Ensure log directory exists
+        # Ensure log directory exists (for command scripts)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        log_file = self.log_dir / f"{stage}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         # Build Claude command
         plugin_slug = state["pipeline"].get("current_plugin")
@@ -396,10 +418,9 @@ class PipelineDaemon:
             script_file.write_text(f"#!/bin/bash\n{claude_cmd}\n")
             script_file.chmod(0o755)
 
-            # Use script to capture output while maintaining PTY
-            # Syntax: script [options] logfile -c command
-            # -q = quiet, -f = flush after each write
-            logged_cmd = f"script -q -f '{log_file}' -c '{script_file}'"
+            # Use script to maintain PTY but discard output to /dev/null
+            # This avoids large binary log files while keeping proper terminal handling
+            logged_cmd = f"script -q /dev/null -c '{script_file}'"
             subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, logged_cmd, "Enter"],
                 capture_output=True,
@@ -517,6 +538,12 @@ class PipelineDaemon:
                 except Exception:
                     pass
             return WorkerStatus.FAILED
+
+        elif stage in EXPERT_STAGES:
+            # Expert stages complete when session ends (agent signals via stage_completed)
+            # If session ended without signal, treat as completed (best effort)
+            self._kill_tmux_session(session)
+            return WorkerStatus.COMPLETED
 
         elif stage == "qa-triage":
             # QA stage always "completes" - findings get validated or rejected
@@ -994,7 +1021,16 @@ class PipelineDaemon:
             return None
 
         elif current == "security-research":
-            return "qa-triage"
+            # After security-research, go to first expert stage
+            return "file-rce-expert"
+
+        elif current in EXPERT_STAGES:
+            # Get next stage in order
+            current_idx = STAGE_ORDER.index(current)
+            next_idx = current_idx + 1
+            if next_idx < len(STAGE_ORDER):
+                return STAGE_ORDER[next_idx]
+            return None
 
         elif current == "qa-triage":
             # Check restart mode

@@ -77,7 +77,19 @@ python3 poc.py --url http://172.17.0.1:8000 -u author -p author
 
 ### Step 3: Reproduction in Sandbox
 
-**Test at the documented auth level AND verify lower levels don't work:**
+**CRITICAL: Test ALL authentication levels from bottom up, regardless of reported level.**
+
+The security researcher may have tested at a higher auth level than necessary. Your job is to find the LOWEST auth level that can exploit the vulnerability - this maximizes bounty value and impact.
+
+**Testing Order (ALWAYS follow this order):**
+1. **Unauthenticated** - Try first, highest value
+2. **Subscriber** - Lowest authenticated role
+3. **Contributor** - Can write posts (not publish)
+4. **Author** - Can publish own posts
+
+**Note:** Customer role only exists if WooCommerce is installed. Skip this level for non-WooCommerce plugins.
+
+**STOP as soon as exploitation succeeds** - that's the correct auth level for the finding.
 
 ```python
 # Check sandbox is ready
@@ -90,34 +102,72 @@ if not status.get("all_ok"):
 # Install vulnerable version
 wpguard_sandbox_install_plugin(slug="example-plugin", version="1.2.3")
 
-# Execute PoC at documented auth level
-# Use appropriate auth: "subscriber", "contributor", or "author"
-wpguard_sandbox_request(
+# ALWAYS test from bottom up - ignore what the finding says!
+# The researcher may have only tested at one level
+
+# 1. Try UNAUTHENTICATED first (no auth parameter)
+result = wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "vulnerable_action", "param": "payload"}
+    # No auth = unauthenticated
+)
+# If this works → UPDATE finding to auth_level="unauthenticated" (highest severity!)
+
+# 2. Try SUBSCRIBER
+result = wpguard_sandbox_request(
     method="POST",
     path="/wp-admin/admin-ajax.php",
     data={"action": "vulnerable_action", "param": "payload"},
-    auth="author"  # Use the auth level from the finding
+    auth="subscriber"
+)
+# If this works → UPDATE finding to auth_level="subscriber"
+
+# 3. Try CONTRIBUTOR
+result = wpguard_sandbox_request(
+    method="POST",
+    path="/wp-admin/admin-ajax.php",
+    data={"action": "vulnerable_action", "param": "payload"},
+    auth="contributor"
 )
 
-# Verify lower auth levels fail (confirms correct classification)
-wpguard_sandbox_request(
+# 4. Try AUTHOR (last resort, still in scope)
+result = wpguard_sandbox_request(
     method="POST",
     path="/wp-admin/admin-ajax.php",
     data={"action": "vulnerable_action", "param": "payload"},
-    auth="contributor"  # Should fail if finding says "author"
+    auth="author"
 )
+
+# If NONE work, the finding may be invalid or require special conditions
 
 # Cleanup
 wpguard_sandbox_uninstall_plugin(slug="example-plugin")
 ```
 
+**IMPORTANT: Update the finding if you discover a lower auth level works!**
+
+```python
+# If finding was reported as "author" but works as "subscriber":
+wpguard_finding_update(
+    finding_id="abc123",
+    validation_notes="UPGRADED: Originally reported as Author, but exploitable as Subscriber! Tested all levels bottom-up."
+)
+# Then manually update auth_level in the finding or create corrected finding
+```
+
 **Sandbox Credentials:**
-| Role | Username | Password |
-|------|----------|----------|
-| Subscriber | subscriber | subscriber |
-| Customer | customer | customer |
-| Contributor | contributor | contributor |
-| Author | author | author |
+| Role | Username | Password | Priority |
+|------|----------|----------|----------|
+| Unauthenticated | - | - | Test FIRST |
+| Subscriber | subscriber | subscriber | Test 2nd |
+| Contributor | contributor | contributor | Test 3rd |
+| Author | author | author | Test 4th (last) |
+
+**Why This Matters:**
+- Unauthenticated SQLi = Critical (9.8 CVSS)
+- Author-level SQLi = High (8.8 CVSS)
+- Finding the lowest exploitable level = Higher bounty tier
 
 ### Step 4: Update Finding Status & Send Discord Notification
 
@@ -220,7 +270,149 @@ Finding received from Security Researcher
 ALL categories get Discord notification!
 ```
 
-### Step 5: End-of-Session Summary (Optional)
+### Step 5: Create Vulnerability Writeup (REQUIRED)
+
+**Every finding MUST have a formal writeup saved to `reports/{plugin-slug}/`**
+
+Create a markdown file for each finding: `reports/{plugin-slug}/{vuln_type}_{finding_id}.md`
+
+**Writeup Template:**
+
+```markdown
+# {Plugin Name} - {Vulnerability Title}
+
+## Summary
+| Field | Value |
+|-------|-------|
+| Plugin | {plugin_name} ({plugin_slug}) |
+| Version | {version} (and likely prior) |
+| Active Installs | {active_installs} |
+| Vulnerability Type | {vuln_type} |
+| CVSS Score | {cvss_score} ({severity}) |
+| CVSS Vector | {cvss_vector} |
+| Authentication | {auth_level} |
+| Finding ID | {finding_id} |
+| Status | {status} (validated/rejected/draft) |
+
+## Description
+
+{Detailed description of the vulnerability, what it allows an attacker to do}
+
+## Affected Code
+
+**File:** `{affected_file}`
+**Function:** `{affected_function}()`
+**Line:** {affected_line}
+
+```php
+// Vulnerable code snippet
+{code_snippet}
+```
+
+## Data Flow
+
+```
+{Entry point} → {Processing} → {Sink}
+```
+
+1. User input enters via: {entry_point}
+2. Data passes through: {intermediate_steps}
+3. Reaches vulnerable sink: {sink}
+
+## Proof of Concept
+
+### Manual Reproduction
+
+{Step-by-step instructions to reproduce manually}
+
+### PoC Script
+
+```bash
+python3 poc.py --url http://target.com -u {username} -p {password}
+```
+
+**PoC Location:** `reports/{plugin_slug}/poc.py`
+
+## Impact
+
+{What can an attacker achieve? Data theft, RCE, privilege escalation, etc.}
+
+## Remediation
+
+{How should the developer fix this vulnerability?}
+
+## Timeline
+
+| Date | Action |
+|------|--------|
+| {date} | Vulnerability discovered |
+| {date} | Finding created |
+| {date} | PoC validated |
+| {date} | Status: {final_status} |
+
+## References
+
+- [Wordfence Bug Bounty Program](https://www.wordfence.com/threat-intel/bug-bounty-program/)
+- {Any relevant CWE, CVE references, or similar vulnerabilities}
+```
+
+**Example Implementation:**
+
+```python
+# After validating/rejecting a finding, create the writeup
+writeup_content = f"""# {plugin_name} - {finding['title']}
+
+## Summary
+| Field | Value |
+|-------|-------|
+| Plugin | {plugin_name} ({plugin_slug}) |
+| Version | {finding['plugin_version']} (and likely prior) |
+| Active Installs | {finding['active_installs']:,} |
+| Vulnerability Type | {finding['vuln_type']} |
+| CVSS Score | {finding['cvss_score']} |
+| CVSS Vector | {finding['cvss_vector']} |
+| Authentication | {finding['auth_level']} |
+| Finding ID | {finding['id']} |
+| Status | {finding['status']} |
+
+## Description
+
+{finding['description']}
+
+## Affected Code
+
+**File:** `{finding['affected_file']}`
+**Function:** `{finding.get('affected_function', 'N/A')}()`
+**Line:** {finding.get('affected_line', 'N/A')}
+
+## Validation Notes
+
+{finding.get('validation_notes', 'No validation notes')}
+
+## Timeline
+
+| Date | Action |
+|------|--------|
+| {finding['created_at'][:10]} | Finding created |
+| {datetime.now().strftime('%Y-%m-%d')} | QA triage completed - {finding['status']} |
+"""
+
+# Write to reports directory
+writeup_path = f"reports/{plugin_slug}/{finding['vuln_type']}_{finding['id'][:8]}.md"
+# Use Write tool to save the writeup
+```
+
+**Writeup Checklist:**
+- [ ] Created `reports/{plugin-slug}/` directory if not exists
+- [ ] Saved writeup as `{vuln_type}_{finding_id}.md`
+- [ ] Included all finding metadata in summary table
+- [ ] Documented affected code location
+- [ ] Explained data flow clearly
+- [ ] Referenced PoC script location
+- [ ] Added validation notes and final status
+- [ ] Included remediation recommendations
+
+### Step 6: End-of-Session Summary (Optional)
 
 ```python
 # Send summary of all validated findings
@@ -275,9 +467,15 @@ wpguard_discord_notify_summary(
 **CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed:
 
 ```python
-# After completing QA triage, signal completion
+# After completing QA triage (all findings have writeups), signal completion
 wpguard_scan_state(stage_completed="qa-triage")
 ```
+
+**Before signaling completion, ensure:**
+1. All findings have been triaged (validated/rejected/draft)
+2. All findings have writeups saved to `reports/{plugin-slug}/`
+3. Discord notifications sent for all findings
+4. PoC scripts are saved alongside writeups
 
 This will:
 1. Tell the pipeline daemon you're done

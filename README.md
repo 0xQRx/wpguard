@@ -600,29 +600,49 @@ WordPressGuard includes a fully automated pipeline for continuous WordPress plug
 │                  (Background Process)                       │
 └─────────────────────┬───────────────────────────────────────┘
                       │
-        ┌─────────────┼─────────────┐
-        ▼             ▼             ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-│ tmux session  │ │ tmux session  │ │ tmux session  │
-│  Claude Code  │ │  Claude Code  │ │  Claude Code  │
-│ /target-      │ │ /security-    │ │ /qa-triage    │
-│  research     │ │  research     │ │               │
-└───────┬───────┘ └───────┬───────┘ └───────┬───────┘
-        │                 │                 │
-        ▼                 ▼                 ▼
-   Find plugins     Analyze code      Validate
-   matching         for vulns         findings
-   criteria                           in sandbox
-        │                 │                 │
-        ▼                 ▼                 ▼
-   plugins_pending   findings.json    Discord notify
+    Sequential Stage Execution (per plugin)
+                      │
+    ┌─────────────────┼─────────────────────────────────────┐
+    ▼                 ▼                                     ▼
+┌──────────┐    ┌──────────┐    ┌────────────────────┐  ┌──────────┐
+│ /target- │ → │/security-│ → │   Expert Stages    │→ │/qa-triage│
+│ research │    │ research │    │   (6 specialists)  │  │          │
+└──────────┘    └──────────┘    └────────────────────┘  └──────────┘
+                                         │
+                   ┌─────────────────────┼─────────────────────┐
+                   ▼                     ▼                     ▼
+            ┌────────────┐        ┌────────────┐        ┌────────────┐
+            │/file-rce-  │   →    │/sqli-expert│   →    │/xss-expert │
+            │  expert    │        │            │        │            │
+            └────────────┘        └────────────┘        └────────────┘
+                   │                     │                     │
+                   ▼                     ▼                     ▼
+            ┌────────────┐        ┌────────────┐        ┌────────────┐
+            │/auth-expert│   →    │/object-    │   →    │/ssrf-expert│
+            │            │        │injection-  │        │            │
+            └────────────┘        │expert      │        └────────────┘
+                                  └────────────┘
 ```
 
-### Three Stages
+### Nine Stages (Sequential Per Plugin)
 
 1. **Target Research**: Find WordPress plugins matching criteria, verify Wordfence eligibility, download source code
-2. **Security Research**: Analyze plugin code for vulnerabilities, create findings with PoCs, test against sandbox
-3. **QA/Triage**: Validate findings, verify CVSS scores, reproduce vulnerabilities, send Discord notifications
+2. **Security Research**: General vulnerability analysis - hooks, patterns, data flows
+3. **File/RCE Expert**: File upload, read, write, delete, path traversal, phar deserialization → RCE
+4. **SQLi Expert**: SQL injection in all forms - UNION, blind, second-order, identifier injection
+5. **XSS Expert**: Stored, reflected, DOM XSS with context-aware escaping analysis
+6. **Auth Expert**: Auth bypass, privilege escalation, IDOR, missing authorization checks
+7. **Object Injection Expert**: PHP object injection, phar deserialization, gadget chain construction
+8. **SSRF Expert**: Server-side request forgery, cloud metadata access, internal network scanning
+9. **QA/Triage**: Validate findings, verify CVSS scores, reproduce vulnerabilities, send Discord notifications
+
+### Expert Agent Philosophy
+
+All expert agents operate with an **elite hacker mindset**:
+- **Assume vulnerable** - Every plugin IS vulnerable until YOU personally prove otherwise
+- **Never give up** - Exhaust ALL bypass techniques before marking anything "secure"
+- **Die on that hill** - If defenses exist, find the edge case that breaks them
+- **Deep expertise** - Each expert knows every bypass, every edge case, every obscure technique for their domain
 
 ### Pipeline Modes
 
@@ -679,9 +699,16 @@ wpguard_pipeline_stop(force=True)     # Force kill all workers
 ```
 project/
 ├── .claude/commands/           # Slash command templates
-│   ├── target-research.md
-│   ├── security-research.md
-│   └── qa-triage.md
+│   ├── target-research.md      # Target discovery agent
+│   ├── security-research.md    # General security analysis
+│   ├── file-rce-expert.md      # File ops & RCE specialist
+│   ├── sqli-expert.md          # SQL injection specialist
+│   ├── xss-expert.md           # XSS specialist
+│   ├── auth-expert.md          # Auth/authz specialist
+│   ├── object-injection-expert.md  # PHP object injection specialist
+│   ├── ssrf-expert.md          # SSRF specialist
+│   ├── qa-triage.md            # Validation & submission
+│   └── poc-creator.md          # Changelog → PoC creator
 ├── targets/                    # Downloaded plugins
 │   └── {plugin-slug}/extracted/
 ├── reports/                    # Findings and PoCs
@@ -689,8 +716,23 @@ project/
 ├── wpguard_findings.json       # Vulnerability findings
 ├── wpguard_scan_state.json     # Scan progress
 ├── wpguard_pipeline_state.json # Pipeline state
-└── wpguard_pipeline_logs/      # Worker logs
+└── CLAUDE.md                   # Project instructions
 ```
+
+### Available Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/target-research` | Find and scope WordPress plugins for analysis |
+| `/security-research` | General vulnerability analysis (hooks, patterns, data flows) |
+| `/file-rce-expert` | File upload, read, write, delete, path traversal → RCE |
+| `/sqli-expert` | SQL injection in all forms (UNION, blind, second-order) |
+| `/xss-expert` | Stored, reflected, DOM XSS |
+| `/auth-expert` | Auth bypass, privilege escalation, IDOR, missing authz |
+| `/object-injection-expert` | PHP object injection, phar deserialization |
+| `/ssrf-expert` | Server-side request forgery, cloud metadata access |
+| `/qa-triage` | Validate and submit findings |
+| `/poc-creator` | Analyze changelogs for security fixes and create PoCs |
 
 ## Three-Phase Workflow
 

@@ -1138,21 +1138,92 @@ Before submitting a finding, verify:
 
 ## Mandatory Completion Checklist (REQUIRED)
 
-**Before signaling stage_completed, you MUST verify ALL of these:**
+**Before signaling stage_completed, you MUST complete ALL phases:**
 
+### Phase 1: Discovery & Setup
 ```
-[ ] Tested EVERY AJAX handler in sandbox (not just read the code)
-[ ] Tested EVERY REST API endpoint in sandbox
-[ ] Traced data flow for ALL user inputs ($_GET, $_POST, $_REQUEST, $_FILES)
-[ ] Checked ALL save/update/delete handlers, not just display functions
-[ ] Attempted bypass on EVERY "protected" function (nonce, capability checks)
-[ ] Created at least one finding OR documented why no vulnerabilities exist
-[ ] Attempted at least one PoC (even if unsuccessful)
-[ ] Tested at multiple auth levels (unauth, subscriber, contributor, author)
-[ ] Checked for race conditions in multi-step operations
-[ ] Looked at error handling paths for information disclosure
-[ ] Checked file operations for path traversal
-[ ] Checked database queries for SQL injection
+[ ] Downloaded and extracted plugin source code
+[ ] Checked for known CVEs (wpguard_cve_search) - treat as opportunities, not fixed issues
+[ ] Mapped plugin file structure (all PHP files identified)
+[ ] Identified plugin's main functionality and features
+[ ] Started sandbox and installed plugin (wpguard_sandbox_install_plugin)
+```
+
+### Phase 2: Entry Point Enumeration
+```
+[ ] Found ALL AJAX handlers (grep for wp_ajax_ and wp_ajax_nopriv_)
+[ ] Found ALL REST API endpoints (grep for register_rest_route)
+[ ] Found ALL shortcodes (grep for add_shortcode)
+[ ] Found ALL admin pages/menus (grep for add_menu_page, add_submenu_page)
+[ ] Found ALL form handlers (grep for admin_post_)
+[ ] Found ALL cron jobs (grep for wp_schedule_event, wp_cron)
+```
+
+### Phase 3: Vulnerability Hunting by Type
+
+**Authentication & Authorization:**
+```
+[ ] Tested each AJAX handler at ALL auth levels (unauth/subscriber/contributor/author)
+[ ] Tested each REST endpoint at ALL auth levels
+[ ] Checked for missing capability checks (current_user_can)
+[ ] Checked for missing nonce verification (wp_verify_nonce)
+[ ] Attempted nonce/auth bypass on "protected" functions
+[ ] Checked for IDOR (can user A access user B's data?)
+[ ] Checked for privilege escalation paths
+```
+
+**Injection Vulnerabilities:**
+```
+[ ] Checked ALL $wpdb->query/get_*/prepare calls for SQL injection
+[ ] Checked ALL echo/print statements for XSS (missing esc_html, esc_attr, etc.)
+[ ] Checked ALL include/require statements for LFI/RFI
+[ ] Checked for command injection (exec, system, passthru, shell_exec)
+[ ] Checked for code injection (eval, create_function, preg_replace /e)
+[ ] Checked for object injection (unserialize, maybe_unserialize)
+```
+
+**File Operations:**
+```
+[ ] Checked ALL file uploads (wp_handle_upload, move_uploaded_file, $_FILES)
+[ ] Checked ALL file reads (file_get_contents, fread, readfile)
+[ ] Checked ALL file writes (file_put_contents, fwrite)
+[ ] Checked ALL file deletes (unlink, wp_delete_file, rmdir)
+[ ] Tested for path traversal (../) in all file operations
+[ ] Checked file extension validation (whitelist vs blacklist)
+```
+
+**Data Handling:**
+```
+[ ] Traced ALL user inputs ($_GET, $_POST, $_REQUEST, $_FILES, $_COOKIE)
+[ ] Checked ALL update_option/add_option calls for options injection
+[ ] Checked ALL update_user_meta/update_post_meta calls
+[ ] Checked for CSRF on state-changing operations
+[ ] Checked for SSRF in external requests (wp_remote_get, curl)
+```
+
+**Logic & State:**
+```
+[ ] Checked for race conditions (TOCTOU) in multi-step operations
+[ ] Checked error handlers for information disclosure
+[ ] Checked debug/logging functions for sensitive data exposure
+[ ] Checked import/export features for XXE, injection
+[ ] Checked upgrade/migration code paths
+```
+
+### Phase 4: Testing & Documentation
+```
+[ ] Tested findings in sandbox (not just code review)
+[ ] Created finding for EVERY potential issue (even uncertain ones)
+[ ] Attempted PoC for each finding
+[ ] Tested at lowest possible auth level for each finding
+[ ] Documented exploitation steps clearly
+```
+
+### Phase 5: Final Verification
+```
+[ ] Re-checked any "secure" code for bypasses
+[ ] Verified no entry points were missed
+[ ] All findings have complete data flow documentation
 ```
 
 **If ANY checkbox is unchecked, you are NOT done. Go back and complete it.**

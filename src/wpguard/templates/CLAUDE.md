@@ -4,10 +4,19 @@ This is a wpguard security research project for the Wordfence Bug Bounty Program
 
 ## Available Slash Commands
 
+### Core Workflow
 - `/target-research` - Find and scope WordPress plugins for analysis
-- `/security-research` - Analyze plugins for vulnerabilities
+- `/security-research` - Analyze plugins for vulnerabilities (general)
 - `/qa-triage` - Validate and submit findings
 - `/poc-creator` - Analyze changelogs for security fixes and create PoCs for patched vulnerabilities
+
+### Expert Agents (Deep-Dive Specialists)
+- `/file-rce-expert` - File upload, read, write, delete, path traversal → RCE
+- `/sqli-expert` - SQL injection in all forms (UNION, blind, second-order)
+- `/xss-expert` - Stored, reflected, DOM XSS
+- `/auth-expert` - Auth bypass, privilege escalation, IDOR, missing authz
+- `/object-injection-expert` - PHP object injection, phar deserialization
+- `/ssrf-expert` - Server-side request forgery, cloud metadata access
 
 ## MCP Tools Available
 
@@ -131,7 +140,13 @@ project/
 
 ## Pipeline Automation
 
-The pipeline automates the full research workflow: target-research -> security-research -> qa-triage
+The pipeline automates the full research workflow with expert agents:
+
+```
+target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → qa-triage
+```
+
+Each plugin goes through ALL stages sequentially for maximum coverage.
 
 ### Starting the Pipeline
 
@@ -197,4 +212,4 @@ wpguard_pipeline_stop(force=True)
 
 - `wpguard_pipeline_state.json` - Daemon state, worker status, progress
 - `wpguard_daemon.pid` - Process ID file
-- `wpguard_pipeline_logs/` - Worker output logs
+- `wpguard_pipeline_logs/` - Command scripts and daemon logs
