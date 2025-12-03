@@ -872,20 +872,9 @@ async def list_tools() -> list[Tool]:
                         "description": "Number of targets per cycle (default: 5)",
                         "default": 5,
                     },
-                    "restart_mode": {
-                        "type": "string",
-                        "enum": ["deeper", "next", "configurable"],
-                        "description": "How to handle security-research restarts: 'deeper' (same plugin), 'next' (move on), 'configurable' (auto)",
-                        "default": "deeper",
-                    },
-                    "max_restarts": {
+                    "num_iterations": {
                         "type": "integer",
-                        "description": "Max restarts per plugin for security-research (default: 2)",
-                        "default": 2,
-                    },
-                    "expert_restarts": {
-                        "type": "integer",
-                        "description": "Number of iterations experts run (1 = first round only, 2 = first two, etc. Default: 2)",
+                        "description": "Number of times to run security-research + experts per plugin (default: 2)",
                         "default": 2,
                     },
                     "deferred_qa": {
@@ -982,18 +971,9 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "restart_mode": {
-                        "type": "string",
-                        "enum": ["deeper", "next", "configurable"],
-                        "description": "Update restart mode",
-                    },
-                    "max_restarts": {
+                    "num_iterations": {
                         "type": "integer",
-                        "description": "Update max restarts for security-research",
-                    },
-                    "expert_restarts": {
-                        "type": "integer",
-                        "description": "Number of iterations experts run (1 = first round only, 2 = first two rounds, etc.)",
+                        "description": "Number of times to run security-research + experts per plugin",
                     },
                     "deferred_qa": {
                         "type": "boolean",
@@ -1328,9 +1308,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _pipeline_start(
             arguments.get("mode", "continuous"),
             arguments.get("target_count", 5),
-            arguments.get("restart_mode", "deeper"),
-            arguments.get("max_restarts", 2),
-            arguments.get("expert_restarts", 2),
+            arguments.get("num_iterations", 2),
             arguments.get("deferred_qa", True),
             arguments.get("target_criteria"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
@@ -1356,9 +1334,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_pipeline_config":
         return await _pipeline_config(
-            arguments.get("restart_mode"),
-            arguments.get("max_restarts"),
-            arguments.get("expert_restarts"),
+            arguments.get("num_iterations"),
             arguments.get("deferred_qa"),
             arguments.get("notify_discord"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
@@ -2479,9 +2455,7 @@ async def _cve_stats() -> dict[str, Any]:
 def _pipeline_start_sync(
     mode: str,
     target_count: int,
-    restart_mode: str,
-    max_restarts: int,
-    expert_restarts: int,
+    num_iterations: int,
     deferred_qa: bool,
     target_criteria: str | None,
     output_dir: str,
@@ -2492,9 +2466,7 @@ def _pipeline_start_sync(
     return daemon.start(
         mode=mode,
         target_count=target_count,
-        restart_mode=restart_mode,
-        max_restarts=max_restarts,
-        expert_restarts=expert_restarts,
+        num_iterations=num_iterations,
         deferred_qa=deferred_qa,
         target_criteria=target_criteria,
     )
@@ -2503,16 +2475,14 @@ def _pipeline_start_sync(
 async def _pipeline_start(
     mode: str,
     target_count: int,
-    restart_mode: str,
-    max_restarts: int,
-    expert_restarts: int,
+    num_iterations: int,
     deferred_qa: bool,
     target_criteria: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Start pipeline daemon."""
     return await run_in_executor(
-        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, expert_restarts, deferred_qa, target_criteria, output_dir
+        _pipeline_start_sync, mode, target_count, num_iterations, deferred_qa, target_criteria, output_dir
     )
 
 
@@ -2565,9 +2535,7 @@ async def _pipeline_resume(output_dir: str) -> dict[str, Any]:
 
 
 def _pipeline_config_sync(
-    restart_mode: str | None,
-    max_restarts: int | None,
-    expert_restarts: int | None,
+    num_iterations: int | None,
     deferred_qa: bool | None,
     notify_discord: bool | None,
     output_dir: str,
@@ -2578,12 +2546,8 @@ def _pipeline_config_sync(
 
     # If no updates, just return current config
     updates = {}
-    if restart_mode is not None:
-        updates["restart_mode"] = restart_mode
-    if max_restarts is not None:
-        updates["max_restarts"] = max_restarts
-    if expert_restarts is not None:
-        updates["expert_restarts"] = expert_restarts
+    if num_iterations is not None:
+        updates["num_iterations"] = num_iterations
     if deferred_qa is not None:
         updates["deferred_qa"] = deferred_qa
     if notify_discord is not None:
@@ -2595,16 +2559,14 @@ def _pipeline_config_sync(
 
 
 async def _pipeline_config(
-    restart_mode: str | None,
-    max_restarts: int | None,
-    expert_restarts: int | None,
+    num_iterations: int | None,
     deferred_qa: bool | None,
     notify_discord: bool | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Get or update pipeline config."""
     return await run_in_executor(
-        _pipeline_config_sync, restart_mode, max_restarts, expert_restarts, deferred_qa, notify_discord, output_dir
+        _pipeline_config_sync, num_iterations, deferred_qa, notify_discord, output_dir
     )
 
 

@@ -162,9 +162,7 @@ Each plugin goes through ALL 13 expert stages sequentially for maximum coverage.
 wpguard_pipeline_start(
     mode="continuous",     # Loop: find targets -> research -> qa -> repeat
     target_count=10,       # Plugins per cycle
-    restart_mode="deeper", # Restart security-research on same plugin to find more vulns
-    max_restarts=2,        # Max restart attempts per plugin (default: 2)
-    expert_restarts=2      # How many iterations experts run (default: 2)
+    num_iterations=2       # Run security-research + experts twice per plugin (default: 2)
 )
 
 # Single cycle (one batch of targets)
@@ -172,6 +170,9 @@ wpguard_pipeline_start(mode="single", target_count=5)
 
 # Just find targets (no analysis)
 wpguard_pipeline_start(mode="targets-only", target_count=20)
+
+# More thorough analysis (3 iterations)
+wpguard_pipeline_start(num_iterations=3)
 ```
 
 ### Monitoring Progress
@@ -201,7 +202,7 @@ wpguard_pipeline_pause()
 wpguard_pipeline_resume()
 
 # Change configuration mid-run
-wpguard_pipeline_config(restart_mode="next", max_restarts=5, expert_restarts=2)
+wpguard_pipeline_config(num_iterations=3)
 
 # Stop the pipeline
 wpguard_pipeline_stop()
@@ -210,36 +211,29 @@ wpguard_pipeline_stop()
 wpguard_pipeline_stop(force=True)
 ```
 
-### Restart Modes
+### Configuration Options
 
-- **`deeper`**: After QA, restart security-research on the same plugin to explore different code paths
-- **`next`**: After QA, move to the next plugin in the queue
-- **`configurable`**: Auto-mode (deeper for first 2 restarts, then move to next)
+#### `num_iterations` (default: 2)
 
-### Expert Iterations (`expert_restarts`)
+Number of times to run security-research + all 13 experts per plugin:
+- **`num_iterations=1`**: Single pass (faster, less thorough)
+- **`num_iterations=2`**: Two passes (default, good balance)
+- **`num_iterations=3`**: Three passes (more thorough)
 
-Controls how many restart cycles include expert agents:
-- **`expert_restarts=1`**: Experts run only on first round, restarts skip them
-- **`expert_restarts=2`** (default): Experts run on first two rounds
-- **`expert_restarts=3`**: Experts run on all rounds
+#### `deferred_qa` (default: true)
 
-### Deferred QA (`deferred_qa`)
+Controls when QA runs:
+- **`deferred_qa=true`** (default): QA runs once after all iterations complete
+- **`deferred_qa=false`**: QA runs after each iteration
 
-Controls when QA runs relative to iterations:
-- **`deferred_qa=true`** (default): QA runs only once after all iterations complete
-- **`deferred_qa=false`**: QA runs after each iteration (legacy behavior)
+### Pipeline Flow
 
-Example with `max_restarts=2, expert_restarts=2, deferred_qa=true` (default):
+With `num_iterations=2, deferred_qa=true` (default):
 ```
-Round 1: security-research → all 13 experts
-Round 2: security-research → all 13 experts
-Final:   qa-triage (runs once, reviews all findings)
-```
-
-Example with `deferred_qa=false`:
-```
-Round 1: security-research → all 13 experts → qa-triage
-Round 2: security-research → all 13 experts → qa-triage
+Iteration 1: security-research → all 13 experts
+Iteration 2: security-research → all 13 experts
+Final:       qa-triage (runs once, reviews all findings)
+→ Next plugin
 ```
 
 ### Pipeline State Files

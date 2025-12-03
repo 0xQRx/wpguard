@@ -74,10 +74,8 @@ PIPELINE_LOG_DIR = "wpguard_pipeline_logs"
 DEFAULT_PIPELINE_CONFIG = {
     "heartbeat_interval": 30,
     "worker_check_interval": 10,
-    "max_restarts": 2,
-    "expert_restarts": 2,  # Number of iterations experts run (1 = only first round, 2 = first two rounds, etc.)
-    "restart_mode": "deeper",  # "deeper", "next", or "configurable"
-    "deferred_qa": True,  # If true, QA runs only after all iterations complete (not after each)
+    "num_iterations": 2,  # Number of times to run security-research + experts per plugin
+    "deferred_qa": True,  # If true, QA runs only after all iterations complete
     "target_count": 5,
     "min_installs": 500,
     "worker_timeout_minutes": 120,  # 2 hours default timeout per worker
@@ -1065,15 +1063,8 @@ class PipelineDaemon:
             return None
 
         elif current == "security-research":
-            # Check if experts should run this iteration
-            restart_count = state["workers"]["security-research"]["restart_count"]
-            expert_restarts = state["config"].get("expert_restarts", 1)
-            if restart_count < expert_restarts:
-                # Run experts for first N iterations (configurable)
-                return "file-rce-expert"
-            else:
-                # Skip experts on later restarts - they already ran enough
-                return "qa-triage"
+            # Always run experts after security-research
+            return "file-rce-expert"
 
         elif current in EXPERT_STAGES:
             # Get next stage in order
@@ -1086,8 +1077,8 @@ class PipelineDaemon:
                 deferred_qa = state["config"].get("deferred_qa", True)
                 if deferred_qa:
                     worker = state["workers"]["security-research"]
-                    max_restarts = state["config"].get("max_restarts", 2)
-                    if worker["restart_count"] < max_restarts - 1:
+                    num_iterations = state["config"].get("num_iterations", 2)
+                    if worker["restart_count"] < num_iterations - 1:
                         # More iterations to go - loop back to security-research
                         worker["restart_count"] += 1
                         return "security-research"
@@ -1116,18 +1107,11 @@ class PipelineDaemon:
                     return "security-research"
                 return None
 
-            # Non-deferred mode: check if we should go deeper on same plugin
-            restart_mode = state["config"].get("restart_mode", "deeper")
+            # Non-deferred mode: check if more iterations needed
             worker = state["workers"]["security-research"]
-            max_restarts = state["config"].get("max_restarts", 3)
+            num_iterations = state["config"].get("num_iterations", 2)
 
-            go_deeper = False
-            if restart_mode == "deeper":
-                go_deeper = worker["restart_count"] < max_restarts
-            elif restart_mode == "configurable":
-                go_deeper = worker["restart_count"] < 2
-
-            if go_deeper:
+            if worker["restart_count"] < num_iterations - 1:
                 worker["restart_count"] += 1
                 state["pipeline"]["current_plugin"] = current_plugin
                 return "security-research"
