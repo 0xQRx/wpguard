@@ -54,7 +54,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-wpguard = ["py.typed", "templates/*.md"]
+wpguard = ["py.typed", "templates/*.md", "wordpress_instance/**/*"]
 
 [tool.black]
 line-length = 100

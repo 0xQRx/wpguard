@@ -72,12 +72,12 @@ Start pipeline: {
 Find and scan file-related plugins continuously:
 
 ```
-Start pipeline: {
+Start pipeline, ensure proper config: {
     "mode": "continuous",
-    "target_count": 10,
-    "target_criteria": "browse:updated min_installs:3000 max_installs:5000 plugins that work with files",
-    "num_iterations": 2,
-    "min_installs": 500
+    "target_count": 2,
+    "target_criteria": "min_installs:60000 max_installs:65000 plugins that work with files, no woocommerce and not depending on other plugins, select 2 best suited targets",
+    "num_iterations": 1,
+    "min_installs": 50000
 }
 ```
 

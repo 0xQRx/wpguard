@@ -15,8 +15,28 @@ WP_SANDBOX_HOST = os.environ.get("WP_SANDBOX_HOST", "172.17.0.1")
 WP_SANDBOX_PORT = int(os.environ.get("WP_SANDBOX_PORT", "8000"))
 WP_CONTAINER_NAME = os.environ.get("WP_CONTAINER_NAME", "wp_app")
 
-# WordPress Sandbox Docker Compose directory (relative to package)
-WP_SANDBOX_COMPOSE_DIR = Path(__file__).parent.parent.parent / "wordpress_instance"
+# WordPress Sandbox Docker Compose directory
+def _get_sandbox_dir() -> Path:
+    """Get WordPress sandbox directory with fallback logic."""
+    # Environment override (highest priority)
+    env_path = os.environ.get("WPGUARD_SANDBOX_DIR")
+    if env_path and Path(env_path).exists():
+        return Path(env_path)
+
+    # Package location (installed mode)
+    pkg_path = Path(__file__).parent / "wordpress_instance"
+    if pkg_path.exists():
+        return pkg_path
+
+    # Development fallback (running from source tree)
+    dev_path = Path(__file__).parent.parent.parent / "wordpress_instance"
+    if dev_path.exists():
+        return dev_path
+
+    # Return package path even if missing (will fail with clear error)
+    return pkg_path
+
+WP_SANDBOX_COMPOSE_DIR = _get_sandbox_dir()
 
 # WordPress Test Credentials (role -> (username, password))
 # All roles up to Author are IN SCOPE for Wordfence Bug Bounty
@@ -54,14 +74,3 @@ def get_discord_webhook(cli_webhook: str | None = None) -> str | None:
     return cli_webhook or DISCORD_WEBHOOK_URL
 
 
-# Pipeline automation configuration
-# NOTE: Discord notifications are handled by qa-triage agent (wpguard_discord_notify_finding)
-# The pipeline daemon does NOT send notifications - only validated/rejected findings are reported
-PIPELINE_CONFIG = {
-    "heartbeat_interval": 30,        # Seconds between heartbeats
-    "worker_check_interval": 10,     # Seconds between worker checks
-    "max_restarts": 3,               # Max restarts per plugin for security-research
-    "restart_mode": "deeper",        # "deeper", "next", or "configurable"
-    "target_count": 5,               # Targets per cycle
-    "min_installs": 500,             # Minimum installs for targets
-}
