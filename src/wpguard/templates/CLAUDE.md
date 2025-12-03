@@ -223,7 +223,20 @@ Controls how many restart cycles include expert agents:
 - **`expert_restarts=2`** (default): Experts run on first two rounds
 - **`expert_restarts=3`**: Experts run on all rounds
 
-Example with `max_restarts=2, expert_restarts=2` (default):
+### Deferred QA (`deferred_qa`)
+
+Controls when QA runs relative to iterations:
+- **`deferred_qa=true`** (default): QA runs only once after all iterations complete
+- **`deferred_qa=false`**: QA runs after each iteration (legacy behavior)
+
+Example with `max_restarts=2, expert_restarts=2, deferred_qa=true` (default):
+```
+Round 1: security-research → all 13 experts
+Round 2: security-research → all 13 experts
+Final:   qa-triage (runs once, reviews all findings)
+```
+
+Example with `deferred_qa=false`:
 ```
 Round 1: security-research → all 13 experts → qa-triage
 Round 2: security-research → all 13 experts → qa-triage

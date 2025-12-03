@@ -888,6 +888,11 @@ async def list_tools() -> list[Tool]:
                         "description": "Number of iterations experts run (1 = first round only, 2 = first two, etc. Default: 2)",
                         "default": 2,
                     },
+                    "deferred_qa": {
+                        "type": "boolean",
+                        "description": "If true, QA runs only after all iterations complete (default: true)",
+                        "default": True,
+                    },
                     "target_criteria": {
                         "type": "string",
                         "description": "Custom criteria/arguments to pass to /target-research (e.g., 'browse:updated min_installs:1000')",
@@ -989,6 +994,10 @@ async def list_tools() -> list[Tool]:
                     "expert_restarts": {
                         "type": "integer",
                         "description": "Number of iterations experts run (1 = first round only, 2 = first two rounds, etc.)",
+                    },
+                    "deferred_qa": {
+                        "type": "boolean",
+                        "description": "If true, QA runs only after all iterations complete",
                     },
                     "notify_discord": {
                         "type": "boolean",
@@ -1322,6 +1331,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("restart_mode", "deeper"),
             arguments.get("max_restarts", 2),
             arguments.get("expert_restarts", 2),
+            arguments.get("deferred_qa", True),
             arguments.get("target_criteria"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
@@ -1349,6 +1359,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("restart_mode"),
             arguments.get("max_restarts"),
             arguments.get("expert_restarts"),
+            arguments.get("deferred_qa"),
             arguments.get("notify_discord"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
@@ -2471,6 +2482,7 @@ def _pipeline_start_sync(
     restart_mode: str,
     max_restarts: int,
     expert_restarts: int,
+    deferred_qa: bool,
     target_criteria: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
@@ -2483,6 +2495,7 @@ def _pipeline_start_sync(
         restart_mode=restart_mode,
         max_restarts=max_restarts,
         expert_restarts=expert_restarts,
+        deferred_qa=deferred_qa,
         target_criteria=target_criteria,
     )
 
@@ -2493,12 +2506,13 @@ async def _pipeline_start(
     restart_mode: str,
     max_restarts: int,
     expert_restarts: int,
+    deferred_qa: bool,
     target_criteria: str | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Start pipeline daemon."""
     return await run_in_executor(
-        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, expert_restarts, target_criteria, output_dir
+        _pipeline_start_sync, mode, target_count, restart_mode, max_restarts, expert_restarts, deferred_qa, target_criteria, output_dir
     )
 
 
@@ -2554,6 +2568,7 @@ def _pipeline_config_sync(
     restart_mode: str | None,
     max_restarts: int | None,
     expert_restarts: int | None,
+    deferred_qa: bool | None,
     notify_discord: bool | None,
     output_dir: str,
 ) -> dict[str, Any]:
@@ -2569,6 +2584,8 @@ def _pipeline_config_sync(
         updates["max_restarts"] = max_restarts
     if expert_restarts is not None:
         updates["expert_restarts"] = expert_restarts
+    if deferred_qa is not None:
+        updates["deferred_qa"] = deferred_qa
     if notify_discord is not None:
         updates["notify_discord"] = notify_discord
 
@@ -2581,12 +2598,13 @@ async def _pipeline_config(
     restart_mode: str | None,
     max_restarts: int | None,
     expert_restarts: int | None,
+    deferred_qa: bool | None,
     notify_discord: bool | None,
     output_dir: str,
 ) -> dict[str, Any]:
     """Get or update pipeline config."""
     return await run_in_executor(
-        _pipeline_config_sync, restart_mode, max_restarts, expert_restarts, notify_discord, output_dir
+        _pipeline_config_sync, restart_mode, max_restarts, expert_restarts, deferred_qa, notify_discord, output_dir
     )
 
 

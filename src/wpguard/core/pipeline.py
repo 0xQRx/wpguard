@@ -77,6 +77,7 @@ DEFAULT_PIPELINE_CONFIG = {
     "max_restarts": 2,
     "expert_restarts": 2,  # Number of iterations experts run (1 = only first round, 2 = first two rounds, etc.)
     "restart_mode": "deeper",  # "deeper", "next", or "configurable"
+    "deferred_qa": True,  # If true, QA runs only after all iterations complete (not after each)
     "target_count": 5,
     "min_installs": 500,
     "worker_timeout_minutes": 120,  # 2 hours default timeout per worker
@@ -1078,16 +1079,26 @@ class PipelineDaemon:
             # Get next stage in order
             current_idx = STAGE_ORDER.index(current)
             next_idx = current_idx + 1
+
+            # Check if next stage is qa-triage (last expert just finished)
+            if next_idx < len(STAGE_ORDER) and STAGE_ORDER[next_idx] == "qa-triage":
+                # Deferred QA: loop back to security-research if more iterations remain
+                deferred_qa = state["config"].get("deferred_qa", True)
+                if deferred_qa:
+                    worker = state["workers"]["security-research"]
+                    max_restarts = state["config"].get("max_restarts", 2)
+                    if worker["restart_count"] < max_restarts - 1:
+                        # More iterations to go - loop back to security-research
+                        worker["restart_count"] += 1
+                        return "security-research"
+                # All iterations done or deferred_qa=false - proceed to QA
+                return "qa-triage"
+
             if next_idx < len(STAGE_ORDER):
                 return STAGE_ORDER[next_idx]
             return None
 
         elif current == "qa-triage":
-            # Check restart mode
-            restart_mode = state["config"].get("restart_mode", "deeper")
-            worker = state["workers"]["security-research"]
-            max_restarts = state["config"].get("max_restarts", 3)
-
             # Move current plugin to completed
             current_plugin = state["pipeline"].get("current_plugin")
             if current_plugin:
@@ -1096,16 +1107,27 @@ class PipelineDaemon:
                 if current_plugin in state["pipeline"]["plugins_queue"]:
                     state["pipeline"]["plugins_queue"].remove(current_plugin)
 
-            # Determine if we go deeper or next
+            deferred_qa = state["config"].get("deferred_qa", True)
+            if deferred_qa:
+                # Deferred QA: all iterations already done, always move to next plugin
+                if state["pipeline"]["plugins_queue"]:
+                    state["pipeline"]["current_plugin"] = state["pipeline"]["plugins_queue"][0]
+                    state["workers"]["security-research"]["restart_count"] = 0
+                    return "security-research"
+                return None
+
+            # Non-deferred mode: check if we should go deeper on same plugin
+            restart_mode = state["config"].get("restart_mode", "deeper")
+            worker = state["workers"]["security-research"]
+            max_restarts = state["config"].get("max_restarts", 3)
+
             go_deeper = False
             if restart_mode == "deeper":
                 go_deeper = worker["restart_count"] < max_restarts
             elif restart_mode == "configurable":
-                # Default: deeper for first 2, then next
                 go_deeper = worker["restart_count"] < 2
 
             if go_deeper:
-                # Go back to security research on same plugin
                 worker["restart_count"] += 1
                 state["pipeline"]["current_plugin"] = current_plugin
                 return "security-research"
