@@ -347,7 +347,7 @@ class PipelineDaemon:
         elif stage == "security-research":
             if is_resume:
                 initial_prompt = (
-                    f"Resume security research for {plugin_slug}. "
+                    f"/security-research {plugin_slug}. "
                     f"This is restart #{restart_count}. "
                     f"Found {findings_count} findings so far. "
                     f"Explore different code paths than previous session. "
@@ -359,7 +359,7 @@ class PipelineDaemon:
             # Expert agents - include restart context if on a pipeline restart cycle
             if is_resume and restart_count > 0:
                 initial_prompt = (
-                    f"Resume /{stage} for {plugin_slug}. "
+                    f"/{stage} for {plugin_slug}. "
                     f"This is pipeline restart #{restart_count}. "
                     f"Found {findings_count} findings so far. "
                     f"Focus on different attack vectors than previous runs. "

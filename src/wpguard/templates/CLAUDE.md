@@ -145,6 +145,30 @@ project/
 
 **Key Point:** Always test each vulnerability at EVERY applicable auth level. A finding exploitable by Author is still valuable - document it with the correct auth_level.
 
+## CRITICAL: Your job is to PROVE the code is vulnerable, not confirm it's safe.
+
+## CRITICAL: Previous CVEs Do NOT Mean Fixed Code
+
+If you find previous CVEs for this plugin (via `wpguard_cve_search`):
+
+- **DO NOT assume the vulnerability was properly fixed** - 99/100 times fixes are incomplete
+- **DO NOT skip similar code patterns** - the same mistake is likely repeated elsewhere
+- **DO look for bypasses** of the "fix" - developers often patch symptoms, not root causes
+- **DO check similar functionality** - if SQLi was in search, check ALL query functions
+- **DO check different entry points** - fix may only cover one path to the sink
+
+```
+WRONG MINDSET:
+"This plugin had CVE-2023-XXXX for SQLi in the search function.
+That's been fixed, so I'll skip the search code."
+
+CORRECT MINDSET:
+"This plugin had SQLi before - the developers don't understand secure coding.
+Let me check if the fix is complete, find bypasses, and look for the
+same pattern in ALL other database queries."
+```
+
+
 ## Pipeline Automation
 
 The pipeline automates the full research workflow with expert agents:
@@ -241,3 +265,5 @@ Final:       qa-triage (runs once, reviews all findings)
 - `wpguard_pipeline_state.json` - Daemon state, worker status, progress
 - `wpguard_daemon.pid` - Process ID file
 - `wpguard_pipeline_logs/` - Command scripts and daemon logs
+
+
