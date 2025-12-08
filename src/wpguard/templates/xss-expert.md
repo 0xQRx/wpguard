@@ -402,9 +402,44 @@ Unauthenticated Stored XSS: 7.2 High (S:C bumps it up)
 Subscriber+ Stored XSS: 6.4 Medium
 Contributor+ Stored XSS: 5.4 Medium
 Unauthenticated Reflected XSS: 6.1 Medium
-Subscriber+ Reflected XSS: 5.4 Medium
 DOM-based XSS: Similar to reflected (depends on trigger)
 Self-XSS: Usually out of scope (UI:R, S:U)
+```
+
+## CRITICAL: Reflected XSS is ALWAYS Unauthenticated
+
+**Reflected XSS auth_level is ALWAYS "unauthenticated", regardless of which page it affects.**
+
+Why? Reflected XSS attacks **users**, not the site:
+1. Attacker crafts malicious URL **locally** (no account needed on target site)
+2. Attacker sends link to victim via email, social media, etc.
+3. Victim (logged-in user) clicks link
+4. XSS executes with **victim's session**
+
+Since the attacker needs no privileges to craft the payload, report as `auth_level="unauthenticated"`.
+
+**Document the targeted role in your finding:**
+- Reflected XSS on admin page → targets administrators
+- Reflected XSS on subscriber dashboard → targets subscribers+
+- Reflected XSS on public page → targets any logged-in user
+
+```python
+wpguard_finding_create(
+    vuln_type="reflected_xss",
+    auth_level="unauthenticated",  # ALWAYS - attacker needs no account
+    description="""
+## Target Role
+This vulnerability targets **Administrator** users. The XSS is in the admin settings page,
+so only administrators would visit this URL.
+
+## Attack Scenario
+1. Attacker crafts: /wp-admin/options.php?page=plugin&search=<script>alert(1)</script>
+2. Attacker sends link to site admin
+3. Admin clicks link while logged in
+4. XSS executes, stealing admin cookies/session
+    """,
+    # ...
+)
 ```
 
 ---

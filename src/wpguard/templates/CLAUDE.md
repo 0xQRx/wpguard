@@ -125,9 +125,17 @@ project/
 |------|--------------|---------------------|
 | High Threat | 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc |
 | Common/Dangerous | 500 | SQL Injection, Stored XSS |
-| Standard Researchers | 50,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
-| Resourceful Researchers | 10,000 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
-| 1337 Researchers | 500 | Reflected XSS, CSRF, Missing Auth, IDOR, SSRF, Object Injection |
+| Standard Researchers | 50,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
+| Resourceful Researchers | 10,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
+| 1337 Researchers | 500 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
+
+**\* Special Note on Reflected XSS and CSRF:**
+These vulnerabilities are ALWAYS reported with `auth_level="unauthenticated"` because:
+- The attacker crafts the malicious payload/page **locally** (no account needed)
+- The victim (a logged-in user) is tricked into executing it
+- The attack runs with the **victim's privileges**, not the attacker's
+
+When reporting, document the **targeted role** in the description (e.g., "Targets Administrator users").
 
 ## Authentication Levels to Audit
 

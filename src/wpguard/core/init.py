@@ -97,6 +97,9 @@ WPGUARD_BASH_COMMANDS = [
     "Bash(python3:*)",
     "Bash(ls:*)",
     "Bash(grep:*)",
+    "Bash(cd:*)",
+    "Bash(cat:*)",
+    "Bash(svn:*)",
 ]
 
 # Core Claude tools needed for autonomous operation

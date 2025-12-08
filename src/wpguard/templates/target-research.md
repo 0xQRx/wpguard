@@ -30,9 +30,11 @@ This agent operates within an authorized bug bounty program. All research target
 |-------------------|--------------|-------|
 | High Threat | 25 | RCE, File Upload/Delete, Auth Bypass |
 | Common/Dangerous | 500 | SQLi, Stored XSS |
-| Standard Researchers | 50,000 | Reflected XSS, CSRF, IDOR, etc. |
-| Resourceful Researchers | 10,000 | Reflected XSS, CSRF, IDOR, etc. |
-| 1337 Researchers | 500 | Reflected XSS, CSRF, IDOR, etc. |
+| Standard Researchers | 50,000 | Reflected XSS*, CSRF*, IDOR, etc. |
+| Resourceful Researchers | 10,000 | Reflected XSS*, CSRF*, IDOR, etc. |
+| 1337 Researchers | 500 | Reflected XSS*, CSRF*, IDOR, etc. |
+
+**\* Note:** Reflected XSS and CSRF are always in scope as unauthenticated vulnerabilities (attacker crafts payload locally, targets logged-in users).
 
 ## Workflow
 

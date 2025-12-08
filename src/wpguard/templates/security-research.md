@@ -655,6 +655,37 @@ Check:
 | Editor | - | - | NO | - |
 | Administrator | - | - | NO | - |
 
+### Special Case: Reflected XSS and CSRF
+
+**Reflected XSS and CSRF are ALWAYS classified as `auth_level="unauthenticated"`.**
+
+Why? These vulnerabilities attack **users**, not the site directly:
+1. Attacker crafts a malicious link/page **locally** (needs no account on target site)
+2. Attacker tricks victim into clicking/visiting
+3. Attack executes with **victim's privileges**
+
+Since the attacker needs no privileges to craft the payload, `auth_level` is always `unauthenticated`.
+
+**Document the targeted role in the description:**
+```python
+wpguard_finding_create(
+    vuln_type="reflected_xss",  # or "csrf"
+    auth_level="unauthenticated",  # ALWAYS unauthenticated
+    description="""
+## Target Role
+This vulnerability targets **Subscriber+** users. Any logged-in user can be attacked
+by tricking them into clicking a malicious link.
+
+## Attack Scenario
+1. Attacker crafts URL: https://target.com/?search=<script>...</script>
+2. Attacker sends link to victim (subscriber/admin/etc.)
+3. Victim clicks link while logged in
+4. XSS executes with victim's session
+    """,
+    # ...
+)
+```
+
 ### Testing Strategy per Flow:
 
 ```

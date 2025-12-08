@@ -374,6 +374,43 @@ CSRF on low-impact action: 4.3 Medium
 CSRF requiring specific conditions: -0.5 to -1.0 (AC:H)
 ```
 
+## CRITICAL: CSRF is ALWAYS Unauthenticated
+
+**CSRF auth_level is ALWAYS "unauthenticated", regardless of which action it triggers.**
+
+Why? CSRF attacks **users**, not the site directly:
+1. Attacker creates malicious page **locally** (no account needed on target site)
+2. Attacker tricks victim into visiting the page
+3. Victim's browser sends authenticated request to target site
+4. Action executes with **victim's privileges**
+
+Since the attacker needs no privileges to craft the CSRF page, report as `auth_level="unauthenticated"`.
+
+**Document the targeted role in your finding:**
+- CSRF on admin action → targets administrators
+- CSRF on subscriber settings → targets subscribers+
+- CSRF on any authenticated action → targets any logged-in user
+
+```python
+wpguard_finding_create(
+    vuln_type="csrf",
+    auth_level="unauthenticated",  # ALWAYS - attacker needs no account
+    description="""
+## Target Role
+This vulnerability targets **Subscriber+** users. Any logged-in user can be attacked
+by tricking them into visiting a malicious page.
+
+## Attack Scenario
+1. Attacker creates page with auto-submitting form to /wp-admin/admin-ajax.php
+2. Attacker tricks victim into visiting the page (email link, social media, etc.)
+3. Victim's browser submits form with their session cookies
+4. Action executes with victim's privileges - settings changed, data deleted, etc.
+    """,
+    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",  # PR:N because attacker needs no privs
+    # ...
+)
+```
+
 ---
 
 ## Draft Findings (When PoC Fails)

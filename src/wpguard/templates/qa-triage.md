@@ -589,12 +589,33 @@ wpguard_discord_notify_summary(
 | Priv Esc | 25 | Unauth/Sub/Contrib/Author |
 | SQL Injection | 500 | Unauth/Sub/Contrib/Author |
 | Stored XSS | 500 | Unauth/Sub/Contrib/Author |
-| Reflected XSS | 50,000 | Unauth/Sub/Contrib/Author |
-| CSRF (impactful) | 50,000 | Unauth/Sub/Contrib/Author |
+| Reflected XSS* | 50,000 | **Always Unauthenticated** |
+| CSRF (impactful)* | 50,000 | **Always Unauthenticated** |
 | Missing Authz | 50,000 | Unauth/Sub/Contrib/Author |
 | Any | Any | Editor/Admin = OUT OF SCOPE |
 
 **All auth levels up to and including Author are IN SCOPE.**
+
+### *Special Note on Reflected XSS and CSRF
+
+**Reflected XSS and CSRF are ALWAYS reported with `auth_level="unauthenticated"`** because:
+- The attacker crafts the malicious payload/page **locally** (no account needed)
+- The victim (logged-in user) is tricked into executing it
+- The attack runs with the **victim's privileges**
+
+**When validating these findings:**
+1. Verify `auth_level="unauthenticated"` (fix if reported differently)
+2. Check the description documents the **targeted role** (e.g., "Targets Administrator users")
+3. CVSS vector should have `PR:N` (Privileges Required: None)
+
+**Example correction:**
+```python
+# If finding was incorrectly reported as subscriber-level CSRF:
+wpguard_finding_update(
+    finding_id="abc123",
+    validation_notes="CORRECTED: auth_level changed from 'subscriber' to 'unauthenticated'. CSRF always unauthenticated - attacker needs no account to craft the attack page."
+)
+```
 
 ## Out of Scope Vulnerability Types
 
