@@ -79,6 +79,7 @@ DEFAULT_PIPELINE_CONFIG = {
     "target_count": 5,
     "min_installs": 500,
     "worker_timeout_minutes": 120,  # 2 hours default timeout per worker
+    "max_parallel_workers": 3,  # Max concurrent expert workers (includes security-research)
 }
 
 
@@ -141,7 +142,10 @@ class PipelineDaemon:
             },
             "pipeline": {
                 "mode": PipelineMode.CONTINUOUS.value,
-                "current_stage": None,
+                "current_stage": None,  # Legacy: kept for backwards compat, now use active_stages
+                "active_stages": [],  # Currently running stages (parallel workers)
+                "pending_expert_stages": [],  # Expert stages waiting to run
+                "completed_expert_stages": [],  # Expert stages that finished for current plugin
                 "current_plugin": None,
                 "plugins_queue": [],
                 "plugins_completed": [],
@@ -902,7 +906,7 @@ class PipelineDaemon:
     # === Main Loop ===
 
     def _main_loop(self):
-        """Main daemon event loop."""
+        """Main daemon event loop with parallel worker support."""
         state = self._load_state()
         check_interval = state["config"].get("worker_check_interval", 10)
         heartbeat_interval = state["config"].get("heartbeat_interval", 30)
@@ -922,26 +926,68 @@ class PipelineDaemon:
                 self._save_state(state)
                 last_heartbeat = time.time()
 
-            # Get current stage
-            current_stage = state["pipeline"].get("current_stage")
+            # Get active stages (parallel workers)
+            active_stages = state["pipeline"].get("active_stages", [])
+            # Backwards compat: migrate from current_stage if needed
+            if not active_stages and state["pipeline"].get("current_stage"):
+                active_stages = [state["pipeline"]["current_stage"]]
+                state["pipeline"]["active_stages"] = active_stages
 
-            if current_stage is None:
-                # Start with target research
+            if not active_stages:
+                # No active workers - start pipeline
                 self._start_stage("target-research", state)
             else:
-                # Check current worker status
-                worker_status = self._check_worker_completion(current_stage, state)
+                # Check all active workers for completion
+                completed_stages = []
+                failed_stages = []
 
-                if worker_status == WorkerStatus.COMPLETED:
-                    self._handle_stage_complete(current_stage, state)
-                elif worker_status == WorkerStatus.FAILED:
-                    self._handle_worker_failure(current_stage, state)
-                # RUNNING - continue monitoring
+                for stage in active_stages:
+                    worker_status = self._check_worker_completion(stage, state)
+                    if worker_status == WorkerStatus.COMPLETED:
+                        completed_stages.append(stage)
+                    elif worker_status == WorkerStatus.FAILED:
+                        failed_stages.append(stage)
+
+                # Handle completions
+                for stage in completed_stages:
+                    self._handle_stage_complete(stage, state)
+                    # Reload state after each completion (it may have changed)
+                    state = self._load_state()
+
+                # Handle failures
+                for stage in failed_stages:
+                    self._handle_worker_failure(stage, state)
+                    state = self._load_state()
+
+                # Fill empty worker slots with pending experts
+                self._fill_worker_slots(state)
 
             time.sleep(check_interval)
 
         # Cleanup on exit
         self._cleanup()
+
+    def _fill_worker_slots(self, state: dict[str, Any]) -> None:
+        """Fill empty worker slots with pending expert stages."""
+        max_workers = state["config"].get("max_parallel_workers", 3)
+        active_stages = state["pipeline"].get("active_stages", [])
+        pending_experts = state["pipeline"].get("pending_expert_stages", [])
+
+        # Calculate available slots
+        available_slots = max_workers - len(active_stages)
+
+        if available_slots <= 0 or not pending_experts:
+            return
+
+        # Start pending experts up to available slots
+        stages_to_start = pending_experts[:available_slots]
+
+        for stage in stages_to_start:
+            self._start_stage(stage, state)
+            state["pipeline"]["pending_expert_stages"].remove(stage)
+            state = self._load_state()  # Reload after each start
+
+        self._save_state(state)
 
     def _start_stage(self, stage: str, state: dict[str, Any]) -> None:
         """Start a pipeline stage."""
@@ -956,26 +1002,38 @@ class PipelineDaemon:
         timeout_minutes = state["config"].get("worker_timeout_minutes", 120)
         timeout_at = datetime.utcnow() + timedelta(minutes=timeout_minutes)
 
-        # Update state
+        # Update state - add to active_stages list
+        if "active_stages" not in state["pipeline"]:
+            state["pipeline"]["active_stages"] = []
+        if stage not in state["pipeline"]["active_stages"]:
+            state["pipeline"]["active_stages"].append(stage)
+
+        # Legacy field for backwards compat
         state["pipeline"]["current_stage"] = stage
+
         state["workers"][stage]["status"] = WorkerStatus.RUNNING.value
         state["workers"][stage]["tmux_session"] = session_name
         state["workers"][stage]["started_at"] = datetime.utcnow().isoformat() + "Z"
         state["workers"][stage]["timeout_at"] = timeout_at.isoformat() + "Z"
         state["workers"][stage]["completed_at"] = None
         state["workers"][stage]["error"] = None
+
+        self._log_info(f"Started {stage} worker (session: {session_name})")
         self._save_state(state)
 
     def _handle_stage_complete(self, stage: str, state: dict[str, Any]) -> None:
-        """Handle successful stage completion."""
+        """Handle successful stage completion with parallel worker support."""
         state["workers"][stage]["status"] = WorkerStatus.COMPLETED.value
         state["workers"][stage]["completed_at"] = datetime.utcnow().isoformat() + "Z"
+
+        # Remove from active_stages
+        if stage in state["pipeline"].get("active_stages", []):
+            state["pipeline"]["active_stages"].remove(stage)
 
         # Update metrics based on completed stage
         current_plugin = state["pipeline"].get("current_plugin")
         if stage == "security-research" and current_plugin:
             state["metrics"]["total_plugins_scanned"] += 1
-            # Count findings created during security research
             findings_count = self._get_plugin_findings_count(current_plugin)
             state["metrics"]["total_findings"] = max(
                 state["metrics"]["total_findings"],
@@ -983,67 +1041,39 @@ class PipelineDaemon:
             )
             self._log_info(f"Completed security-research for {current_plugin}, found {findings_count} findings")
 
+        elif stage in EXPERT_STAGES:
+            # Track completed expert
+            if "completed_expert_stages" not in state["pipeline"]:
+                state["pipeline"]["completed_expert_stages"] = []
+            if stage not in state["pipeline"]["completed_expert_stages"]:
+                state["pipeline"]["completed_expert_stages"].append(stage)
+            self._log_info(f"Completed {stage} for {current_plugin}")
+
         elif stage == "qa-triage" and current_plugin:
-            # Count validated findings
             validated_count = self._get_validated_findings_count()
             state["metrics"]["findings_validated"] = validated_count
             self._log_info(f"Completed qa-triage for {current_plugin}")
 
-        # Check for targets-only mode - stop after target-research completes
+        # Check for targets-only mode
         if stage == "target-research" and state["pipeline"]["mode"] == PipelineMode.TARGETS_ONLY.value:
             state["daemon"]["status"] = PipelineStatus.STOPPED.value
             state["pipeline"]["current_stage"] = None
+            state["pipeline"]["active_stages"] = []
             self._save_state(state)
             self.running = False
             return
 
-        # Determine next stage
-        next_stage = self._get_next_stage(stage, state)
-
-        if next_stage:
-            self._start_stage(next_stage, state)
-        else:
-            # Cycle complete
-            state["pipeline"]["cycle_count"] += 1
-
-            mode = state["pipeline"]["mode"]
-            if mode == PipelineMode.CONTINUOUS.value:
-                # Start new cycle
-                state["pipeline"]["current_stage"] = None
-                state["pipeline"]["plugins_completed"].extend(state["pipeline"]["plugins_queue"])
-                state["pipeline"]["plugins_queue"] = []
-            else:
-                # Single cycle complete - stop
-                state["daemon"]["status"] = PipelineStatus.STOPPED.value
-                self.running = False
-
+        # Handle stage transitions based on what completed
+        self._handle_stage_transition(stage, state)
         self._save_state(state)
 
-    def _handle_worker_failure(self, stage: str, state: dict[str, Any]) -> None:
-        """Handle worker failure with restart logic."""
-        worker = state["workers"][stage]
-        max_restarts = state["config"].get("max_restarts", 3)
+    def _handle_stage_transition(self, completed_stage: str, state: dict[str, Any]) -> None:
+        """Handle stage transitions after a stage completes."""
+        current_plugin = state["pipeline"].get("current_plugin")
+        max_workers = state["config"].get("max_parallel_workers", 3)
 
-        # Check if we should restart
-        if stage == "security-research" and worker["restart_count"] < max_restarts:
-            worker["restart_count"] += 1
-            worker["status"] = WorkerStatus.IDLE.value
-
-            # Restart the worker
-            self._start_stage(stage, state)
-            return
-
-        # Cannot retry - mark failed
-        worker["status"] = WorkerStatus.FAILED.value
-        worker["error"] = "Max restarts exceeded"
-
-        # Move to next plugin or stage
-        self._skip_and_continue(stage, state)
-
-    def _get_next_stage(self, current: str, state: dict[str, Any]) -> str | None:
-        """Get the next pipeline stage."""
-        if current == "target-research":
-            # Load plugins from scan state
+        if completed_stage == "target-research":
+            # Load plugins from scan state and start security-research
             from wpguard.core.findings import FindingsManager
             try:
                 fm = FindingsManager(str(self.project_dir))
@@ -1052,83 +1082,165 @@ class PipelineDaemon:
                 if pending:
                     state["pipeline"]["plugins_queue"] = pending
                     state["pipeline"]["current_plugin"] = pending[0]
-                    # Clear plugins_pending to prevent re-queuing on restart
                     fm.update_scan_state(clear_pending=True)
-                    # Reset restart count for new plugin
                     state["workers"]["security-research"]["restart_count"] = 0
-                    self._log_info(f"Loaded {len(pending)} plugins from target-research: {pending}")
-                    return "security-research"
+                    self._log_info(f"Loaded {len(pending)} plugins: {pending}")
+                    self._start_stage("security-research", state)
             except Exception as e:
                 self._log_error(f"Failed to load pending plugins: {e}")
-            return None
 
-        elif current == "security-research":
-            # Always run experts after security-research
-            return "file-rce-expert"
+        elif completed_stage == "security-research":
+            # Queue ALL expert stages for parallel execution
+            state["pipeline"]["pending_expert_stages"] = EXPERT_STAGES.copy()
+            state["pipeline"]["completed_expert_stages"] = []
 
-        elif current in EXPERT_STAGES:
-            # Get next stage in order
-            current_idx = STAGE_ORDER.index(current)
-            next_idx = current_idx + 1
+            # Start up to max_workers experts immediately
+            active_count = len(state["pipeline"].get("active_stages", []))
+            available_slots = max_workers - active_count
+            stages_to_start = state["pipeline"]["pending_expert_stages"][:available_slots]
 
-            # Check if next stage is qa-triage (last expert just finished)
-            if next_idx < len(STAGE_ORDER) and STAGE_ORDER[next_idx] == "qa-triage":
-                # Deferred QA: loop back to security-research if more iterations remain
-                deferred_qa = state["config"].get("deferred_qa", True)
-                if deferred_qa:
-                    worker = state["workers"]["security-research"]
-                    num_iterations = state["config"].get("num_iterations", 2)
-                    if worker["restart_count"] < num_iterations - 1:
-                        # More iterations to go - loop back to security-research
-                        worker["restart_count"] += 1
-                        return "security-research"
-                # All iterations done or deferred_qa=false - proceed to QA
-                return "qa-triage"
+            for expert_stage in stages_to_start:
+                self._start_stage(expert_stage, state)
+                state["pipeline"]["pending_expert_stages"].remove(expert_stage)
+                state = self._load_state()
 
-            if next_idx < len(STAGE_ORDER):
-                return STAGE_ORDER[next_idx]
-            return None
+            self._log_info(f"Started {len(stages_to_start)} expert workers in parallel")
 
-        elif current == "qa-triage":
-            # Move current plugin to completed
-            current_plugin = state["pipeline"].get("current_plugin")
-            if current_plugin:
-                if current_plugin not in state["pipeline"]["plugins_completed"]:
-                    state["pipeline"]["plugins_completed"].append(current_plugin)
-                if current_plugin in state["pipeline"]["plugins_queue"]:
-                    state["pipeline"]["plugins_queue"].remove(current_plugin)
+        elif completed_stage in EXPERT_STAGES:
+            # Check if all experts are done
+            pending = state["pipeline"].get("pending_expert_stages", [])
+            active = state["pipeline"].get("active_stages", [])
+            active_experts = [s for s in active if s in EXPERT_STAGES]
 
-            deferred_qa = state["config"].get("deferred_qa", True)
-            if deferred_qa:
-                # Deferred QA: all iterations already done, always move to next plugin
-                if state["pipeline"]["plugins_queue"]:
-                    state["pipeline"]["current_plugin"] = state["pipeline"]["plugins_queue"][0]
-                    state["workers"]["security-research"]["restart_count"] = 0
-                    return "security-research"
-                return None
+            if not pending and not active_experts:
+                # All experts done - check for more iterations or proceed to QA
+                self._handle_experts_complete(state)
+            # Otherwise, _fill_worker_slots will start more experts
 
-            # Non-deferred mode: check if more iterations needed
-            worker = state["workers"]["security-research"]
-            num_iterations = state["config"].get("num_iterations", 2)
+        elif completed_stage == "qa-triage":
+            # Move to next plugin or complete cycle
+            self._handle_qa_complete(state)
 
+    def _handle_experts_complete(self, state: dict[str, Any]) -> None:
+        """Handle completion of all expert stages for current plugin."""
+        current_plugin = state["pipeline"].get("current_plugin")
+        deferred_qa = state["config"].get("deferred_qa", True)
+        num_iterations = state["config"].get("num_iterations", 2)
+        worker = state["workers"]["security-research"]
+
+        if deferred_qa:
+            # Check if more iterations needed
             if worker["restart_count"] < num_iterations - 1:
                 worker["restart_count"] += 1
-                state["pipeline"]["current_plugin"] = current_plugin
-                return "security-research"
+                state["pipeline"]["completed_expert_stages"] = []
+                self._log_info(f"Starting iteration {worker['restart_count'] + 1}/{num_iterations} for {current_plugin}")
+                self._start_stage("security-research", state)
+                return
 
-            # Move to next plugin
-            if state["pipeline"]["plugins_queue"]:
-                state["pipeline"]["current_plugin"] = state["pipeline"]["plugins_queue"][0]
-                state["workers"]["security-research"]["restart_count"] = 0
-                return "security-research"
+        # All iterations complete - proceed to QA
+        self._log_info(f"All expert stages complete for {current_plugin}, starting qa-triage")
+        self._start_stage("qa-triage", state)
 
-            return None
+    def _handle_qa_complete(self, state: dict[str, Any]) -> None:
+        """Handle QA stage completion - move to next plugin or finish cycle."""
+        current_plugin = state["pipeline"].get("current_plugin")
 
-        return None
+        # Move current plugin to completed
+        if current_plugin:
+            if current_plugin not in state["pipeline"]["plugins_completed"]:
+                state["pipeline"]["plugins_completed"].append(current_plugin)
+            if current_plugin in state["pipeline"]["plugins_queue"]:
+                state["pipeline"]["plugins_queue"].remove(current_plugin)
+
+        # Reset for next plugin
+        state["pipeline"]["completed_expert_stages"] = []
+        state["pipeline"]["pending_expert_stages"] = []
+
+        # Check for more plugins
+        if state["pipeline"]["plugins_queue"]:
+            next_plugin = state["pipeline"]["plugins_queue"][0]
+            state["pipeline"]["current_plugin"] = next_plugin
+            state["workers"]["security-research"]["restart_count"] = 0
+            self._log_info(f"Moving to next plugin: {next_plugin}")
+            self._start_stage("security-research", state)
+        else:
+            # Cycle complete
+            state["pipeline"]["cycle_count"] += 1
+            mode = state["pipeline"]["mode"]
+
+            if mode == PipelineMode.CONTINUOUS.value:
+                # Start new cycle with target-research
+                state["pipeline"]["current_stage"] = None
+                state["pipeline"]["active_stages"] = []
+                state["pipeline"]["current_plugin"] = None
+                self._log_info("Cycle complete, starting new target-research")
+                self._start_stage("target-research", state)
+            else:
+                # Single cycle complete - stop
+                state["daemon"]["status"] = PipelineStatus.STOPPED.value
+                state["pipeline"]["active_stages"] = []
+                self._log_info("Pipeline complete (single mode)")
+                self.running = False
+
+    def _handle_worker_failure(self, stage: str, state: dict[str, Any]) -> None:
+        """Handle worker failure with restart logic for parallel workers."""
+        worker = state["workers"][stage]
+        max_restarts = state["config"].get("max_restarts", 3)
+
+        # Remove from active_stages
+        if stage in state["pipeline"].get("active_stages", []):
+            state["pipeline"]["active_stages"].remove(stage)
+
+        # Check if we should restart security-research
+        if stage == "security-research" and worker["restart_count"] < max_restarts:
+            worker["restart_count"] += 1
+            worker["status"] = WorkerStatus.IDLE.value
+            self._log_info(f"Restarting {stage} (attempt {worker['restart_count']})")
+            self._start_stage(stage, state)
+            return
+
+        # For expert stages, just log and continue (other experts may still succeed)
+        if stage in EXPERT_STAGES:
+            worker["status"] = WorkerStatus.FAILED.value
+            worker["error"] = "Worker failed"
+            self._log_error(f"Expert {stage} failed, continuing with other experts")
+
+            # Track as completed (failed) to not block qa-triage
+            if "completed_expert_stages" not in state["pipeline"]:
+                state["pipeline"]["completed_expert_stages"] = []
+            if stage not in state["pipeline"]["completed_expert_stages"]:
+                state["pipeline"]["completed_expert_stages"].append(stage)
+
+            # Check if all experts are done
+            pending = state["pipeline"].get("pending_expert_stages", [])
+            active = state["pipeline"].get("active_stages", [])
+            active_experts = [s for s in active if s in EXPERT_STAGES]
+
+            if not pending and not active_experts:
+                self._handle_experts_complete(state)
+
+            self._save_state(state)
+            return
+
+        # Cannot retry - mark failed and skip plugin
+        worker["status"] = WorkerStatus.FAILED.value
+        worker["error"] = "Max restarts exceeded"
+        self._skip_and_continue(stage, state)
 
     def _skip_and_continue(self, stage: str, state: dict[str, Any]) -> None:
-        """Skip failed plugin and continue pipeline."""
+        """Skip failed plugin and continue pipeline with parallel worker support."""
         current_plugin = state["pipeline"].get("current_plugin")
+
+        # Kill any remaining active workers for this plugin
+        for active_stage in state["pipeline"].get("active_stages", []):
+            session = state["workers"][active_stage].get("tmux_session")
+            if session and self._tmux_session_exists(session):
+                self._kill_tmux_session(session)
+
+        # Clear parallel tracking
+        state["pipeline"]["active_stages"] = []
+        state["pipeline"]["pending_expert_stages"] = []
+        state["pipeline"]["completed_expert_stages"] = []
 
         if current_plugin:
             # Mark as failed
@@ -1136,16 +1248,25 @@ class PipelineDaemon:
                 state["pipeline"]["plugins_failed"].append(current_plugin)
             if current_plugin in state["pipeline"]["plugins_queue"]:
                 state["pipeline"]["plugins_queue"].remove(current_plugin)
+            self._log_error(f"Skipping failed plugin: {current_plugin}")
 
         # Try next plugin
         if state["pipeline"]["plugins_queue"]:
             state["pipeline"]["current_plugin"] = state["pipeline"]["plugins_queue"][0]
             state["workers"]["security-research"]["restart_count"] = 0
+            self._log_info(f"Moving to next plugin: {state['pipeline']['current_plugin']}")
             self._start_stage("security-research", state)
         else:
-            # No more plugins
+            # No more plugins - start new target research in continuous mode
             state["pipeline"]["current_stage"] = None
             state["pipeline"]["current_plugin"] = None
+
+            if state["pipeline"]["mode"] == PipelineMode.CONTINUOUS.value:
+                self._log_info("No more plugins, starting new target-research")
+                self._start_stage("target-research", state)
+            else:
+                state["daemon"]["status"] = PipelineStatus.STOPPED.value
+                self.running = False
 
         self._save_state(state)
 
@@ -1162,6 +1283,8 @@ class PipelineDaemon:
         # Update state
         state["daemon"]["status"] = PipelineStatus.STOPPED.value
         state["daemon"]["pid"] = None
+        state["pipeline"]["active_stages"] = []
+        state["pipeline"]["pending_expert_stages"] = []
         self._save_state(state)
 
         # Remove PID file

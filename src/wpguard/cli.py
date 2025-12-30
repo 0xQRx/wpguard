@@ -3,9 +3,12 @@ Command-line interface for WordPressGuard.
 """
 
 import argparse
+import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime
+from pathlib import Path
 
 from wpguard import __version__
 from wpguard.api.wordpress import WordPressPluginAPI
@@ -24,6 +27,117 @@ from wpguard.utils.helpers import parse_duration
 
 # Default delay between downloads (seconds)
 DEFAULT_DELAY = 1
+
+# Default directory for auto-research projects
+DEFAULT_RESEARCH_DIR = "./wpguard_research"
+
+
+def auto_research_plugin(
+    slug: str,
+    version: str,
+    old_version: str,
+    research_base_dir: str | Path | None = None,
+    source_plugin_dir: Path | None = None,
+) -> dict:
+    """
+    Initialize a research project for an updated plugin and start the pipeline.
+
+    Args:
+        slug: Plugin slug
+        version: New version of the plugin
+        old_version: Previous version of the plugin
+        research_base_dir: Base directory for research projects
+        source_plugin_dir: Path to already-downloaded plugin source (optional)
+
+    Returns:
+        Dict with success status and project details
+    """
+    from wpguard.core.init import initialize_research_project
+    from wpguard.core.pipeline import PipelineDaemon
+    from wpguard.core.findings import FindingsManager
+
+    research_base = Path(research_base_dir or DEFAULT_RESEARCH_DIR)
+    research_base.mkdir(parents=True, exist_ok=True)
+
+    # Create unique project directory: {slug}_{version}_{timestamp}
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    project_name = f"{slug}_{version}_{timestamp}"
+    project_dir = research_base / project_name
+
+    print(f"\n[*] Auto-research: Initializing project for {slug} v{old_version} -> v{version}")
+    print(f"    Project directory: {project_dir}")
+
+    try:
+        # Initialize the research project structure
+        initialize_research_project(str(project_dir))
+        print(f"[+] Initialized research project structure")
+
+        # Create targets directory and copy/download plugin
+        targets_dir = project_dir / "targets" / slug / "extracted" / version
+        targets_dir.mkdir(parents=True, exist_ok=True)
+
+        if source_plugin_dir and source_plugin_dir.exists():
+            # Copy from existing download
+            shutil.copytree(source_plugin_dir, targets_dir, dirs_exist_ok=True)
+            print(f"[+] Copied plugin source to {targets_dir}")
+        else:
+            # Download fresh
+            from wpguard.core.downloader import PluginDownloader
+            from wpguard.api.wordpress import WordPressPluginAPI
+
+            api = WordPressPluginAPI()
+            plugin_info = api.get_plugin_info(slug)
+            if plugin_info:
+                downloader = PluginDownloader(project_dir / "targets")
+                result = downloader.download_plugin(plugin_info, extract=True, svn=False)
+                print(f"[+] Downloaded plugin to {result.extracted_path}")
+            else:
+                print(f"[!] Could not fetch plugin info for {slug}")
+
+        # Set up scan state with the plugin as pending
+        fm = FindingsManager(str(project_dir))
+        fm.update_scan_state(
+            current_plugin=slug,
+            add_pending=[slug],
+        )
+        print(f"[+] Added {slug} to scan queue")
+
+        # Start the pipeline daemon
+        pipeline = PipelineDaemon(project_dir)
+        result = pipeline.start(
+            mode="single",
+            target_count=1,
+            target_criteria=None,  # Skip target-research, plugin already queued
+        )
+
+        if result.get("success"):
+            print(f"[+] Pipeline started (PID: {result.get('pid')})")
+            print(f"    Monitor with: cd {project_dir} && wpguard-mcp")
+            print(f"    Or attach to workers: tmux list-sessions | grep wpguard")
+
+            return {
+                "success": True,
+                "project_dir": str(project_dir),
+                "plugin": slug,
+                "version": version,
+                "old_version": old_version,
+                "pipeline_pid": result.get("pid"),
+            }
+        else:
+            print(f"[!] Failed to start pipeline: {result.get('error')}")
+            return {
+                "success": False,
+                "error": result.get("error"),
+                "project_dir": str(project_dir),
+            }
+
+    except Exception as e:
+        print(f"[ERROR] Auto-research failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "project_dir": str(project_dir) if project_dir else None,
+        }
 
 
 def cmd_download(args: argparse.Namespace) -> int:
@@ -640,6 +754,9 @@ def cmd_watch_check(args: argparse.Namespace) -> int:
 
     results = watcher.check_updates()
 
+    auto_research = getattr(args, "auto_research", False)
+    research_dir = getattr(args, "research_dir", None)
+
     for report, svn_change in results:
         print(report.format_console_report())
 
@@ -653,6 +770,18 @@ def cmd_watch_check(args: argparse.Namespace) -> int:
 
         if args.send_report:
             watcher.send_report(report)
+
+        # Auto-start research pipeline if enabled
+        if auto_research:
+            # Get the downloaded plugin directory from watcher's output
+            plugin_dir = watcher.plugins_dir / report.plugin_slug / "extracted" / report.new_version
+            auto_research_plugin(
+                slug=report.plugin_slug,
+                version=report.new_version,
+                old_version=report.old_version,
+                research_base_dir=research_dir,
+                source_plugin_dir=plugin_dir if plugin_dir.exists() else None,
+            )
 
     if not results:
         print("[*] No updates found")
@@ -670,6 +799,9 @@ def cmd_watch_start(args: argparse.Namespace) -> int:
             "Set DISCORD_WEBHOOK_URL or use --discord-webhook"
         )
         return 1
+
+    auto_research = getattr(args, "auto_research", False)
+    research_dir = getattr(args, "research_dir", None) or DEFAULT_RESEARCH_DIR
 
     watcher = PluginWatcher(
         output_dir=args.output_dir,
@@ -707,6 +839,9 @@ def cmd_watch_start(args: argparse.Namespace) -> int:
             cmd_parts.append("--send-report")
             if webhook:
                 cmd_parts.extend(["--discord-webhook", webhook])
+        if auto_research:
+            cmd_parts.append("--auto-research")
+            cmd_parts.extend(["--research-dir", str(research_dir)])
 
         cmd_str = " ".join(f'"{p}"' if " " in p else p for p in cmd_parts)
 
@@ -728,6 +863,8 @@ def cmd_watch_start(args: argparse.Namespace) -> int:
             )
             print(f"[+] Watch mode started in tmux session: {session_name}")
             print(f"    Attach with: tmux attach -t {session_name}")
+            if auto_research:
+                print(f"    Auto-research enabled, projects in: {research_dir}")
             return 0
         except subprocess.CalledProcessError as e:
             print(f"[ERROR] Failed to start tmux session: {e}")
@@ -736,7 +873,24 @@ def cmd_watch_start(args: argparse.Namespace) -> int:
             print("[ERROR] tmux not installed. Install with: apt install tmux")
             return 1
     else:
-        watcher.watch(interval=interval, send_reports=args.send_report)
+        # Create auto-research callback if enabled
+        auto_research_callback = None
+        if auto_research:
+            def auto_research_callback(report, svn_change):
+                plugin_dir = watcher.plugins_dir / report.plugin_slug / "extracted" / report.new_version
+                auto_research_plugin(
+                    slug=report.plugin_slug,
+                    version=report.new_version,
+                    old_version=report.old_version,
+                    research_base_dir=research_dir,
+                    source_plugin_dir=plugin_dir if plugin_dir.exists() else None,
+                )
+
+        watcher.watch(
+            interval=interval,
+            send_reports=args.send_report,
+            auto_research_callback=auto_research_callback,
+        )
         return 0
 
 
@@ -951,6 +1105,16 @@ Examples:
     watch_parser.add_argument(
         "--tmux-session", default="wpguard", help="Tmux session name (default: wpguard)"
     )
+    watch_parser.add_argument(
+        "--auto-research",
+        action="store_true",
+        help="Auto-start security research pipeline when updates detected",
+    )
+    watch_parser.add_argument(
+        "--research-dir",
+        default=None,
+        help="Base directory for auto-research projects (default: ./wpguard_research)",
+    )
 
     watch_sub = watch_parser.add_subparsers(dest="watch_cmd", help="Watch subcommands")
 
@@ -1004,6 +1168,16 @@ Examples:
         "--send-report", action="store_true", help="Send report to Discord"
     )
     watch_check.add_argument("--discord-webhook", help="Discord webhook URL")
+    watch_check.add_argument(
+        "--auto-research",
+        action="store_true",
+        help="Auto-start security research pipeline when updates detected",
+    )
+    watch_check.add_argument(
+        "--research-dir",
+        default=None,
+        help="Base directory for auto-research projects (default: ./wpguard_research)",
+    )
     watch_check.set_defaults(func=cmd_watch_check)
 
     # watch status
