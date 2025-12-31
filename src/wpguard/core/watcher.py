@@ -381,7 +381,6 @@ class PluginWatcher:
         interval: int = DEFAULT_WATCH_INTERVAL,
         send_reports: bool = False,
         progress_callback: Callable[[str], None] | None = None,
-        auto_research_callback: Callable[["ChangeReport", "SVNChangeInfo | None"], None] | None = None,
     ) -> None:
         """
         Continuously watch for plugin updates.
@@ -390,7 +389,6 @@ class PluginWatcher:
             interval: Check interval in seconds
             send_reports: Whether to send Discord notifications
             progress_callback: Optional callback for progress updates
-            auto_research_callback: Optional callback to trigger auto-research on updates
         """
         # Format interval for display
         if interval >= 3600:
@@ -406,8 +404,6 @@ class PluginWatcher:
 
         print(f"[*] Starting watch mode (interval: {interval_str})", file=sys.stderr)
         print(f"[*] Watching {len(self.state['plugins'])} plugins", file=sys.stderr)
-        if auto_research_callback:
-            print("[*] Auto-research: ENABLED", file=sys.stderr)
         print("[*] Press Ctrl+C to stop\n", file=sys.stderr)
 
         try:
@@ -426,13 +422,6 @@ class PluginWatcher:
 
                     if send_reports and self.notifier:
                         self.send_report(report)
-
-                    # Trigger auto-research if callback provided
-                    if auto_research_callback:
-                        try:
-                            auto_research_callback(report, svn_change)
-                        except Exception as e:
-                            print(f"[ERROR] Auto-research failed: {e}", file=sys.stderr)
 
                 print(f"[*] Next check in {interval_str}...", file=sys.stderr)
                 time.sleep(interval)
