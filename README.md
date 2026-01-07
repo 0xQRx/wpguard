@@ -806,6 +806,194 @@ See [WORDFENCE_SCOPE.md](WORDFENCE_SCOPE.md) for complete program rules.
 - `Docker` (required for WordPress sandbox testing)
 - `claude` CLI (required for pipeline automation)
 
+## Playwright MCP Integration (Browser Automation)
+
+For browser-based PoC testing (XSS validation, UI interactions), you can integrate the Playwright MCP plugin with Claude Code.
+
+### Installation
+
+```bash
+# Install the Playwright MCP plugin globally
+npm install -g @anthropic/mcp-plugin-playwright
+
+# Install Playwright browsers
+npx playwright install chromium
+```
+
+### ARM64/aarch64 Workaround (Raspberry Pi, Apple Silicon, etc.)
+
+Chrome is not available for aarch64 architecture. Use Chromium instead and create a symlink so Playwright can find it:
+
+```bash
+# Install Chromium via system package manager
+# On Debian/Ubuntu/Raspberry Pi OS:
+sudo apt install chromium-browser
+
+# On Arch Linux:
+sudo pacman -S chromium
+
+# On macOS with Homebrew (Apple Silicon):
+brew install --cask chromium
+```
+
+Create symlink to make Chromium available where Playwright expects Chrome:
+
+```bash
+# Find where Chromium is installed
+which chromium-browser  # Debian/Ubuntu
+which chromium          # Arch/other
+
+# Create the /opt directory structure Playwright expects
+sudo mkdir -p /opt/google/chrome
+
+# Create symlink (adjust source path based on your system)
+# For Debian/Ubuntu/Raspberry Pi:
+sudo ln -s /usr/bin/chromium-browser /opt/google/chrome/chrome
+
+# For Arch Linux:
+sudo ln -s /usr/bin/chromium /opt/google/chrome/chrome
+
+# For macOS (Apple Silicon):
+sudo mkdir -p /opt/google/chrome
+sudo ln -s /Applications/Chromium.app/Contents/MacOS/Chromium /opt/google/chrome/chrome
+```
+
+Set environment variable to use the system Chromium:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/opt/google/chrome/chrome
+
+# Or set in Claude Code's environment
+export CHROME_PATH=/opt/google/chrome/chrome
+```
+
+Verify the setup:
+
+```bash
+# Check symlink works
+/opt/google/chrome/chrome --version
+
+# Test Playwright can find it
+npx playwright install chromium --dry-run
+```
+
+### Creating the Symlink for MCP Plugin
+
+The Playwright MCP plugin may install to a location that Claude Code can't find. Create a symlink to make it accessible:
+
+```bash
+# Find where npm installed the plugin
+npm root -g
+# Example output: /home/user/.nvm/versions/node/v20.10.0/lib/node_modules
+
+# Create symlink in a standard location
+sudo ln -s $(npm root -g)/@anthropic/mcp-plugin-playwright/dist/index.js /usr/local/bin/mcp-plugin-playwright
+
+# Or add to PATH in your shell config (~/.bashrc or ~/.zshrc)
+export PATH="$PATH:$(npm root -g)/@anthropic/mcp-plugin-playwright/dist"
+```
+
+### Adding to Claude Code
+
+```bash
+# Add Playwright MCP to Claude Code
+claude mcp add playwright -s user -- npx @anthropic/mcp-plugin-playwright
+
+# Verify it was added
+claude mcp list
+```
+
+### Manual Configuration
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["@anthropic/mcp-plugin-playwright"]
+    }
+  }
+}
+```
+
+### Allow Playwright Tools
+
+Add Playwright tools to your project's `.claude/settings.local.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_type",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_network_requests",
+      "mcp__plugin_playwright_playwright__browser_close",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_tabs",
+      "mcp__plugin_playwright_playwright__browser_install"
+    ]
+  }
+}
+```
+
+### Available Playwright Tools
+
+| Tool | Description |
+|------|-------------|
+| `browser_navigate` | Navigate to a URL |
+| `browser_snapshot` | Capture accessibility snapshot (better than screenshot) |
+| `browser_click` | Click on an element |
+| `browser_type` | Type text into an element |
+| `browser_fill_form` | Fill multiple form fields |
+| `browser_take_screenshot` | Take a screenshot |
+| `browser_evaluate` | Execute JavaScript in page context |
+| `browser_console_messages` | Get console messages |
+| `browser_network_requests` | Get network requests |
+| `browser_wait_for` | Wait for text or timeout |
+| `browser_tabs` | Manage browser tabs |
+| `browser_close` | Close the browser |
+| `browser_install` | Install browser if not present |
+
+### Use Cases for Security Research
+
+1. **XSS Validation**: Navigate to page, inject payload, check for alert/console messages
+2. **CSRF PoC**: Fill forms, capture requests, verify token handling
+3. **UI-Based Auth Testing**: Test login flows, session handling
+4. **Screenshot Evidence**: Capture visual proof of vulnerabilities
+
+### Example: XSS Validation
+
+```python
+# Navigate to vulnerable page
+browser_navigate(url="http://sandbox:8000/vulnerable-page")
+
+# Take snapshot to find form elements
+browser_snapshot()
+
+# Fill form with XSS payload
+browser_type(
+    element="Search input",
+    ref="input#search",
+    text="<script>alert('XSS')</script>"
+)
+
+# Submit form
+browser_click(element="Submit button", ref="button[type=submit]")
+
+# Check for XSS execution
+browser_console_messages(level="error")  # Check for CSP violations
+browser_evaluate(function="() => window.xssTriggered")  # Check for custom flag
+```
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
