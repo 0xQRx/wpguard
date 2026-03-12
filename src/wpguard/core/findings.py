@@ -15,7 +15,6 @@ from wpguard.core.models import Finding
 
 
 FINDINGS_FILENAME = "wpguard_findings.json"
-SCAN_STATE_FILENAME = "wpguard_scan_state.json"
 
 
 class FindingsManager:
@@ -31,7 +30,6 @@ class FindingsManager:
         self.output_dir = Path(output_dir or DEFAULT_OUTPUT_DIR)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.findings_file = self.output_dir / FINDINGS_FILENAME
-        self.state_file = self.output_dir / SCAN_STATE_FILENAME
 
         # Load existing findings
         self._findings: dict[str, Finding] = {}
@@ -276,84 +274,3 @@ class FindingsManager:
             "avg_cvss": sum(f.cvss_score for f in findings) / len(findings) if findings else 0,
         }
 
-    # Scan State Management
-
-    def get_scan_state(self) -> dict[str, Any]:
-        """Get current scan state."""
-        if self.state_file.exists():
-            try:
-                with open(self.state_file, "r") as f:
-                    return json.load(f)
-            except json.JSONDecodeError:
-                pass
-
-        return {
-            "current_plugin": None,
-            "plugins_scanned": [],
-            "plugins_pending": [],
-            "last_activity": None,
-            "session_start": None,
-        }
-
-    def update_scan_state(
-        self,
-        current_plugin: str | None = None,
-        add_scanned: str | None = None,
-        add_pending: list[str] | None = None,
-        remove_pending: str | None = None,
-        clear_pending: bool = False,
-        stage_completed: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Update scan state.
-
-        Args:
-            current_plugin: Currently scanning plugin
-            add_scanned: Plugin to add to scanned list
-            add_pending: Plugins to add to pending list
-            remove_pending: Plugin to remove from pending
-            clear_pending: Clear all pending plugins
-            stage_completed: Signal that a pipeline stage has completed
-
-        Returns:
-            Updated state
-        """
-        state = self.get_scan_state()
-
-        if state.get("session_start") is None:
-            state["session_start"] = datetime.utcnow().isoformat() + "Z"
-
-        if current_plugin is not None:
-            state["current_plugin"] = current_plugin
-
-        if add_scanned:
-            if add_scanned not in state.get("plugins_scanned", []):
-                state.setdefault("plugins_scanned", []).append(add_scanned)
-
-        if add_pending:
-            pending = state.setdefault("plugins_pending", [])
-            for p in add_pending:
-                if p not in pending and p not in state.get("plugins_scanned", []):
-                    pending.append(p)
-
-        if remove_pending and remove_pending in state.get("plugins_pending", []):
-            state["plugins_pending"].remove(remove_pending)
-
-        if clear_pending:
-            state["plugins_pending"] = []
-
-        if stage_completed is not None:
-            # Empty string clears the marker, non-empty sets it
-            state["stage_completed"] = stage_completed if stage_completed else None
-
-        state["last_activity"] = datetime.utcnow().isoformat() + "Z"
-
-        with open(self.state_file, "w") as f:
-            json.dump(state, f, indent=2)
-
-        return state
-
-    def clear_scan_state(self) -> None:
-        """Clear the scan state (start fresh session)."""
-        if self.state_file.exists():
-            self.state_file.unlink()

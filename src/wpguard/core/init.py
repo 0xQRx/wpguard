@@ -7,7 +7,7 @@ Templates are loaded from the templates/ directory for easy modification.
 import json
 from pathlib import Path
 
-from wpguard.core.findings import FINDINGS_FILENAME, SCAN_STATE_FILENAME
+from wpguard.core.findings import FINDINGS_FILENAME
 
 
 # Template directory relative to this file
@@ -48,7 +48,6 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_finding_list",
     "mcp__wpguard__wpguard_finding_delete",
     "mcp__wpguard__wpguard_finding_stats",
-    "mcp__wpguard__wpguard_scan_state",
     "mcp__wpguard__wpguard_discord_notify_finding",
     "mcp__wpguard__wpguard_discord_notify_summary",
     "mcp__wpguard__wpguard_discord_send_message",
@@ -58,15 +57,6 @@ WPGUARD_MCP_TOOLS = [
     "mcp__wpguard__wpguard_cve_search",
     "mcp__wpguard__wpguard_cve_get",
     "mcp__wpguard__wpguard_cve_stats",
-    # Pipeline automation tools
-    "mcp__wpguard__wpguard_pipeline_start",
-    "mcp__wpguard__wpguard_pipeline_stop",
-    "mcp__wpguard__wpguard_pipeline_status",
-    "mcp__wpguard__wpguard_pipeline_pause",
-    "mcp__wpguard__wpguard_pipeline_resume",
-    "mcp__wpguard__wpguard_pipeline_config",
-    "mcp__wpguard__wpguard_pipeline_logs",
-    "mcp__wpguard__wpguard_pipeline_attach",
 ]
 
 # Slash commands for agent workflows
@@ -315,16 +305,6 @@ def initialize_research_project(output_dir: str) -> dict:
             json.dumps(settings_local, indent=2)
         )
 
-        # Initialize empty scan state file (matches FindingsManager schema)
-        initial_state = {
-            "current_plugin": None,
-            "plugins_scanned": [],
-            "plugins_pending": [],
-            "last_activity": None,
-            "session_start": None,
-        }
-        (root / SCAN_STATE_FILENAME).write_text(json.dumps(initial_state, indent=2))
-
         # Initialize empty findings file (matches FindingsManager schema)
         initial_findings = {
             "version": "1.0",
@@ -378,7 +358,6 @@ def initialize_research_project(output_dir: str) -> dict:
                     ".claude/commands/",
                 ],
                 "files": [
-                    SCAN_STATE_FILENAME,
                     FINDINGS_FILENAME,
                     ".claude/settings.local.json",
                 ],
