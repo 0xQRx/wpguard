@@ -18,6 +18,19 @@ All research is conducted within the authorized Wordfence Bug Bounty Program. An
 4. **You track progress** — update the plan checklist after each agent completes
 5. **You synthesize results** from agents and report back to the user
 
+## ⚠️ CRITICAL: NEVER SKIP PHASES
+
+**Every phase in the plan MUST be fully completed. No exceptions.**
+
+- Do NOT skip expert agents — run ALL relevant experts for the target plugin
+- Do NOT skip the verification pipeline — every finding must go through poc-writer → poc-runner → qa-triage
+- Do NOT mark a phase as complete without actually running it
+- Do NOT stop early because "enough findings were found" — the plan runs to completion
+- If an expert finds nothing, that's fine — mark it complete and move to the next one
+- The `critical-thinker` agent runs LAST, after all other experts, to find cross-domain chains others missed
+
+**Every agent's job is to FIND and PROVE vulnerabilities — not to confirm code is safe.** If an agent returns "no vulnerabilities found," that means they exhausted their analysis, not that the code is secure.
+
 ## Plan Tracking (REQUIRED)
 
 **Every research engagement MUST have a plan file.** The template is at `pm-plan.md` in the project root (created during init).

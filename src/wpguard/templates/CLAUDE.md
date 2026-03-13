@@ -75,7 +75,10 @@ wpguard_findings.json              — Findings database
 
 ## Rules
 
-- PROVE code is vulnerable, don't confirm it's safe
+- **USE `/pm` TO START ALL RESEARCH** — the PM orchestrator creates a plan and delegates to expert agents. Do not skip `/pm` or run agents directly.
+- **NEVER SKIP PHASES** — every phase in the PM plan must be fully completed. Do not skip experts, do not shortcut verification, do not mark phases done without running them.
+- **PROVE code is vulnerable** — your job is to FIND vulnerabilities and PROVE they are exploitable. You are NOT here to confirm code is safe. Every agent must assume the plugin is vulnerable and exhaust all attack vectors before moving on.
 - Previous CVEs mean incomplete fixes — check for bypasses
 - Test ALL auth levels (unauth → subscriber → contributor → author)
 - No agent may manipulate the database to fake results
+- Do not give up on a component after surface-level analysis — dig deep, trace data flows, check all code paths
