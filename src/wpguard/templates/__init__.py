@@ -3,7 +3,8 @@ Agent instruction templates for wpguard research projects.
 
 Templates are stored as markdown files in this directory for easy editing:
 - CLAUDE.md - Main project instructions
-- target-research.md - Target researcher agent instructions
-- security-research.md - Security researcher agent instructions
-- qa-triage.md - QA/triager agent instructions
+- pm.md - PM orchestrator slash command
+- target-research.md - Target researcher slash command
+- 13 expert agent templates (file-rce, sqli, xss, auth, etc.)
+- qa-triage.md, poc-creator.md, poc-writer.md, poc-runner.md, sandbox-admin.md
 """

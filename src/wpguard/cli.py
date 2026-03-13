@@ -126,19 +126,22 @@ def cmd_init(args: argparse.Namespace) -> int:
     if result["success"]:
         print(f"\n[+] Research project initialized: {result['path']}")
         print("\n[*] Created structure:")
-        print(f"    CLAUDE.md          - Agent instructions")
-        print(f"    .claude/commands/  - Slash commands")
-        print(f"    targets/           - Plugin source code")
-        print(f"    reports/           - Findings and PoCs")
-        print(f"    state.json         - Scan state tracking")
-        print(f"    findings.json      - Vulnerability findings")
-        print("\n[*] Available slash commands:")
+        print(f"    CLAUDE.md            - Project instructions")
+        print(f"    .claude/commands/    - Slash commands (/pm, /target-research)")
+        print(f"    .claude/agents/      - Expert agents ({len(result['structure']['agents'])} agents)")
+        print(f"    targets/             - Plugin source code")
+        print(f"    reports/             - Findings and PoCs")
+        print(f"    findings.json        - Vulnerability findings")
+        print("\n[*] Slash commands:")
         for cmd in result["structure"]["commands"]:
             print(f"    {cmd}")
+        print("\n[*] Expert agents:")
+        for agent in result["structure"]["agents"]:
+            print(f"    {agent}")
         print(f"\n[*] Next steps:")
         print(f"    cd {result['path']}")
         print(f"    claude  # Start Claude Code in the project directory")
-        print(f"    /target-research  # Begin target discovery")
+        print(f"    /pm     # Start the PM orchestrator")
         return 0
     else:
         print(f"[ERROR] {result['message']}")

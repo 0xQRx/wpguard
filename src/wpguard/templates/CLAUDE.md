@@ -1,277 +1,76 @@
 # WordPressGuard Security Research Project
 
-This is a wpguard security research project for the Wordfence Bug Bounty Program.
+Wordfence Bug Bounty Program research project. Use `/pm` to start.
 
-## Available Slash Commands
+## Commands
 
-### Core Workflow
+- `/pm` - PM orchestrator — coordinates all research, delegates to agents
 - `/target-research` - Find and scope WordPress plugins for analysis
-- `/security-research` - Analyze plugins for vulnerabilities (general)
-- `/qa-triage` - Validate and submit findings
-- `/poc-creator` - Analyze changelogs for security fixes and create PoCs for patched vulnerabilities
 
-### Expert Agents (Deep-Dive Specialists)
-- `/file-rce-expert` - File upload, read, write, delete, path traversal → RCE
-- `/sqli-expert` - SQL injection in all forms (UNION, blind, second-order)
-- `/xss-expert` - Stored, reflected, DOM XSS
-- `/auth-expert` - Auth bypass, privilege escalation, IDOR, missing authz
-- `/object-injection-expert` - PHP object injection, phar deserialization
-- `/ssrf-expert` - Server-side request forgery, cloud metadata access
-- `/race-condition-expert` - TOCTOU, database races, double-spend, limit bypass
-- `/csrf-expert` - Cross-Site Request Forgery, missing nonce validation
-- `/lfi-rfi-expert` - Local/Remote File Inclusion, path traversal
-- `/xxe-expert` - XML External Entity injection, SVG/XML processing
-- `/deserialization-expert` - JSON/YAML parsing, property injection, type juggling
-- `/logic-flaw-expert` - Business logic bugs, payment bypass, workflow manipulation
-- `/info-disclosure-expert` - Sensitive data exposure, debug endpoints, user enumeration
+## Agents
 
-## MCP Tools Available
+Delegated by `/pm` — not invoked directly.
 
-All `wpguard_*` tools are available via MCP:
+### Vulnerability Experts
+| Agent | Focus |
+|-------|-------|
+| `file-rce-expert` | File upload/read/write/delete, path traversal, RCE |
+| `sqli-expert` | SQL injection (UNION, blind, second-order) |
+| `xss-expert` | Stored, reflected, DOM XSS |
+| `auth-expert` | Auth bypass, priv esc, IDOR, missing authz |
+| `object-injection-expert` | PHP object injection, phar deserialization |
+| `ssrf-expert` | SSRF, cloud metadata |
+| `race-condition-expert` | TOCTOU, database races, limit bypass |
+| `csrf-expert` | CSRF, missing nonce validation |
+| `lfi-rfi-expert` | LFI/RFI, path traversal |
+| `xxe-expert` | XXE, SVG/XML processing |
+| `deserialization-expert` | Unsafe deserialization, type juggling |
+| `logic-flaw-expert` | Business logic, payment bypass |
+| `info-disclosure-expert` | Data exposure, debug endpoints |
 
-### Plugin Discovery
-- `wpguard_search` - Search WordPress plugin repository
-- `wpguard_plugin_info` - Get detailed plugin information
-- `wpguard_download` - Download a plugin
-- `wpguard_bulk_download` - Download multiple plugins
-- `wpguard_svn_log` - View SVN commit history
-- `wpguard_plugin_versions` - List all available versions
+### Verification Pipeline
+```
+Expert finds vuln → PoC Writer → PoC Runner → QA Triage
+```
+| Agent | Role |
+|-------|------|
+| `poc-writer` | Writes PoC scripts with declared expected results |
+| `poc-runner` | Executes PoCs, verifies results, catches false positives (has Playwright) |
+| `qa-triage` | Final validation, scope check, CVSS, writeups, Discord notifications |
 
-### Sandbox Testing
-- `wpguard_sandbox_status` - Check WordPress sandbox connectivity
-- `wpguard_sandbox_install_plugin` - Install plugin in sandbox
-- `wpguard_sandbox_uninstall_plugin` - Remove plugin from sandbox
-- `wpguard_sandbox_request` - Execute HTTP request against sandbox
-- `wpguard_sandbox_wp_cli` - Run WP-CLI commands
-- `wpguard_sandbox_get_nonce` - Get WordPress nonce for actions
-
-### Sandbox Management
-- `wpguard_sandbox_start` - Start sandbox Docker containers (builds if needed)
-- `wpguard_sandbox_stop` - Stop sandbox containers
-- `wpguard_sandbox_restart` - Restart sandbox
-- `wpguard_sandbox_destroy` - Reset sandbox (removes all data)
-
-### Scope Validation
-- `wpguard_scope_check_plugin` - Check if plugin is in scope
-- `wpguard_scope_check_finding` - Validate finding eligibility
-- `wpguard_scope_get_vulns` - Get in-scope vuln types for install count
-
-### Finding Management
-- `wpguard_finding_create` - Create a new finding
-- `wpguard_finding_update` - Update finding status/details
-- `wpguard_finding_get` - Get finding by ID
-- `wpguard_finding_list` - List findings with filters
-- `wpguard_finding_delete` - Delete a finding
-- `wpguard_finding_stats` - Get finding statistics
-- `wpguard_scan_state` - Manage scan progress state
-
-### Discord Notifications
-- `wpguard_discord_notify_finding` - Send finding alert
-- `wpguard_discord_notify_summary` - Send findings summary
-- `wpguard_discord_send_message` - Send simple message
-
-### Wordfence CVE Database
-- `wpguard_cve_download` - Download/refresh vulnerability database
-- `wpguard_cve_search` - Search CVEs by plugin slug or keyword
-- `wpguard_cve_get` - Get detailed CVE info by ID
-- `wpguard_cve_stats` - Get database statistics
-
-### Pipeline Automation
-- `wpguard_pipeline_start` - Start automated research pipeline daemon
-- `wpguard_pipeline_stop` - Stop the pipeline daemon
-- `wpguard_pipeline_status` - Get current pipeline status and progress
-- `wpguard_pipeline_pause` - Pause after current stage completes
-- `wpguard_pipeline_resume` - Resume paused pipeline
-- `wpguard_pipeline_config` - Get/update pipeline configuration
-- `wpguard_pipeline_logs` - Get worker output logs
-- `wpguard_pipeline_attach` - Get tmux attach command for a stage
+### Utility
+| Agent | Role |
+|-------|------|
+| `poc-creator` | n-day research — changelog/CVE analysis, PoCs for patched vulns |
+| `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
 
 ## Directory Structure
 
 ```
-project/
-├── targets/                    # Downloaded plugin source code
-│   └── {plugin_slug}/
-│       └── extracted/
-├── reports/                    # Vulnerability reports and PoCs
-│   └── {plugin_slug}/
-│       ├── finding_001.md      # Vulnerability report
-│       └── poc.py              # Proof of concept script
-├── wpguard_scan_state.json     # Scan state (progress tracking)
-└── wpguard_findings.json       # All findings database
+targets/{plugin_slug}/extracted/   — Plugin source code
+reports/{plugin_slug}/             — Findings, writeups, PoC scripts
+wpguard_findings.json              — Findings database
 ```
 
-## Quick Start
+## Environment
 
-```bash
-# Start target research
-/target-research
+- Sandbox: `172.17.0.1:8000` (Docker: wp_app)
+- Test users: subscriber/subscriber, contributor/contributor, author/author
+- Editor and Administrator are OUT OF SCOPE
 
-# Or manually search and analyze
-"Search for file upload plugins with 500+ installs and analyze for SQLi"
+## Scope Quick Reference
 
-# Check scan state
-"Show current scan state and pending plugins"
-```
+| Min Installs | Vulnerability Types |
+|--------------|---------------------|
+| 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc |
+| 500 | SQL Injection, Stored XSS |
+| 50,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
 
-## Environment Requirements
+*Reflected XSS and CSRF are always `auth_level="unauthenticated"` — attacker crafts payload locally, victim executes it.
 
-- WordPress sandbox at 172.17.0.1:8000 (container: wp_app)
-- DISCORD_WEBHOOK_URL environment variable (optional, for notifications)
+## Rules
 
-## Wordfence Bounty Tiers
-
-| Tier | Min Installs | Vulnerability Types |
-|------|--------------|---------------------|
-| High Threat | 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc |
-| Common/Dangerous | 500 | SQL Injection, Stored XSS |
-| Standard Researchers | 50,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
-| Resourceful Researchers | 10,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
-| 1337 Researchers | 500 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
-
-**\* Special Note on Reflected XSS and CSRF:**
-These vulnerabilities are ALWAYS reported with `auth_level="unauthenticated"` because:
-- The attacker crafts the malicious payload/page **locally** (no account needed)
-- The victim (a logged-in user) is tricked into executing it
-- The attack runs with the **victim's privileges**, not the attacker's
-
-When reporting, document the **targeted role** in the description (e.g., "Targets Administrator users").
-
-## Authentication Levels to Audit
-
-**IMPORTANT: Audit ALL vulnerabilities for ALL authentication levels from Unauthenticated up to Author.**
-
-| Level | Username | Password | In Scope | Notes |
-|-------|----------|----------|----------|-------|
-| Unauthenticated | - | - | YES | Highest priority |
-| Subscriber | subscriber | subscriber | YES | Default registered user |
-| Customer | customer | customer | YES | WooCommerce customer role |
-| Contributor | contributor | contributor | YES | Can write posts (not publish) |
-| Author | author | author | YES | Can publish own posts |
-| Editor | - | - | NO | Out of scope |
-| Administrator | - | - | NO | Out of scope |
-
-**Key Point:** Always test each vulnerability at EVERY applicable auth level. A finding exploitable by Author is still valuable - document it with the correct auth_level.
-
-## CRITICAL: Your job is to PROVE the code is vulnerable, not confirm it's safe.
-
-## CRITICAL: Previous CVEs Do NOT Mean Fixed Code
-
-If you find previous CVEs for this plugin (via `wpguard_cve_search`):
-
-- **DO NOT assume the vulnerability was properly fixed** - 99/100 times fixes are incomplete
-- **DO NOT skip similar code patterns** - the same mistake is likely repeated elsewhere
-- **DO look for bypasses** of the "fix" - developers often patch symptoms, not root causes
-- **DO check similar functionality** - if SQLi was in search, check ALL query functions
-- **DO check different entry points** - fix may only cover one path to the sink
-
-```
-WRONG MINDSET:
-"This plugin had CVE-2023-XXXX for SQLi in the search function.
-That's been fixed, so I'll skip the search code."
-
-CORRECT MINDSET:
-"This plugin had SQLi before - the developers don't understand secure coding.
-Let me check if the fix is complete, find bypasses, and look for the
-same pattern in ALL other database queries."
-```
-
-
-## Pipeline Automation
-
-The pipeline automates the full research workflow with expert agents:
-
-```
-target-research → security-research → file-rce-expert → sqli-expert → xss-expert → auth-expert → object-injection-expert → ssrf-expert → race-condition-expert → csrf-expert → lfi-rfi-expert → xxe-expert → deserialization-expert → logic-flaw-expert → info-disclosure-expert → qa-triage
-```
-
-Each plugin goes through ALL 13 expert stages sequentially for maximum coverage.
-
-### Starting the Pipeline
-
-```python
-# Start overnight continuous run
-wpguard_pipeline_start(
-    mode="continuous",     # Loop: find targets -> research -> qa -> repeat
-    target_count=10,       # Plugins per cycle
-    num_iterations=2       # Run security-research + experts twice per plugin (default: 2)
-)
-
-# Single cycle (one batch of targets)
-wpguard_pipeline_start(mode="single", target_count=5)
-
-# Just find targets (no analysis)
-wpguard_pipeline_start(mode="targets-only", target_count=20)
-
-# More thorough analysis (3 iterations)
-wpguard_pipeline_start(num_iterations=3)
-```
-
-### Monitoring Progress
-
-```python
-# Check status
-wpguard_pipeline_status()
-
-# Get detailed status with recent worker output
-wpguard_pipeline_status(include_logs=True)
-
-# Get logs for a specific stage
-wpguard_pipeline_logs(stage="security-research", lines=100)
-
-# Attach to watch a worker live (returns tmux command)
-wpguard_pipeline_attach(stage="security-research")
-# Then in terminal: tmux attach -t wpguard_security_research_abc123
-```
-
-### Controlling the Pipeline
-
-```python
-# Pause (current stage finishes, next won't start)
-wpguard_pipeline_pause()
-
-# Resume paused pipeline
-wpguard_pipeline_resume()
-
-# Change configuration mid-run
-wpguard_pipeline_config(num_iterations=3)
-
-# Stop the pipeline
-wpguard_pipeline_stop()
-
-# Force stop (kills workers immediately)
-wpguard_pipeline_stop(force=True)
-```
-
-### Configuration Options
-
-#### `num_iterations` (default: 2)
-
-Number of times to run security-research + all 13 experts per plugin:
-- **`num_iterations=1`**: Single pass (faster, less thorough)
-- **`num_iterations=2`**: Two passes (default, good balance)
-- **`num_iterations=3`**: Three passes (more thorough)
-
-#### `deferred_qa` (default: true)
-
-Controls when QA runs:
-- **`deferred_qa=true`** (default): QA runs once after all iterations complete
-- **`deferred_qa=false`**: QA runs after each iteration
-
-### Pipeline Flow
-
-With `num_iterations=2, deferred_qa=true` (default):
-```
-Iteration 1: security-research → all 13 experts
-Iteration 2: security-research → all 13 experts
-Final:       qa-triage (runs once, reviews all findings)
-→ Next plugin
-```
-
-### Pipeline State Files
-
-- `wpguard_pipeline_state.json` - Daemon state, worker status, progress
-- `wpguard_daemon.pid` - Process ID file
-- `wpguard_pipeline_logs/` - Command scripts and daemon logs
-
-
+- PROVE code is vulnerable, don't confirm it's safe
+- Previous CVEs mean incomplete fixes — check for bypasses
+- Test ALL auth levels (unauth → subscriber → contributor → author)
+- No agent may manipulate the database to fake results

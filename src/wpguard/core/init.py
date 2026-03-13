@@ -62,22 +62,7 @@ WPGUARD_MCP_TOOLS = [
 # Slash commands for agent workflows
 WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/target-research)",
-    "SlashCommand(/security-research)",
-    "SlashCommand(/file-rce-expert)",
-    "SlashCommand(/sqli-expert)",
-    "SlashCommand(/xss-expert)",
-    "SlashCommand(/auth-expert)",
-    "SlashCommand(/object-injection-expert)",
-    "SlashCommand(/ssrf-expert)",
-    "SlashCommand(/race-condition-expert)",
-    "SlashCommand(/csrf-expert)",
-    "SlashCommand(/lfi-rfi-expert)",
-    "SlashCommand(/xxe-expert)",
-    "SlashCommand(/deserialization-expert)",
-    "SlashCommand(/logic-flaw-expert)",
-    "SlashCommand(/info-disclosure-expert)",
-    "SlashCommand(/qa-triage)",
-    "SlashCommand(/poc-creator)",
+    "SlashCommand(/pm)",
 ]
 
 # Common bash commands needed for research
@@ -105,6 +90,33 @@ WPGUARD_CORE_TOOLS = [
     "TodoWrite",
     "NotebookEdit",
 ]
+
+# Agent definitions: (template_name, agent_dir_name)
+EXPERT_AGENTS = [
+    "file-rce-expert",
+    "sqli-expert",
+    "xss-expert",
+    "auth-expert",
+    "object-injection-expert",
+    "ssrf-expert",
+    "race-condition-expert",
+    "csrf-expert",
+    "lfi-rfi-expert",
+    "xxe-expert",
+    "deserialization-expert",
+    "logic-flaw-expert",
+    "info-disclosure-expert",
+]
+
+SUPPORT_AGENTS = [
+    "qa-triage",
+    "poc-creator",
+    "poc-writer",
+    "poc-runner",
+    "sandbox-admin",
+]
+
+ALL_AGENTS = EXPERT_AGENTS + SUPPORT_AGENTS
 
 
 def _load_template(name: str) -> str:
@@ -136,9 +148,9 @@ def get_target_researcher_instructions() -> str:
     return _load_template("target-research.md")
 
 
-def get_security_researcher_instructions() -> str:
-    """Get security researcher agent instructions."""
-    return _load_template("security-research.md")
+def get_pm_instructions() -> str:
+    """Get PM/orchestrator slash command instructions."""
+    return _load_template("pm.md")
 
 
 def get_qa_triager_instructions() -> str:
@@ -235,62 +247,25 @@ def initialize_research_project(output_dir: str) -> dict:
         (root / "reports").mkdir(exist_ok=True)
         (root / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
 
+        # Create agent directories and write agent definitions
+        for agent_name in ALL_AGENTS:
+            agent_dir = root / ".claude" / "agents" / agent_name
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            agent_content = _load_template(f"{agent_name}.md")
+            (agent_dir / "agent.md").write_text(agent_content)
+
         # Write main CLAUDE.md
         (root / "CLAUDE.md").write_text(get_main_claude_md())
 
-        # Write slash commands
+        # Write PM plan template to project root
+        (root / "pm-plan.md").write_text(_load_template("pm-plan.md"))
+
+        # Write slash commands (only pm and target-research)
         (root / ".claude" / "commands" / "target-research.md").write_text(
             get_target_researcher_instructions()
         )
-        (root / ".claude" / "commands" / "security-research.md").write_text(
-            get_security_researcher_instructions()
-        )
-        (root / ".claude" / "commands" / "qa-triage.md").write_text(
-            get_qa_triager_instructions()
-        )
-        (root / ".claude" / "commands" / "poc-creator.md").write_text(
-            get_poc_creator_instructions()
-        )
-
-        # Write expert agent slash commands
-        (root / ".claude" / "commands" / "file-rce-expert.md").write_text(
-            get_file_rce_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "sqli-expert.md").write_text(
-            get_sqli_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "xss-expert.md").write_text(
-            get_xss_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "auth-expert.md").write_text(
-            get_auth_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "object-injection-expert.md").write_text(
-            get_object_injection_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "ssrf-expert.md").write_text(
-            get_ssrf_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "race-condition-expert.md").write_text(
-            get_race_condition_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "csrf-expert.md").write_text(
-            get_csrf_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "lfi-rfi-expert.md").write_text(
-            get_lfi_rfi_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "xxe-expert.md").write_text(
-            get_xxe_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "deserialization-expert.md").write_text(
-            get_deserialization_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "logic-flaw-expert.md").write_text(
-            get_logic_flaw_expert_instructions()
-        )
-        (root / ".claude" / "commands" / "info-disclosure-expert.md").write_text(
-            get_info_disclosure_expert_instructions()
+        (root / ".claude" / "commands" / "pm.md").write_text(
+            get_pm_instructions()
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -314,6 +289,51 @@ def initialize_research_project(output_dir: str) -> dict:
         }
         (root / FINDINGS_FILENAME).write_text(json.dumps(initial_findings, indent=2))
 
+        # Write per-project devrag config
+        devrag_config = {
+            "document_patterns": [
+                "/home/groot/Desktop/Projects/PentestResources/WebPentestRAG",
+                str(root / "specs"),
+                str(root / "reports"),
+            ],
+            "db_path": str(root / ".devrag" / "vectors.db"),
+            "chunk_size": 500,
+            "search_top_k": 5,
+            "update_check": True,
+            "compute": {
+                "device": "auto",
+                "fallback_to_cpu": True,
+            },
+            "model": {
+                "name": "multilingual-e5-small",
+                "dimensions": 384,
+            },
+        }
+        devrag_dir = root / ".devrag"
+        devrag_dir.mkdir(exist_ok=True)
+        (devrag_dir / "config.json").write_text(json.dumps(devrag_config, indent=2))
+
+        # Write .mcp.json with all MCP servers
+        mcp_config = {
+            "mcpServers": {
+                "playwright": {
+                    "command": "npx",
+                    "args": ["@playwright/mcp@latest"],
+                },
+                "wpguard": {
+                    "type": "stdio",
+                    "command": "wpguard-mcp",
+                    "args": [],
+                },
+                "devrag": {
+                    "type": "stdio",
+                    "command": "/home/groot/Desktop/Tools/devrag/bin/devrag",
+                    "args": ["--config", str(devrag_dir / "config.json")],
+                },
+            }
+        }
+        (root / ".mcp.json").write_text(json.dumps(mcp_config, indent=2))
+
         # Download Wordfence vulnerability database (non-blocking, cached)
         wordfence_status = None
         try:
@@ -331,24 +351,10 @@ def initialize_research_project(output_dir: str) -> dict:
             "structure": {
                 "claude_md": str(root / "CLAUDE.md"),
                 "commands": [
+                    "/pm",
                     "/target-research",
-                    "/security-research",
-                    "/file-rce-expert",
-                    "/sqli-expert",
-                    "/xss-expert",
-                    "/auth-expert",
-                    "/object-injection-expert",
-                    "/ssrf-expert",
-                    "/race-condition-expert",
-                    "/csrf-expert",
-                    "/lfi-rfi-expert",
-                    "/xxe-expert",
-                    "/deserialization-expert",
-                    "/logic-flaw-expert",
-                    "/info-disclosure-expert",
-                    "/qa-triage",
-                    "/poc-creator",
                 ],
+                "agents": [f"{name}" for name in ALL_AGENTS],
                 "directories": [
                     "targets/",
                     "targets/{plugin_slug}/",
@@ -356,10 +362,12 @@ def initialize_research_project(output_dir: str) -> dict:
                     "reports/{plugin_slug}/",
                     ".claude/",
                     ".claude/commands/",
+                    ".claude/agents/",
                 ],
                 "files": [
                     FINDINGS_FILENAME,
                     ".claude/settings.local.json",
+                    ".mcp.json",
                 ],
             },
         }

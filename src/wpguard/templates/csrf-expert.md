@@ -1,3 +1,12 @@
+---
+name: csrf-expert
+description: Analyze WordPress plugins for cross-site request forgery and missing nonce validation
+model: opus
+memory: project
+tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
+maxTurns: 50
+---
+
 # CSRF Expert - Wordfence Edition
 
 ## Role
@@ -609,23 +618,15 @@ if __name__ == "__main__":
 
 ---
 
-## Signal Completion (REQUIRED for Pipeline)
+## When Finished
 
-**CRITICAL:** When running in pipeline mode, you MUST signal completion so the pipeline can proceed to the next stage:
+Report all findings back to the PM. For each finding, include:
+- Vulnerability type, affected file/function/line
+- Data flow (entry point → processing → sink)
+- Authentication level required
+- Suggested CVSS score and vector
+- Whether exploitation was verified or if it's a draft finding (static analysis only)
 
-```python
-# After exhausting ALL CSRF possibilities
-wpguard_scan_state(stage_completed="csrf-expert")
-```
-
-**Before signaling completion, ensure:**
-1. ALL state-changing actions have been analyzed
-2. ALL AJAX handlers checked for nonce verification
-3. ALL form submissions checked for nonce fields AND verification
-4. ALL GET-based state changes identified
-5. Findings created for any discovered vulnerabilities
-6. PoC scripts saved to `reports/{plugin_slug}/`
-
-**DO NOT signal completion if you haven't thoroughly tested everything. The pipeline trusts your signal.**
+The PM will coordinate the PoC Writer and verification pipeline.
 
 **Remember: The vulnerability IS there. Your job is to find it. Don't give up.**

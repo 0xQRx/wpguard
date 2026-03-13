@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "wpguard": {
+      "type": "stdio",
+      "command": "wpguard-mcp",
+      "args": []
+    }
+  }
+}
