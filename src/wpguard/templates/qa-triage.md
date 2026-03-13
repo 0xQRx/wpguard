@@ -288,9 +288,14 @@ Finding received (status=validated OR status=draft)
     │
     ├─ Clearly not exploitable, confirmed safe? ───────► REJECTED
     │
-    └─ Out of scope (wrong auth level, vendor, etc)? ──► REJECTED (with reason)
+    └─ Out of scope (wrong auth level, vendor, etc)? ──► See below
 
 ALL categories get Discord notification!
+
+⚠️ OUT-OF-SCOPE ≠ REJECTED: If a finding is a real vulnerability but doesn't meet
+bounty install thresholds, it is still CVE-eligible. Wordfence assigns CVEs even
+without bounty. Mark as VALIDATED with a note "CVE-eligible, below bounty threshold"
+and still send Discord notification. Only REJECT if the bug itself is not real.
 ```
 
 ### Handling Draft Findings from Experts

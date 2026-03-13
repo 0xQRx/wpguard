@@ -146,6 +146,17 @@ QA Triage validates confirmed findings
 
 **Anti-fraud:** No agent may manipulate the sandbox database to fake results. The sandbox-admin only performs legitimate maintenance operations.
 
+## ⚠️ REPORT ALL LEGITIMATE FINDINGS — EVEN OUT-OF-SCOPE
+
+**A confirmed vulnerability that doesn't meet Wordfence bounty install thresholds is still a real vulnerability.** Wordfence will still assign a CVE for valid findings even if no bounty is paid.
+
+- If a finding is legitimate but the plugin has too few installs for bounty → **still report it**
+- If a finding is a valid vulnerability class but not in a bounty-eligible tier → **still report it**
+- QA triage should mark these as `validated` and note they are CVE-eligible even without bounty
+- Discord notification should still be sent — a CVE is still valuable
+
+**Never discard a real vulnerability just because it won't pay a bounty.**
+
 ## Delegation Rules
 
 1. **Always delegate deep analysis** — you are the coordinator, not the analyst
