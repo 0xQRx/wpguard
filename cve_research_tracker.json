@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "last_updated": null,
+  "stats": {
+    "total_researched": 0,
+    "total_skipped": 0,
+    "total_groups": 0,
+    "total_edge_cases": 0
+  },
+  "researched_cves": {},
+  "skipped_cves": {},
+  "groups": {}
+}
