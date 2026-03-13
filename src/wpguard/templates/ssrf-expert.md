@@ -159,6 +159,52 @@ $response = wp_remote_get($url, array('redirection' => 5));  // Follows up to 5 
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-32830: BuddyForms — file_get_contents() with User URL
+**Impact:** Unauthenticated SSRF + Arbitrary File Read, CVSS 9.3
+
+```php
+// AJAX handler uses file_get_contents() on user-supplied URL
+$image_url = urldecode( $url );
+$image_data = file_get_contents( $image_url );
+// file_get_contents() supports file://, php://, and internal IPs
+// Payload: url=file:///etc/passwd or url=http://169.254.169.254/latest/meta-data/
+```
+
+**Why vulnerable:** `file_get_contents()` has zero restrictions — supports `file://`, `php://`, internal IPs, and all protocols. The fix replaced it with `wp_safe_remote_get()` which blocks internal IPs, `file://`, and restricts to HTTP(S).
+**Detection:** `file_get_contents($variable)` where `$variable` traces back to user input (`$_POST`, `$_GET`, `$_REQUEST`, shortcode attrs). Always vulnerable. Also check `wp_remote_get()` (partial protection) vs `wp_safe_remote_get()` (correct).
+
+### CVE-2019-16932: Visualizer — Blind SSRF via REST API Import
+**Impact:** Authenticated SSRF via chart data import, CVSS 7.7
+
+```php
+// REST route fetches URL to import chart data
+register_rest_route('visualizer/v1', '/fetch-data', array(
+    'callback' => 'fetch_remote_data',
+    // permission_callback was missing (unauthenticated) or too weak
+));
+function fetch_remote_data($request) {
+    $url = $request->get_param('url');
+    $response = wp_remote_get($url);  // SSRF: user controls destination
+    return wp_remote_retrieve_body($response);
+}
+```
+
+**Why vulnerable:** `wp_remote_get()` follows redirects and allows internal IPs. Even after the fix added an auth check, the SSRF sink remains for authenticated users. Correct fix requires `wp_safe_remote_get()` or `wp_http_validate_url()` before fetching.
+**Detection:** `wp_remote_get($url)` or `wp_remote_post($url)` in REST route callbacks or AJAX handlers where `$url` comes from request parameters. Check if `wp_safe_remote_get()` or `wp_http_validate_url()` is used instead.
+
+### Key WordPress SSRF Function Reference
+
+| Function | Safe? | Notes |
+|----------|-------|-------|
+| `file_get_contents($url)` | **NO** | Supports file://, php://, internal IPs — never use with user URLs |
+| `wp_remote_get($url)` | **Partial** | Follows redirects, allows internal IPs |
+| `wp_safe_remote_get($url)` | **YES** | Blocks internal IPs, restricts protocols |
+| `esc_url_raw($url)` | **NO** | Sanitizes format only, does NOT validate destination |
+
+---
+
 ## Attack Techniques
 
 ### 1. Localhost Bypass Techniques

@@ -43,7 +43,9 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `file-rce-expert` | File upload, read, write, delete, path traversal, RCE |
 | `sqli-expert` | SQL injection (UNION, blind, second-order) |
 | `xss-expert` | Stored, reflected, DOM-based XSS |
-| `auth-expert` | Auth bypass, privilege escalation, IDOR, missing authz |
+| `missing-auth-expert` | Missing capability checks on AJAX/REST/admin endpoints |
+| `idor-expert` | Insecure Direct Object Reference, object-level access control |
+| `priv-esc-expert` | Privilege escalation, options update chains, role manipulation, auth bypass |
 | `object-injection-expert` | PHP object injection, phar deserialization |
 | `ssrf-expert` | Server-side request forgery, cloud metadata |
 | `race-condition-expert` | TOCTOU, database races, double-spend, limit bypass |
@@ -53,6 +55,9 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `deserialization-expert` | JSON/YAML parsing, property injection, type juggling |
 | `logic-flaw-expert` | Business logic bugs, payment bypass, workflow manipulation |
 | `info-disclosure-expert` | Sensitive data exposure, debug endpoints, user enumeration |
+| `code-injection-expert` | eval, call_user_func, dynamic dispatch, callback injection |
+| `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
+| `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 
 ### Verification Pipeline Agents
 | Agent | Purpose |
@@ -79,13 +84,16 @@ When the user wants a comprehensive audit of a plugin:
 5. **Delegate to experts** — launch relevant expert agents based on the plugin's functionality:
    - Forms/user input? → `xss-expert`, `sqli-expert`, `csrf-expert`
    - File handling? → `file-rce-expert`, `lfi-rfi-expert`
-   - Authentication? → `auth-expert`
+   - Authentication? → `missing-auth-expert`, `idor-expert`, `priv-esc-expert`
    - External requests? → `ssrf-expert`
    - Data serialization? → `object-injection-expert`, `deserialization-expert`
    - XML/SVG processing? → `xxe-expert`
    - Payment/workflow? → `logic-flaw-expert`
    - Settings/debug? → `info-disclosure-expert`
    - Concurrent operations? → `race-condition-expert`
+   - Dynamic code execution? → `code-injection-expert`
+   - Redirects/OAuth? → `open-redirect-expert`
+   - Always (last pass) → `critical-thinker`
 6. **Collect findings** from all agents
 7. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
 8. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)

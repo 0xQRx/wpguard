@@ -845,6 +845,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
 async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Execute the requested tool and return the result."""
+    # Coerce string values to int for integer-typed params (MCP clients may send strings)
+    _tool_schemas = {t.name: t.inputSchema for t in (await list_tools())}
+    schema = _tool_schemas.get(name, {})
+    for param, prop in schema.get("properties", {}).items():
+        if prop.get("type") == "integer" and param in arguments:
+            try:
+                arguments[param] = int(arguments[param])
+            except (ValueError, TypeError):
+                pass
 
     if name == "wpguard_plugin_info":
         return await _plugin_info(arguments["slug"])

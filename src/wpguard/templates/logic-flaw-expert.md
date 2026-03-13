@@ -239,6 +239,57 @@ function gift_item($item_id, $recipient_id) {
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2025-11517: Event Tickets — Free Endpoint Bypasses Payment
+**Impact:** Unauthenticated paid ticket acquisition for free, CVSS 7.5
+
+```php
+// REST endpoint for "free" orders — never validates cart total is $0!
+register_rest_route('tribe/tickets/v1', 'commerce/free/order', [
+    'methods'  => 'POST',
+    'callback' => 'create_free_order',
+    'permission_callback' => '__return_true',
+]);
+function create_free_order($request) {
+    $data = $request->get_json_params();
+    $order = Order::create($data);  // Creates order directly, no price check
+}
+```
+
+**Why vulnerable:** Separate "free order" endpoint exists alongside the normal checkout flow. Attacker adds paid tickets to cart, then calls the free endpoint instead of the payment gateway. Fix: validate `$cart->get_cart_total() <= 0` before processing.
+**Detection:** REST routes or AJAX handlers with names like `free_order`, `zero_checkout`, `skip_payment`. Any order creation endpoint that doesn't verify the cart total against expected payment.
+
+### CVE-2025-3889: VW Developer Developer Course — Negative Quantity
+**Impact:** Price manipulation via negative values, CVSS 5.3
+
+```php
+// VULNERABLE: quantity from POST, not validated as positive
+$quantity = intval($_POST['quantity']);  // could be -5
+$item_price = get_product_price($product_id);
+$line_total = $item_price * $quantity;  // negative total!
+$cart_total += $line_total;  // subtracts from cart
+```
+
+**Why vulnerable:** `intval()` happily converts "-5" to -5. Negative quantity × positive price = negative line total, reducing the cart total. Fix: use `absint()` (absolute integer) or explicitly check `$quantity < 1`.
+**Detection:** `intval($_POST['quantity'])` or `(int)$_POST['amount']` without a positivity check. Also look for missing `absint()` on any numeric value that feeds into price calculations.
+
+### CVE-2024-7747: TeraWallet — Self-Transfer Type Confusion
+**Impact:** Subscriber+ wallet balance inflation, CVSS 6.5
+
+```php
+// VULNERABLE: amount as string, transfer-to-self not blocked
+$whom = sanitize_text_field($_POST['woo_wallet_transfer_user_id']);
+$amount = sanitize_text_field($_POST['woo_wallet_transfer_amount']);
+// sanitize_text_field returns STRING, not float
+// Self-transfer with type confusion can create money from nothing
+```
+
+**Why vulnerable:** `sanitize_text_field()` returns a string, and loose PHP comparisons on monetary values cause rounding/casting issues. Combined with missing self-transfer validation, users can inflate their balance. Fix: cast to `floatval()`, block `$whom == get_current_user_id()`.
+**Detection:** Wallet/credit/balance transfer functions where amount is `sanitize_text_field()` instead of `floatval()`/`absint()`. Missing check for self-transfer (`$target_user == $current_user`).
+
+---
+
 ## Attack Techniques
 
 ### 1. Price Manipulation

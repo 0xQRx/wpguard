@@ -1,13 +1,1390 @@
 {
   "version": 1,
-  "last_updated": null,
+  "last_updated": "2026-03-13",
   "stats": {
-    "total_researched": 0,
-    "total_skipped": 0,
-    "total_groups": 0,
-    "total_edge_cases": 0
+    "total_researched": 77,
+    "total_skipped": 6,
+    "total_groups": 13,
+    "total_edge_cases": 87
   },
-  "researched_cves": {},
-  "skipped_cves": {},
-  "groups": {}
+  "researched_cves": {
+    "CVE-2025-24734": {
+      "plugin": "real-time-auto-find-and-replace",
+      "title": "Better Find and Replace <= 1.6.7 - Missing Auth to Privilege Escalation",
+      "cvss": 8.8,
+      "pattern": "missing-capability-check",
+      "group": "auth",
+      "diff_quality": "excellent",
+      "svn_old_rev": "3225013",
+      "svn_new_rev": "3226871",
+      "key_file": "core/admin/functions/DbReplacer.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-5324": {
+      "plugin": "waitlist-woocommerce",
+      "title": "XootiX Framework - Missing Auth to Arbitrary Options Update",
+      "cvss": 8.8,
+      "pattern": "missing-capability-check+missing-nonce",
+      "group": "auth",
+      "diff_quality": "excellent",
+      "svn_old_rev": "3093328",
+      "svn_new_rev": "3117333",
+      "key_file": "includes/xoo-framework/admin/class-xoo-admin-settings.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2022-2696": {
+      "plugin": "menu-ordering-reservations",
+      "title": "Restaurant Menu <= 2.3.0 - Missing Auth on AJAX Actions",
+      "cvss": 6.3,
+      "pattern": "missing-capability-check+missing-nonce",
+      "group": "auth",
+      "diff_quality": "excellent",
+      "svn_old_rev": "2793397",
+      "svn_new_rev": "2793398",
+      "key_file": "includes/admin/class-glf-admin-screens.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2022-40223": {
+      "plugin": "searchwp",
+      "title": "SearchWP Premium <= 4.2.5 - Nonce Leakage + Auth Bypass",
+      "cvss": 7.1,
+      "pattern": "nonce-leakage",
+      "group": "auth",
+      "diff_quality": "none (premium plugin, no SVN)",
+      "svn_old_rev": null,
+      "svn_new_rev": null,
+      "key_file": null,
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-4450": {
+      "plugin": "ali2woo-lite",
+      "title": "AliNext Lite <= 3.3.6 - Missing Auth via Several Functions",
+      "cvss": 6.3,
+      "pattern": "missing-capability-check",
+      "group": "auth",
+      "diff_quality": "large (diff too big to parse inline)",
+      "svn_old_rev": "3107543",
+      "svn_new_rev": "3111831",
+      "key_file": "includes/classes/controller/ImportAjaxController.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-13847": {
+      "plugin": "photofade",
+      "title": "PhotoFade <= 0.2.1 - Contributor+ Stored XSS via Shortcode Attributes",
+      "cvss": 6.4,
+      "pattern": "xss-shortcode-attrs",
+      "group": "xss",
+      "diff_quality": "excellent",
+      "svn_old_rev": "469126",
+      "svn_new_rev": "567551",
+      "key_file": "photo-fade.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-8967": {
+      "plugin": "iworks-pwa",
+      "title": "PWA plugin <= 1.6.3 - Author+ Stored XSS via SVG File Upload",
+      "cvss": 6.4,
+      "pattern": "xss-svg-upload",
+      "group": "xss",
+      "diff_quality": "excellent",
+      "svn_old_rev": "3152521",
+      "svn_new_rev": "3161055",
+      "key_file": "includes/iworks/class-iworks-svg.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-11287": {
+      "plugin": "ebook-store",
+      "title": "Ebook Store <= 5.8001 - Reflected XSS via REQUEST_URI",
+      "cvss": 6.1,
+      "pattern": "reflected-xss-request-uri",
+      "group": "xss",
+      "diff_quality": "excellent",
+      "svn_old_rev": "3314572",
+      "svn_new_rev": "3333679",
+      "key_file": "functions.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2026-0996": {
+      "plugin": "fluentform",
+      "title": "Fluent Forms <= 6.1.14 - Subscriber+ Stored XSS via AI Form Builder",
+      "cvss": 6.4,
+      "pattern": "stored-xss-ai-generated-content",
+      "group": "xss",
+      "diff_quality": "large-diff-partial-review",
+      "svn_old_rev": "3427723",
+      "svn_new_rev": "3439511",
+      "key_file": null,
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-68848": {
+      "plugin": "amr-cron-manager",
+      "title": "amr cron manager <= 2.3 - Unauthenticated Stored XSS",
+      "cvss": 7.2,
+      "pattern": "stored-xss-unescaped-admin-output",
+      "group": "xss",
+      "diff_quality": "no-fix-available",
+      "svn_old_rev": "1431091",
+      "svn_new_rev": "2362652",
+      "key_file": "amr-cron-manager.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2020-12800": {
+      "plugin": "drag-and-drop-multiple-file-upload-contact-form-7",
+      "title": "Drag and Drop Multiple File Upload CF7 <= 1.3.3.2 - Arbitrary File Upload",
+      "cvss": 9.8,
+      "pattern": "arbitrary-file-upload-client-controlled-types",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.3.3.2",
+      "svn_new_rev": "tags/1.3.3.3.1",
+      "key_file": "inc/dnd-upload-cf7.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-2005": {
+      "plugin": "front-end-only-users",
+      "title": "Front End Only Users <= 3.2.32 - Unauthenticated Arbitrary File Upload",
+      "cvss": 9.8,
+      "pattern": "arbitrary-file-upload-no-type-validation",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.2.32",
+      "svn_new_rev": "tags/3.2.33",
+      "key_file": "Functions/Prepare_Data_For_Insertion.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-10147": {
+      "plugin": "podlove-podcasting-plugin-for-wordpress",
+      "title": "Podlove Podcast Publisher <= 4.2.6 - Unauthenticated Arbitrary File Upload",
+      "cvss": 9.8,
+      "pattern": "arbitrary-file-upload-content-only-check",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/4.2.6",
+      "svn_new_rev": "tags/4.2.7",
+      "key_file": "lib/helper.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-51410": {
+      "plugin": "wp-mail-log",
+      "title": "WP Mail Log <= 1.1.2 - Contributor+ Arbitrary File Upload + Path Traversal",
+      "cvss": 8.8,
+      "pattern": "arbitrary-file-upload-rest-no-validation+path-traversal",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.1.2",
+      "svn_new_rev": "tags/1.1.3",
+      "key_file": "classes/api.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-8104": {
+      "plugin": "wpextended",
+      "title": "WP Extended <= 3.0.8 - Subscriber+ Arbitrary File Download via Path Traversal",
+      "cvss": 8.8,
+      "pattern": "path-traversal-file-download",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.0.8",
+      "svn_new_rev": "tags/3.0.9",
+      "key_file": "includes/libraries/wpext_export/wpext_export.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-6972": {
+      "plugin": "backup-backup",
+      "title": "Backup Migration <= 1.3.9 - Unauthenticated Path Traversal to File Deletion",
+      "cvss": 9.8,
+      "pattern": "path-traversal-file-deletion",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.3.9",
+      "svn_new_rev": "tags/1.4.0",
+      "key_file": "includes/bypasser.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2019-13635": {
+      "plugin": "wp-fastest-cache",
+      "title": "WP Fastest Cache <= 0.8.9.5 - Unauthenticated Directory Traversal",
+      "cvss": 9.1,
+      "pattern": "path-traversal-url-decode-bypass",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/0.8.9.5",
+      "svn_new_rev": "tags/0.8.9.6",
+      "key_file": "inc/cache.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2021-39312": {
+      "plugin": "seo-local-rank",
+      "title": "True Ranker <= 2.2.2 - Unauthenticated File Read via Vendor File",
+      "cvss": 7.5,
+      "pattern": "path-traversal-vendor-file-regex-bypass",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.2.2",
+      "svn_new_rev": "tags/2.2.4",
+      "key_file": "admin/vendor/datatables/examples/resources/examples.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2016-10965": {
+      "plugin": "real3d-flipbook",
+      "title": "Real3D Flipbook <= 1.0.0 - Directory Traversal",
+      "cvss": 9.1,
+      "pattern": "path-traversal-classic",
+      "group": "file-ops",
+      "diff_quality": "skipped-no-tags",
+      "svn_old_rev": null,
+      "svn_new_rev": null,
+      "key_file": null,
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2022-0320": {
+      "plugin": "essential-addons-for-elementor-lite",
+      "title": "Essential Addons for Elementor <= 5.0.4 - Unauthenticated LFI",
+      "cvss": 9.8,
+      "pattern": "lfi-strpos-without-realpath",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.0.4",
+      "svn_new_rev": "tags/5.0.5",
+      "key_file": "includes/Traits/Helper.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-12493": {
+      "plugin": "woolentor-addons",
+      "title": "ShopLentor <= 3.2.5 - Unauthenticated LFI via load_template",
+      "cvss": 9.8,
+      "pattern": "lfi-template-style-param",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.2.5",
+      "svn_new_rev": "tags/3.2.6",
+      "key_file": "includes/addons/product-grid/base/class.product-grid-base.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2022-1392": {
+      "plugin": "video-synchro-pdf",
+      "title": "Videos sync PDF <= 1.7.4 - Unauthenticated LFI via direct include",
+      "cvss": 9.8,
+      "pattern": "lfi-direct-include-get-param",
+      "group": "file-ops",
+      "diff_quality": "no-fix (abandoned)",
+      "svn_old_rev": null,
+      "svn_new_rev": null,
+      "key_file": "reglages/Menu_Plugins/tout.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-49613": {
+      "plugin": "simple-code-insert-shortcode",
+      "title": "Simple Code Insert Shortcode <= 1.0 - Contributor+ SQL Injection (UNPATCHED)",
+      "cvss": 8.8,
+      "pattern": "wpdb-prepare-missing",
+      "group": "sqli",
+      "diff_quality": "source-only (abandoned, no fix)",
+      "svn_old_rev": null,
+      "svn_new_rev": null,
+      "key_file": "class.scis.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Abandoned plugin, no fix. Classic $atts['id'] into WHERE id=$id"
+    },
+    "CVE-2023-5428": {
+      "plugin": "image-vertical-reel-scroll-slideshow",
+      "title": "Image Vertical Reel <= 9.0 - Contributor+ SQL Injection via Shortcode",
+      "cvss": 8.8,
+      "pattern": "wpdb-prepare-missing",
+      "group": "sqli",
+      "diff_quality": "excellent",
+      "svn_old_rev": "2827122",
+      "svn_new_rev": "3010833",
+      "key_file": "image-vertical-reel-scroll-slideshow.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-13673": {
+      "plugin": "tutor",
+      "title": "Tutor LMS <= 3.9.6 - Unauthenticated SQL Injection via coupon_code",
+      "cvss": 7.5,
+      "pattern": "wpdb-prepare-missing",
+      "group": "sqli",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.9.6",
+      "svn_new_rev": "tags/3.9.7",
+      "key_file": "helpers/QueryHelper.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Custom query builder with is_numeric?$val:'$val' antipattern. Fix adds prepare_value() helper."
+    },
+    "CVE-2024-9186": {
+      "plugin": "wp-marketing-automations",
+      "title": "FunnelKit Automations <= 3.2.2 - Unauthenticated SQL Injection via Cookie",
+      "cvss": 7.5,
+      "pattern": "wpdb-prepare-missing",
+      "group": "sqli",
+      "diff_quality": "large-diff (9MB total, tracking model reviewed)",
+      "svn_old_rev": "tags/3.2.2",
+      "svn_new_rev": "tags/3.3.0",
+      "key_file": "includes/db/class-bwfan-model-engagement-tracking.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Cookie-based injection. Model class has systemic prepare missing across multiple methods."
+    },
+    "CVE-2024-1071": {
+      "plugin": "ultimate-member",
+      "title": "Ultimate Member 2.1.3-2.8.2 - Unauthenticated SQL Injection via sorting",
+      "cvss": 9.8,
+      "pattern": "order-by-injection",
+      "group": "sqli",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.8.2",
+      "svn_new_rev": "tags/2.8.3",
+      "key_file": "includes/core/class-member-directory.php",
+      "researched_at": "2026-03-13",
+      "notes": "Critical severity. Non-strict in_array allows fallthrough to ORDER BY injection. prepare() cannot fix ORDER BY - needs allowlist."
+    },
+    "CVE-2021-4443": {
+      "plugin": "quadmenu",
+      "title": "QuadMenu <= 2.0.6 - Unauthenticated Arbitrary File Creation",
+      "cvss": 9.8,
+      "pattern": "file-creation-compiler-no-ext-check",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.0.6",
+      "svn_new_rev": "tags/2.0.7",
+      "key_file": "includes/compiler.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-6467": {
+      "plugin": "bookingpress-appointment-booking",
+      "title": "BookingPress <= 1.1.5 - Subscriber+ File Read to File Creation",
+      "cvss": 8.8,
+      "pattern": "file-creation-image-copy-no-validation",
+      "group": "file-ops",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.1.5",
+      "svn_new_rev": "tags/1.1.6",
+      "key_file": "core/classes/class.bookingpress_services.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-32830": {
+      "plugin": "buddyforms",
+      "title": "BuddyForms <= 2.8.8 - Unauthenticated SSRF + Arbitrary File Read",
+      "cvss": 9.3,
+      "pattern": "ssrf-file-get-contents",
+      "group": "ssrf",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.8.8",
+      "svn_new_rev": "tags/2.8.9",
+      "key_file": "includes/functions.php",
+      "researched_at": "2026-03-13",
+      "notes": "file_get_contents() replaced with wp_safe_remote_get(). Unauthenticated via AJAX."
+    },
+    "CVE-2019-16932": {
+      "plugin": "visualizer",
+      "title": "Visualizer <= 3.3.0 - Unauthenticated Blind SSRF via REST API",
+      "cvss": 9.3,
+      "pattern": "ssrf-rest-no-permission-callback",
+      "group": "ssrf",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.3.0",
+      "svn_new_rev": "tags/3.3.1",
+      "key_file": "classes/Visualizer/Gutenberg/Block.php",
+      "researched_at": "2026-03-13",
+      "notes": "REST route /upload-data had no permission_callback. Fix added current_user_can('edit_posts') but no URL validation."
+    },
+    "CVE-2024-23825": {
+      "plugin": "tablepress",
+      "title": "TablePress <= 2.2.4 - Author+ SSRF with DNS Rebinding Bypass",
+      "cvss": 8.5,
+      "pattern": "ssrf-hostname-blocklist-bypass",
+      "group": "ssrf",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.2.4",
+      "svn_new_rev": "tags/2.2.5",
+      "key_file": "classes/class-import.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Original checked hostname string against metadata IPs (DNS rebinding bypass). Fix resolves DNS first then checks IP. Added more cloud metadata IPs."
+    },
+    "CVE-2023-6991": {
+      "plugin": "wp-file-get-contents",
+      "title": "JSM file_get_contents() Shortcode <= 2.7.0 - Contributor+ SSRF via Shortcode",
+      "cvss": 5.4,
+      "pattern": "ssrf-shortcode-url-attribute",
+      "group": "ssrf",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.7.0-equivalent",
+      "svn_new_rev": "tags/2.7.1",
+      "key_file": "wp-file-get-contents.php",
+      "researched_at": "2026-03-13",
+      "notes": "Shortcode accepts URL attr from contributor post content. Fix added wp_http_validate_url()."
+    },
+    "CVE-2025-14478": {
+      "plugin": "demo-importer-plus",
+      "title": "Demo Importer Plus <= 2.0.9 - Author+ Blind XXE via SVG Upload",
+      "cvss": 7.5,
+      "pattern": "xxe-simplexml-load-file",
+      "group": "xxe",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.0.9",
+      "svn_new_rev": "tags/2.0.10",
+      "key_file": "inc/importers/class-demo-importer-plus-sites-helper.php",
+      "researched_at": "2026-03-13",
+      "notes": "simplexml_load_file() on SVG without entity protection. Fixed with DOMDocument + resolveExternals=false. PHP < 8.0 only."
+    },
+    "CVE-2025-32138": {
+      "plugin": "google-maps-easy",
+      "title": "Easy Google Maps <= 1.11.18 - Author+ XXE via LIBXML_NOENT",
+      "cvss": 6.3,
+      "pattern": "xxe-libxml-noent-flag",
+      "group": "xxe",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.11.18",
+      "svn_new_rev": "tags/1.11.19",
+      "key_file": "modules/icons/mod.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "LIBXML_NOENT enables entity substitution (name is misleading). Works on ALL PHP versions. Fix removed the flag and added resolveExternals=false."
+    },
+    "CVE-2024-50442": {
+      "plugin": "royal-elementor-addons",
+      "title": "Royal Elementor Addons <= 1.3.980 - Author+ XXE via SVG Sanitizer",
+      "cvss": 5.4,
+      "pattern": "xxe-libxml-noent-flag",
+      "group": "xxe",
+      "diff_quality": "poor (fix still uses LIBXML_NOENT)",
+      "svn_old_rev": "tags/1.3.980",
+      "svn_new_rev": "tags/1.3.981",
+      "key_file": "admin/templates-kit.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "SVG sanitizer uses LIBXML_NOENT|LIBXML_DTDLOAD. The 'fix' in 1.3.981 only renames functions, still uses same dangerous flags. Incomplete fix."
+    },
+    "CVE-2024-7627": {
+      "plugin": "file-manager",
+      "title": "Bit File Manager 6.0-6.5.5 - Unauthenticated RCE via Race Condition",
+      "cvss": 8.1,
+      "pattern": "toctou-temp-file-web-accessible",
+      "group": "race-condition",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/6.5.5",
+      "svn_new_rev": "tags/6.5.6",
+      "key_file": "backend/app/Providers/FileEditValidator.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-4642": {
+      "plugin": "kk-star-ratings",
+      "title": "kk Star Ratings <= 5.4.5 - Race Condition to Multiple User Voting",
+      "cvss": 5.3,
+      "pattern": "database-race-multi-vote",
+      "group": "race-condition",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.4.5",
+      "svn_new_rev": "tags/5.4.6",
+      "key_file": "src/core/wp/actions/wp_ajax_kk-star-ratings.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-6109": {
+      "plugin": "yop-poll",
+      "title": "YOP Poll <= 6.5.26 - Race Condition to Vote Manipulation",
+      "cvss": 5.3,
+      "pattern": "database-race-multi-vote",
+      "group": "race-condition",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/6.5.26",
+      "svn_new_rev": "tags/6.5.27",
+      "key_file": "admin/models/votes.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-3530": {
+      "plugin": "wordpress-simple-paypal-shopping-cart",
+      "title": "WordPress Simple PayPal Shopping Cart <= 5.1.2 - Unauthenticated Price Manipulation",
+      "cvss": 7.5,
+      "pattern": "client-side-price-hash-mismatch",
+      "group": "logic",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.1.2",
+      "svn_new_rev": "tags/5.1.3",
+      "key_file": "includes/wpsc-shortcodes-related.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-3889": {
+      "plugin": "wordpress-simple-paypal-shopping-cart",
+      "title": "WordPress Simple PayPal Shopping Cart <= 5.1.3 - Negative Quantity IDOR",
+      "cvss": 5.3,
+      "pattern": "negative-quantity-price-subtraction",
+      "group": "logic",
+      "diff_quality": "partial",
+      "svn_old_rev": "tags/5.1.3",
+      "svn_new_rev": "tags/5.1.4",
+      "key_file": "includes/wpsc-post-payment-related.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-11517": {
+      "plugin": "event-tickets",
+      "title": "Event Tickets <= 5.26.5 - Unauthenticated Payment Bypass via Free Endpoint",
+      "cvss": 7.5,
+      "pattern": "free-endpoint-no-total-validation",
+      "group": "logic",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.26.5",
+      "svn_new_rev": "tags/5.26.6",
+      "key_file": "src/Tickets/Commerce/Gateways/Free/REST/Order_Endpoint.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-7747": {
+      "plugin": "woo-wallet",
+      "title": "Wallet for WooCommerce <= 1.5.6 - Numeric Type Confusion in Transfer",
+      "cvss": 6.5,
+      "pattern": "numeric-type-confusion-self-transfer",
+      "group": "logic",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.5.6",
+      "svn_new_rev": "tags/1.5.7",
+      "key_file": "includes/class-woo-wallet-frontend.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-51405": {
+      "plugin": "bookingpress-appointment-booking",
+      "title": "BookingPress <= 1.0.74 - Booking Price Manipulation",
+      "cvss": 7.5,
+      "pattern": "client-side-price-trust",
+      "group": "logic",
+      "diff_quality": "partial (large diff, many unrelated changes)",
+      "svn_old_rev": "tags/1.0.74",
+      "svn_new_rev": "tags/1.0.75",
+      "key_file": "core/classes/frontend/class.bookingpress_appointment_bookings.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-6845": {
+      "plugin": "smartsearchwp",
+      "title": "Chatbot with ChatGPT <= 2.4.5 - Unauthenticated OpenAI API Key Exposure",
+      "cvss": 5.8,
+      "pattern": "rest-endpoint-no-auth-returns-secret",
+      "group": "info-disclosure",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.4.5",
+      "svn_new_rev": "tags/2.4.6",
+      "key_file": "includes/wdgpt-api-requests.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2025-11504": {
+      "plugin": "quickcreator",
+      "title": "Quickcreator 0.0.9-0.1.17 - Unauthenticated API Key Exposure via Debug File",
+      "cvss": 7.5,
+      "pattern": "debug-file-put-contents-secrets",
+      "group": "info-disclosure",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/0.1.17",
+      "svn_new_rev": "tags/0.1.18",
+      "key_file": "includes/quickcreator/class-quickcreator.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Partial fix: removed public file write but admin debug page still shows API key in plaintext."
+    },
+    "CVE-2024-22294": {
+      "plugin": "ip2location-country-blocker",
+      "title": "IP2Location Country Blocker <= 2.33.3 - Predictable Debug Log Filename",
+      "cvss": 5.3,
+      "pattern": "predictable-debug-log-filename",
+      "group": "info-disclosure",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.33.3",
+      "svn_new_rev": "tags/2.33.4",
+      "key_file": "ip2location-country-blocker.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-2302": {
+      "plugin": "easy-digital-downloads",
+      "title": "Easy Digital Downloads <= 3.2.9 - Debug Log via Directory Listing",
+      "cvss": 5.3,
+      "pattern": "debug-log-unprotected-directory",
+      "group": "info-disclosure",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.2.9",
+      "svn_new_rev": "tags/3.2.10",
+      "key_file": "src/Logging.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2021-39327": {
+      "plugin": "bulletproof-security",
+      "title": "BulletProof Security <= 5.1 - Backup Path Disclosure in Log File",
+      "cvss": 5.3,
+      "pattern": "sensitive-paths-in-log-file",
+      "group": "info-disclosure",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.1",
+      "svn_new_rev": "tags/5.2",
+      "key_file": "admin/db-backup-security/db-backup-security.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-22284": {
+      "plugin": "asgaros-forum",
+      "title": "Asgaros Forum <= 2.7.2 - Unauthenticated PHP Object Injection via Cookie",
+      "cvss": 9.8,
+      "pattern": "maybe-unserialize-cookie",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.7.2",
+      "svn_new_rev": "tags/2.8.0",
+      "key_file": "includes/forum-unread.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-10913": {
+      "plugin": "wp-clone-by-wp-academy",
+      "title": "Clone <= 2.4.6 - Unauthenticated PHP Object Injection via recursive_unserialize",
+      "cvss": 8.8,
+      "pattern": "recursive-unserialize-replace-no-allowed-classes",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.4.6",
+      "svn_new_rev": "tags/2.4.7",
+      "key_file": "lib/icit_srdb_replacer.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-38759": {
+      "plugin": "search-and-replace",
+      "title": "Search & Replace <= 3.2.2 - Unauthenticated PHP Object Injection",
+      "cvss": 9.8,
+      "pattern": "recursive-unserialize-replace-no-allowed-classes",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.2.2",
+      "svn_new_rev": "tags/3.2.3",
+      "key_file": "inc/Database/Replace.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-10957": {
+      "plugin": "updraftplus",
+      "title": "UpdraftPlus 1.23.8-1.24.11 - Unauthenticated PHP Object Injection",
+      "cvss": 8.8,
+      "pattern": "recursive-unserialize-replace-no-allowed-classes",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.24.11",
+      "svn_new_rev": "tags/1.24.12",
+      "key_file": "includes/class-search-replace.php",
+      "researched_at": "2026-03-13",
+      "notes": "Used Brumann polyfill for PHP <7.0 allowed_classes support"
+    },
+    "CVE-2024-5085": {
+      "plugin": "hash-form",
+      "title": "Hash Form <= 1.1.0 - Unauthenticated PHP Object Injection via Form Entry",
+      "cvss": 8.1,
+      "pattern": "maybe-unserialize-form-data",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.1.0",
+      "svn_new_rev": "tags/1.1.1",
+      "key_file": "admin/classes/HashFormEntries.php",
+      "researched_at": "2026-03-13",
+      "notes": "Best fix pattern -- custom array-only serialized string parser avoiding unserialize() entirely"
+    },
+    "CVE-2023-26326": {
+      "plugin": "buddyforms",
+      "title": "BuddyForms <= 2.7.7 - PHAR Deserialization via Image URL",
+      "cvss": 8.8,
+      "pattern": "phar-deserialization-url-param",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.7.7",
+      "svn_new_rev": "tags/2.7.8",
+      "key_file": "includes/functions.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2024-24934": {
+      "plugin": "elementor",
+      "title": "Elementor <= 3.19.0 - Contributor+ PHAR Deserialization + File Deletion",
+      "cvss": 8.8,
+      "pattern": "phar-deserialization-file-operation",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.19.0",
+      "svn_new_rev": "tags/3.19.1",
+      "key_file": "core/files/uploads-manager.php",
+      "researched_at": "2026-03-13",
+      "notes": "Model fix: realpath() + temp dir containment + is_uploaded_file() validation"
+    },
+    "CVE-2023-25701": {
+      "plugin": "watchtowerhq",
+      "title": "WatchTowerHQ <= 3.6.16 - Type Juggling Auth Bypass in check_ota",
+      "cvss": 9.8,
+      "pattern": "loose-comparison-auth-bypass",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.6.16",
+      "svn_new_rev": "tags/3.6.17",
+      "key_file": "src/class-api.php",
+      "researched_at": "2026-03-13"
+    },
+    "CVE-2023-6875": {
+      "plugin": "post-smtp",
+      "title": "POST SMTP <= 2.8.7 - Type Juggling Auth Bypass via connect-app API",
+      "cvss": 9.8,
+      "pattern": "loose-comparison-auth-bypass",
+      "group": "deserialization",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.8.7",
+      "svn_new_rev": "tags/2.8.8",
+      "key_file": "Postman/Mobile/includes/rest-api/v1/rest-api.php",
+      "researched_at": "2026-03-13",
+      "notes": "Attack chain: bypass auth -> register FCM token -> intercept password reset emails -> admin takeover"
+    },
+    "CVE-2021-25074": {
+      "plugin": "webp-converter-for-media",
+      "title": "WebP Converter for Media <= 4.0.2 - Unauthenticated Open Redirect",
+      "cvss": 6.1,
+      "pattern": "header-location-user-input",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/4.0.2",
+      "svn_new_rev": "tags/4.0.3",
+      "key_file": "includes/passthru.php",
+      "researched_at": "2026-03-13",
+      "notes": "Standalone PHP file outside WP routing. header('Location:') with $_GET['src']. Fix adds host + extension validation."
+    },
+    "CVE-2024-8761": {
+      "plugin": "share-this-image",
+      "title": "Share This Image <= 2.03 - Open Redirect via Stored URL",
+      "cvss": 7.2,
+      "pattern": "wp-redirect-db-stored-url",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.03",
+      "svn_new_rev": "tags/2.04",
+      "key_file": "includes/class-sti-shortlink.php",
+      "researched_at": "2026-03-13",
+      "notes": "Two-stage: store URL via nopriv AJAX, redirect via shortlink. Fix: wp_redirect -> wp_safe_redirect."
+    },
+    "CVE-2024-0250": {
+      "plugin": "analytics-insights",
+      "title": "Analytics Insights <= 6.2 - Open Redirect via OAuth Callback",
+      "cvss": 6.1,
+      "pattern": "oauth-state-as-redirect-url",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/6.2",
+      "svn_new_rev": "tags/6.3",
+      "key_file": "tools/oauth2callback.php",
+      "researched_at": "2026-03-13",
+      "notes": "Standalone OAuth callback file using $_GET['state'] as redirect URL. Fix: deleted file, nonce-based state."
+    },
+    "CVE-2023-51675": {
+      "plugin": "advanced-access-manager",
+      "title": "Advanced Access Manager <= 6.9.18 - Authenticated Open Redirect",
+      "cvss": 4.3,
+      "pattern": "wp-redirect-no-validate",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/6.9.18",
+      "svn_new_rev": "tags/6.9.19",
+      "key_file": "application/Service/Redirect.php",
+      "researched_at": "2026-03-13",
+      "notes": "Two vectors: login redirect settings + REST API auth redirect param. Fix: wp_validate_redirect() on both."
+    },
+    "CVE-2025-6238": {
+      "plugin": "ai-engine",
+      "title": "AI Engine == 2.8.4 - Insecure OAuth redirect_uri",
+      "cvss": 8.0,
+      "pattern": "oauth-redirect-uri-no-client-registration",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.8.4",
+      "svn_new_rev": "tags/2.8.5",
+      "key_file": "labs/oauth.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Full OAuth with unvalidated redirect_uri leaks auth code. Fix: disabled entire OAuth class. wp_safe_redirect wrong fix for OAuth."
+    },
+    "CVE-2021-25111": {
+      "plugin": "english-wp-admin",
+      "title": "English WordPress Admin <= 1.5.1.1 - Unauthenticated Open Redirect",
+      "cvss": 7.2,
+      "pattern": "wp-redirect-get-param",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.5.1.1",
+      "svn_new_rev": "tags/1.5.2",
+      "key_file": "english-wp-admin.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Incomplete fix: added nonce check but no URL validation. Still redirectable with valid nonce."
+    },
+    "CVE-2025-2303": {
+      "plugin": "block-logic",
+      "title": "Block Logic <= 1.0.8 - Authenticated (Contributor+) Remote Code Execution via eval()",
+      "cvss": 8.8,
+      "pattern": "eval-block-attribute",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.0.8",
+      "svn_new_rev": "tags/2.0.0",
+      "key_file": "block-logic.php",
+      "researched_at": "2026-03-13",
+      "notes": "blockLogic attribute passed directly to eval(). Fix: complete rewrite with custom tokenizer/parser and function allowlist."
+    },
+    "CVE-2024-8512": {
+      "plugin": "w3speedster-wp",
+      "title": "W3SPEEDSTER <= 7.26 - Authenticated (Administrator+) Remote Code Execution via eval()",
+      "cvss": 9.1,
+      "pattern": "eval-ajax-broken-allowlist",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/7.26",
+      "svn_new_rev": "tags/7.27",
+      "key_file": "w3speedster.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "safe_eval() with regex-based function allowlist is bypassable (variable functions, backticks). Fix: removed entire AJAX endpoint + eval functions."
+    },
+    "CVE-2011-10033": {
+      "plugin": "is-human",
+      "title": "is-human <= 1.4.2 - Unauthenticated Remote Code Execution via eval()",
+      "cvss": 9.8,
+      "pattern": "eval-direct-get-param",
+      "group": "code-injection",
+      "diff_quality": "source-only (abandoned, no fix)",
+      "svn_old_rev": "tags/1.4.2",
+      "svn_new_rev": null,
+      "key_file": "engine.php",
+      "researched_at": "2026-03-13",
+      "notes": "Direct $_GET['type'] into eval() string concat. No auth, direct file access. Unpatched/abandoned."
+    },
+    "CVE-2025-13035": {
+      "plugin": "code-snippets",
+      "title": "Code Snippets <= 3.9.1 - Authenticated (Contributor+) PHP Code Injection via extract()",
+      "cvss": 8.0,
+      "pattern": "extract-overwrite-eval-var",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/3.9.1",
+      "svn_new_rev": "tags/3.9.2",
+      "key_file": "php/front-end/class-front-end.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "extract() without EXTR_SKIP before eval() allows overwriting $snippet or $filepath vars. Fix: EXTR_SKIP flag."
+    },
+    "CVE-2025-9321": {
+      "plugin": "wpcasa",
+      "title": "WPCasa <= 1.4.1 - Unauthenticated Code Injection via Dynamic Class Instantiation",
+      "cvss": 9.8,
+      "pattern": "dynamic-class-instantiation",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.4.1",
+      "svn_new_rev": "tags/1.4.2",
+      "key_file": "includes/class-wpsight-api.php",
+      "researched_at": "2026-03-13",
+      "notes": "class_exists() + new $api() from query var. Also do_action() with user-controlled suffix. Fix: empty allowlist with apply_filters."
+    },
+    "CVE-2025-10057": {
+      "plugin": "wp-ultimate-csv-importer",
+      "title": "WP Import CSV/XML 7.20-7.28 - Authenticated (Subscriber+) RCE via PHP File Write + Require",
+      "cvss": 8.8,
+      "pattern": "file-write-require-rce",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/7.28",
+      "svn_new_rev": "tags/7.29",
+      "key_file": "importExtensions/ImportHelpers.php",
+      "researched_at": "2026-03-13",
+      "notes": "User CSV data written to customFunction.php (chmod 0777) then require_once'd. Fix: JSON storage, 0644 perms, capability check."
+    },
+    "CVE-2024-9593": {
+      "plugin": "time-clock",
+      "title": "Time Clock <= 1.2.2 - Unauthenticated RCE via call_user_func($_POST['function'])",
+      "cvss": 8.3,
+      "pattern": "call-user-func-post-function-name",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.2.2",
+      "svn_new_rev": "tags/1.2.3",
+      "key_file": "includes/admin/ajax_functions_admin.php",
+      "researched_at": "2026-03-13",
+      "notes": "function_exists() guard is not a security check -- returns true for all PHP builtins. wp_ajax_nopriv_ makes it unauthenticated. Fix: entire endpoint removed."
+    },
+    "CVE-2023-6634": {
+      "plugin": "learnpress",
+      "title": "LearnPress <= 4.2.5.7 - Unauthenticated Command Injection via call_user_func",
+      "cvss": 8.1,
+      "pattern": "call-user-func-rest-arbitrary-callback",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/4.2.5.7",
+      "svn_new_rev": "tags/4.2.5.8",
+      "key_file": "inc/rest-api/v1/frontend/class-lp-rest-ajax-controller.php",
+      "researched_at": "2026-03-13",
+      "notes": "REST route with __return_true permission_callback accepts {class,method} from user input. call_user_func([$class,$method],$args). Fix: allowlist filter."
+    },
+    "CVE-2025-9334": {
+      "plugin": "real-time-auto-find-and-replace",
+      "title": "Better Find and Replace <= 1.7.7 - Subscriber+ Code Injection via Dynamic Dispatch",
+      "cvss": 8.8,
+      "pattern": "dynamic-dispatch-namespace-prefix",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "r3369340",
+      "svn_new_rev": "r3389979",
+      "key_file": "core/actions/RTAFAR_CustomAjax.php",
+      "researched_at": "2026-03-13",
+      "notes": "User 'method' param split by @ into class+method. Namespace prefix not a security boundary. Fix: hardcoded allowlist with per-method capability checks."
+    },
+    "CVE-2020-11928": {
+      "plugin": "media-library-assistant",
+      "title": "Media Library Assistant <= 2.81 - Unauthenticated RCE via create_function() in Shortcode",
+      "cvss": 9.8,
+      "pattern": "create-function-shortcode-attribute",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/2.81",
+      "svn_new_rev": "tags/2.82",
+      "key_file": "includes/class-mla-shortcode-support.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "create_function('','return '.$value.';') on tax_query/meta_query/date_query shortcode attrs. 3x identical patterns. Fix: _validate_array_specification() structural parser."
+    },
+    "CVE-2025-8723": {
+      "plugin": "cf-image-resizing",
+      "title": "Cloudflare Image Resizing <= 1.5.6 - Unauthenticated RCE via PHP Config File Injection",
+      "cvss": 9.8,
+      "pattern": "preg-replace-php-file-injection",
+      "group": "code-injection",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.5.6",
+      "svn_new_rev": "tags/1.5.7",
+      "key_file": "cf-image-resizing.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "rest_pre_dispatch hook fires BEFORE WP auth. preg_replace writes user input into PHP define() statements in config.php. Fix: removed entire hook, admin_init only."
+    },
+    "CVE-2024-4704": {
+      "plugin": "contact-form-7",
+      "title": "Contact Form 7 <= 5.9.4 - Unauthenticated Open Redirect via Protocol-Relative URL",
+      "cvss": 6.1,
+      "pattern": "form-action-protocol-relative-injection",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/5.9.4",
+      "svn_new_rev": "tags/5.9.5",
+      "key_file": "includes/contact-form.php",
+      "researched_at": "2026-03-13",
+      "edge_case": true,
+      "notes": "Not a server redirect -- form action attribute set to //evil.com via add_query_arg(). Fix: ltrim + str_starts_with validation. 5M+ installs."
+    },
+    "CVE-2026-1296": {
+      "plugin": "frontend-post-submission-manager-lite",
+      "title": "Frontend Post Submission Manager Lite <= 1.2.7 - Unauthenticated Open Redirect",
+      "cvss": 6.1,
+      "pattern": "wp-redirect-post-param-esc-url-false-security",
+      "group": "open-redirect",
+      "diff_quality": "excellent",
+      "svn_old_rev": "tags/1.2.7",
+      "svn_new_rev": "tags/1.2.8",
+      "key_file": "includes/classes/class-fpsml-shortcode.php",
+      "researched_at": "2026-03-13",
+      "notes": "6 wp_redirect() calls across login handlers, all with esc_url() false sense of security. Fix: all changed to wp_safe_redirect()."
+    }
+  },
+  "skipped_cves": {
+    "CVE-2024-5021": {
+      "plugin": "nimble-portfolio",
+      "reason": "No patch available (abandoned plugin, no tag beyond vulnerable 3.0.1)",
+      "skipped_at": "2026-03-13"
+    },
+    "CVE-2025-31039": {
+      "plugin": "category-icon",
+      "reason": "Fix in 1.0.3 is XSS sanitization (esc_attr), not XXE fix. Mislabeled CVE.",
+      "skipped_at": "2026-03-13"
+    },
+    "CVE-2018-19370": {
+      "plugin": "wordpress-seo",
+      "reason": "Yoast SEO tags pre-9.2 no longer available on SVN (purged). Cannot diff.",
+      "skipped_at": "2026-03-13"
+    },
+    "CVE-2024-7503": {
+      "plugin": "woo-social-login",
+      "reason": "Plugin removed from wordpress.org SVN. Cannot diff.",
+      "skipped_at": "2026-03-13"
+    },
+    "CVE-2014-8877": {
+      "plugin": "cm-download-manager",
+      "reason": "create_function() CVE from 2014. Tags only available from 2.9.6+, vulnerable version 2.0.3 not on SVN.",
+      "skipped_at": "2026-03-13"
+    },
+    "CVE-2024-7094": {
+      "plugin": "js-support-ticket",
+      "reason": "Described as 'code injection via storeTheme' but fix is adding current_user_can() check -- primarily auth bypass, not code injection pattern.",
+      "skipped_at": "2026-03-13"
+    }
+  },
+  "groups": {
+    "auth": {
+      "status": "completed",
+      "rag_docs": [
+        "auth/missing-capability-check.md",
+        "auth/missing-nonce-verification.md",
+        "auth/privilege-escalation.md",
+        "auth/nonce-leakage.md"
+      ],
+      "cves_researched": [
+        "CVE-2025-24734",
+        "CVE-2024-5324",
+        "CVE-2022-2696",
+        "CVE-2022-40223",
+        "CVE-2024-4450"
+      ],
+      "patterns_covered": [
+        "missing current_user_can() on AJAX handlers",
+        "missing wp_verify_nonce() on form/AJAX handlers",
+        "nonce leakage to low-privilege users",
+        "privilege escalation via arbitrary options update",
+        "privilege escalation via database string replacement",
+        "framework-level shared vulnerability across plugins"
+      ],
+      "edge_cases_documented": 12,
+      "completed_at": "2026-03-13"
+    },
+    "xss": {
+      "status": "completed",
+      "rag_docs": [
+        "xss/xss-shortcode-attrs.md",
+        "xss/xss-svg-upload.md",
+        "xss/reflected-xss-request-uri.md",
+        "xss/stored-xss-ai-generated-content.md",
+        "xss/stored-xss-unescaped-admin-output.md"
+      ],
+      "cves_researched": [
+        "CVE-2025-13847",
+        "CVE-2024-8967",
+        "CVE-2024-11287",
+        "CVE-2026-0996",
+        "CVE-2025-68848"
+      ],
+      "patterns_covered": [
+        "shortcode attribute injection into JS/HTML without escaping",
+        "SVG file upload enabling stored XSS via script tags in XML",
+        "reflected XSS via raw $_SERVER[REQUEST_URI] and add_query_arg()",
+        "AI/LLM-generated content bypassing tag-based sanitization",
+        "unescaped admin page output of user-influenced data"
+      ],
+      "edge_cases_documented": 22,
+      "completed_at": "2026-03-13"
+    },
+    "file-ops": {
+      "status": "completed",
+      "rag_docs": [
+        "file-ops/arbitrary-file-upload.md",
+        "file-ops/path-traversal-file-read-delete.md",
+        "file-ops/local-file-inclusion.md",
+        "file-ops/arbitrary-file-creation-write.md"
+      ],
+      "cves_researched": [
+        "CVE-2020-12800",
+        "CVE-2025-2005",
+        "CVE-2025-10147",
+        "CVE-2023-51410",
+        "CVE-2024-8104",
+        "CVE-2023-6972",
+        "CVE-2019-13635",
+        "CVE-2021-39312",
+        "CVE-2022-0320",
+        "CVE-2025-12493",
+        "CVE-2022-1392",
+        "CVE-2021-4443",
+        "CVE-2024-6467"
+      ],
+      "patterns_covered": [
+        "client-controlled allowed-type list bypass",
+        "missing file type validation on registration form",
+        "content-only check without extension validation",
+        "REST API upload without type checking",
+        "path traversal via filename parameter in download handler",
+        "path traversal via unlink without realpath validation",
+        "URL-decoded cache path traversal",
+        "bundled vendor file with regex bypass for file read",
+        "LFI via include without realpath in Elementor widget AJAX",
+        "LFI via template/style parameter without allowlist",
+        "LFI via direct include of GET parameter in vendor file",
+        "CSS/LESS compiler output file creation without extension validation",
+        "image copy/download without file type validation on destination",
+        "file write with user-controlled path/name"
+      ],
+      "edge_cases_documented": 24,
+      "completed_at": "2026-03-13"
+    },
+    "sqli": {
+      "status": "completed",
+      "rag_docs": [
+        "sqli/wpdb-prepare-missing.md",
+        "sqli/order-by-injection.md"
+      ],
+      "cves_researched": [
+        "CVE-2024-49613",
+        "CVE-2023-5428",
+        "CVE-2025-13673",
+        "CVE-2024-9186",
+        "CVE-2024-1071"
+      ],
+      "patterns_covered": [
+        "shortcode attribute directly concatenated into WHERE clause",
+        "custom query builder wrapping values in quotes without prepare()",
+        "cookie value interpolated into tracking model SQL queries",
+        "abandoned plugin with no fix available",
+        "ORDER BY injection via non-strict in_array bypass (cannot use prepare)"
+      ],
+      "edge_cases_documented": 3,
+      "edge_cases": [
+        "CVE-2025-13673 (custom query builder with is_numeric pattern)",
+        "CVE-2024-9186 (cookie-based injection, not POST/GET)",
+        "CVE-2024-49613 (abandoned plugin, permanent vulnerability)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "ssrf": {
+      "status": "completed",
+      "rag_docs": [
+        "ssrf/ssrf-url-fetch.md"
+      ],
+      "cves_researched": [
+        "CVE-2024-32830",
+        "CVE-2019-16932",
+        "CVE-2024-23825",
+        "CVE-2023-6991"
+      ],
+      "patterns_covered": [
+        "file_get_contents() with user-controlled URL (unauthenticated)",
+        "REST API route without permission_callback fetching user URL",
+        "hostname-based metadata IP blocklist bypassed via DNS rebinding",
+        "shortcode URL attribute triggering server-side fetch",
+        "wp_remote_get() without wp_http_validate_url()",
+        "esc_url_raw() mistaken for SSRF protection (only sanitizes format)"
+      ],
+      "edge_cases_documented": 1,
+      "edge_cases": [
+        "CVE-2024-23825 (DNS rebinding bypass of hostname blocklist, TOCTOU on DNS resolution)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "xxe": {
+      "status": "completed",
+      "rag_docs": [
+        "xxe/xxe-xml-parsing.md"
+      ],
+      "cves_researched": [
+        "CVE-2025-14478",
+        "CVE-2025-32138",
+        "CVE-2024-50442"
+      ],
+      "patterns_covered": [
+        "simplexml_load_file() on uploaded SVG without entity protection",
+        "DOMDocument::loadXML() with LIBXML_NOENT flag (enables entity substitution)",
+        "SVG sanitizer that uses dangerous libxml flags",
+        "LIBXML_NOENT misunderstood as 'no entities' when it means 'substitute entities'",
+        "PHP 8.0+ default protection bypassed by LIBXML_NOENT flag"
+      ],
+      "edge_cases_documented": 2,
+      "edge_cases": [
+        "CVE-2025-32138 (LIBXML_NOENT bypasses PHP 8.0 default entity protection)",
+        "CVE-2024-50442 (incomplete fix: renamed functions but kept dangerous flags)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "race-condition": {
+      "status": "completed",
+      "rag_docs": [
+        "race-condition/race-conditions-wordpress.md"
+      ],
+      "cves_researched": [
+        "CVE-2024-7627",
+        "CVE-2023-4642",
+        "CVE-2023-6109"
+      ],
+      "patterns_covered": [
+        "TOCTOU temp file in web-accessible directory (predictable path, race to execute before unlink)",
+        "database race condition in voting/rating check-then-act without locking",
+        "transient-based mutex lock fix (kk Star Ratings approach)",
+        "MySQL LOCK TABLES fix (YOP Poll approach)",
+        "tmpfile() fix for temp file race (Bit File Manager approach)"
+      ],
+      "edge_cases_documented": 3,
+      "edge_cases": [
+        "CVE-2018-19370 (Yoast SEO ZIP extraction TOCTOU, tags purged from SVN)",
+        "CVE-2025-13646 (Modula ZIP extraction race, file type validation after extract)",
+        "Transient-based locks themselves have a narrow race (get_transient + set_transient not atomic)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "logic": {
+      "status": "completed",
+      "rag_docs": [
+        "logic/payment-price-manipulation.md"
+      ],
+      "cves_researched": [
+        "CVE-2025-3530",
+        "CVE-2025-3889",
+        "CVE-2025-11517",
+        "CVE-2024-7747",
+        "CVE-2023-51405"
+      ],
+      "patterns_covered": [
+        "client-side price in hidden form fields with hash parameter mismatch",
+        "free order REST endpoint without cart total validation",
+        "negative quantity allowing price subtraction",
+        "numeric type confusion in wallet transfer with missing self-transfer check",
+        "client-side-only payment verification without server-to-server gateway check",
+        "booking price accepted from POST without server-side service price lookup"
+      ],
+      "edge_cases_documented": 3,
+      "edge_cases": [
+        "CVE-2025-3889 (negative quantity in same plugin that had price manipulation, chained vulns)",
+        "CVE-2024-7747 (self-transfer to create funds via rounding/conversion)",
+        "Currency/locale manipulation (decimal separator differences affecting floatval)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "deserialization": {
+      "status": "completed",
+      "rag_docs": [
+        "deserialization/object-injection.md",
+        "deserialization/phar-deserialization.md",
+        "deserialization/type-juggling.md"
+      ],
+      "cves_researched": [
+        "CVE-2024-22284",
+        "CVE-2024-10913",
+        "CVE-2024-38759",
+        "CVE-2024-10957",
+        "CVE-2024-5085",
+        "CVE-2023-26326",
+        "CVE-2024-24934",
+        "CVE-2023-25701",
+        "CVE-2023-6875"
+      ],
+      "patterns_covered": [
+        "maybe_unserialize() on cookie data (unauthenticated)",
+        "recursive_unserialize_replace() without allowed_classes (systemic in backup/migration plugins)",
+        "maybe_unserialize() on form entry values stored in DB",
+        "phar:// stream wrapper in file operation with user-controlled URL",
+        "phar:// in file deletion (unlink) with user-controlled path",
+        "loose comparison (==) of API tokens in REST permission callbacks",
+        "loose comparison of authentication nonce with expired transient",
+        "type juggling via JSON-decoded integer 0 matching false/null"
+      ],
+      "edge_cases_documented": 5,
+      "edge_cases": [
+        "CVE-2025-22777 (double URL-encoded serialized payloads bypassing sanitization)",
+        "DateTime exclusion bypass via O:+8 syntax",
+        "PHP 8.0 changed 0=='string' to false but null/false loose comparisons persist",
+        "PHAR polyglot files disguised as images",
+        "Nested stream wrappers (compress.zlib://phar://) bypassing simple phar:// checks"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "info-disclosure": {
+      "status": "completed",
+      "rag_docs": [
+        "info-disclosure/sensitive-data-exposure.md"
+      ],
+      "cves_researched": [
+        "CVE-2024-6845",
+        "CVE-2025-11504",
+        "CVE-2024-22294",
+        "CVE-2024-2302",
+        "CVE-2021-39327"
+      ],
+      "patterns_covered": [
+        "REST endpoint with __return_true returning API keys/secrets",
+        "debug file_put_contents dumping tokens to web-accessible directory",
+        "predictable debug log filename using only public data in hash",
+        "debug log in unprotected uploads directory (directory listing)",
+        "backup job log exposing server paths and download URLs",
+        "phpinfo() exposure via IP spoofing or bundled phpinfo.php"
+      ],
+      "edge_cases_documented": 3,
+      "edge_cases": [
+        "CVE-2025-11504 (partial fix: removed public file but admin debug page still shows API key)",
+        "CVE-2024-10588 (Debug Tool: phpinfo via nopriv AJAX only when WP_DEBUG enabled)",
+        "CVE-2025-12039 (phpinfo gated by IP check using spoofable X-Forwarded-For)"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "code-injection": {
+      "status": "completed",
+      "rag_docs": [
+        "code-injection/eval-assert-injection.md",
+        "code-injection/callback-dynamic-dispatch.md"
+      ],
+      "cves_researched": [
+        "CVE-2025-2303",
+        "CVE-2024-8512",
+        "CVE-2011-10033",
+        "CVE-2025-13035",
+        "CVE-2025-9321",
+        "CVE-2025-10057",
+        "CVE-2024-9593",
+        "CVE-2023-6634",
+        "CVE-2025-9334",
+        "CVE-2020-11928",
+        "CVE-2025-8723"
+      ],
+      "patterns_covered": [
+        "eval() on block/widget attributes (Contributor+ stored in post content)",
+        "eval() via AJAX with broken regex-based function allowlist",
+        "eval() on direct GET parameter in standalone PHP file (unauth)",
+        "extract() without EXTR_SKIP overwriting variables consumed by eval()",
+        "dynamic class instantiation from query var (new $class())",
+        "user PHP code written to .php file then require_once'd",
+        "do_action() with user-controlled suffix for hook injection",
+        "call_user_func($_POST['function']) with function_exists() guard (nopriv AJAX)",
+        "call_user_func([$class,$method],$args) via unauthenticated REST (__return_true)",
+        "dynamic dispatch (new $class)->$method($data) with namespace prefix as false security",
+        "create_function() on shortcode tax_query/meta_query/date_query attributes",
+        "preg_replace writing user input into PHP define() statements in config file"
+      ],
+      "edge_cases_documented": 8,
+      "edge_cases": [
+        "CVE-2024-8512 (safe_eval with regex allowlist bypassed via variable functions, backticks)",
+        "CVE-2025-13035 (extract+eval combo: eval'd code is trusted but extract overwrites its variables)",
+        "Admin-only eval() still critical on multisite (CVSS 9.1 for W3SPEEDSTER)",
+        "Autoloader-triggered file inclusion via class_exists() with user-controlled class name",
+        "CVE-2020-11928 (create_function is eval in disguise, 3x identical patterns in one file)",
+        "CVE-2025-8723 (rest_pre_dispatch fires before WP auth -- preg_replace into PHP config is stealth RCE)",
+        "function_exists() is not a security check for call_user_func (true for all builtins)",
+        "Namespace prefix on dynamic dispatch is naming convention, not security boundary"
+      ],
+      "completed_at": "2026-03-13"
+    },
+    "open-redirect": {
+      "status": "completed",
+      "rag_docs": [
+        "open-redirect/open-redirect-wp.md"
+      ],
+      "cves_researched": [
+        "CVE-2021-25074",
+        "CVE-2024-8761",
+        "CVE-2024-0250",
+        "CVE-2023-51675",
+        "CVE-2025-6238",
+        "CVE-2021-25111",
+        "CVE-2024-4704",
+        "CVE-2026-1296"
+      ],
+      "patterns_covered": [
+        "header('Location:') in standalone PHP file with $_GET parameter",
+        "wp_redirect() with database-stored URL (two-stage via nopriv AJAX)",
+        "OAuth state parameter misused as redirect URL in standalone callback",
+        "wp_redirect() with user-controlled redirect param without wp_validate_redirect()",
+        "OAuth redirect_uri without client registration (auth code theft)",
+        "wp_redirect() with $_GET return URL without validation (nonce-only fix)",
+        "Form action URL via add_query_arg() protocol-relative injection (//evil.com)",
+        "Systemic wp_redirect() across login handlers with esc_url() false security"
+      ],
+      "edge_cases_documented": 5,
+      "edge_cases": [
+        "CVE-2025-6238 (OAuth redirect_uri cannot use wp_safe_redirect -- needs client registration whitelist)",
+        "CVE-2021-25111 (incomplete fix: nonce check added but URL still not validated)",
+        "CVE-2024-0250 (FILTER_SANITIZE_URL provides zero security against external redirects)",
+        "CVE-2024-4704 (protocol-relative URL //evil.com via add_query_arg, not a server redirect but form action injection, 5M+ installs)",
+        "CVE-2026-1296 (esc_url() before wp_redirect() provides zero redirect protection, common false pattern)"
+      ],
+      "completed_at": "2026-03-13"
+    }
+  }
 }

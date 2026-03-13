@@ -153,6 +153,61 @@ realpath($user_path)  // Check if result is validated after
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2020-12800: Drag and Drop CF7 — Client-Controlled Allowed-Type List
+**Impact:** Unauthenticated Arbitrary File Upload → RCE, CVSS 9.8
+
+```php
+// Server receives allowed type list from POST — attacker controls this!
+$file_type_pattern = dnd_upload_cf7_filetypes( $_POST['supported_type'] );
+if ( ! preg_match( $file_type_pattern, $file['name'] ) ) {
+    wp_send_json_error( 'Invalid file type' );
+}
+// Attacker sends: supported_type=jpg|png|php%  →  uploads shell.php%
+// Apache may execute .php% as PHP depending on config
+```
+
+**Why vulnerable:** The allowed file type list is sent from JavaScript client-side, not from server config. Attacker modifies the POST parameter to include `php%` or any extension. No server-side denylist of dangerous extensions.
+**Detection:** File upload handlers where the allowed-type/extension list comes from `$_POST`, `$_GET`, or `$_REQUEST` rather than a hardcoded server-side array. Also look for `wp_check_filetype()` (extension-only) instead of `wp_check_filetype_and_ext()` (extension + content).
+
+### CVE-2022-0320: Essential Addons for Elementor — LFI via Template Loading
+**Impact:** Unauthenticated LFI → RCE, CVSS 9.8 (1M+ installations)
+
+```php
+// AJAX handler loads template file — user controls the path components
+$template_info = $_REQUEST['templateInfo'];
+$file_path = sprintf('%s/Template/%s/%s',
+    $dir_path,
+    $template_info['name'],      // User-controlled
+    $template_info['file_name']  // User-controlled
+);
+// Path check WITHOUT realpath() — bypassable with ../
+if (!$file_path || 0 !== strpos($file_path, $dir_path)) { /* reject */ }
+include($file_path);  // LFI → include any PHP file on disk
+```
+
+**Why vulnerable:** The `strpos()` containment check operates on the RAW string before resolving `../` sequences. `$dir_path . "/Template/../../wp-config.php"` still starts with `$dir_path`. Fix required `realpath()` BEFORE the containment check.
+**Detection:** `include/require` with user-controlled path components where validation uses `strpos()` without `realpath()`. Also look for `sanitize_text_field()` on file paths — it does NOT strip `../`.
+
+### CVE-2024-8104: WP Extended — Path Traversal File Read
+**Impact:** Subscriber+ Arbitrary File Read, CVSS 8.8
+
+```php
+// AJAX handler — no auth check, no nonce, no path validation
+public function download_file_ajax() {
+    $filename = $_GET['filename'];  // Raw user input
+    $file_path = $dir . "/" . $filename;  // Direct concatenation
+    // filename=../../wp-config.php → reads wp-config.php
+    readfile($file_path);  // Serves file contents to attacker
+}
+```
+
+**Why vulnerable:** Triple failure: no `current_user_can()`, no nonce verification, and no path sanitization. `$filename` with `../../` escapes the intended export directory. Fix added capability check + `realpath()` + directory containment validation.
+**Detection:** `readfile()`, `file_get_contents()`, `fread()`, or `fpassthru()` with path built from user input. Look for missing `realpath()` + containment check, and `basename()` vs direct concatenation.
+
+---
+
 ## Attack Techniques
 
 ### 1. Extension Bypass Techniques

@@ -17,7 +17,9 @@
 - [ ] `file-rce-expert` — File upload/read/write/delete, RCE
 - [ ] `sqli-expert` — SQL injection
 - [ ] `xss-expert` — Stored/Reflected/DOM XSS
-- [ ] `auth-expert` — Auth bypass, priv esc, IDOR
+- [ ] `missing-auth-expert` — Missing capability checks on endpoints
+- [ ] `idor-expert` — IDOR, object-level access control
+- [ ] `priv-esc-expert` — Privilege escalation, options update, auth bypass
 - [ ] `object-injection-expert` — PHP object injection
 - [ ] `ssrf-expert` — SSRF
 - [ ] `race-condition-expert` — Race conditions
@@ -27,6 +29,9 @@
 - [ ] `deserialization-expert` — Deserialization
 - [ ] `logic-flaw-expert` — Business logic
 - [ ] `info-disclosure-expert` — Info disclosure
+- [ ] `code-injection-expert` — eval, call_user_func, dynamic dispatch
+- [ ] `open-redirect-expert` — wp_redirect, header Location, JS redirects
+- [ ] `critical-thinker` — Cross-domain chains, second-order bugs, subtle logic flaws
 
 ### Expert Results
 | Expert | Findings | Status |
@@ -34,7 +39,9 @@
 | file-rce-expert | — | pending |
 | sqli-expert | — | pending |
 | xss-expert | — | pending |
-| auth-expert | — | pending |
+| missing-auth-expert | — | pending |
+| idor-expert | — | pending |
+| priv-esc-expert | — | pending |
 | object-injection-expert | — | pending |
 | ssrf-expert | — | pending |
 | race-condition-expert | — | pending |
@@ -44,6 +51,9 @@
 | deserialization-expert | — | pending |
 | logic-flaw-expert | — | pending |
 | info-disclosure-expert | — | pending |
+| code-injection-expert | — | pending |
+| open-redirect-expert | — | pending |
+| critical-thinker | — | pending |
 
 ## Verification Pipeline
 For each finding from experts:

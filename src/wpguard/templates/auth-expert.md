@@ -201,6 +201,56 @@ update_option('users_can_register', '1');  // Enable registration
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2025-24734: Better Find and Replace — Missing Cap Check → DB Replace
+**Impact:** Subscriber+ Arbitrary DB Modification, CVSS 8.8
+
+```php
+// DbReplacer.php — NO authorization check
+public function db_string_replace( $user_query ) {
+    $userInput = Util::check_evil_script( $user_query['cs_db_string_replace'] );
+    // Performs direct database find-and-replace on ANY table
+    // Subscriber can replace 'subscriber' with 'administrator' in wp_usermeta
+}
+```
+
+**Why vulnerable:** AJAX handler registered via `wp_ajax_` hook dispatches to `db_string_replace()` without `current_user_can('manage_options')`. Any authenticated user (including Subscriber) can execute arbitrary string replacements across the database — including changing their own role in `wp_usermeta`.
+**Detection:** `wp_ajax_` handler functions missing `current_user_can()` before `$wpdb->update`, `$wpdb->query`, `$wpdb->replace`, or `update_option`.
+
+### CVE-2024-5324: XootiX Framework — Import Settings → Priv Esc
+**Impact:** Subscriber+ Arbitrary Options Update, CVSS 8.8
+
+```php
+// class-xoo-admin-settings.php — NO cap check, NO nonce
+public function import_settings(){
+    $settings = $_POST['import'];
+    // Directly updates WordPress options from user input
+    // Subscriber sets default_role=administrator, users_can_register=1
+}
+```
+
+**Why vulnerable:** Shared framework code across 4+ plugins (Waitlist Woo, Side Cart, Login Customizer, OTP Login). Missing both `current_user_can()` and `wp_verify_nonce()`. Attack chain: call `import_settings` → set `default_role=administrator` + `users_can_register=1` → register new admin at `/wp-login.php?action=register`.
+**Detection:** Functions handling `$_POST['import']` or `$_POST['settings']` that call `update_option()` without capability checks. Framework/shared code is especially dangerous.
+
+### CVE-2022-40223: SearchWP Premium — Nonce Leak → Settings Takeover
+**Impact:** Subscriber+ Settings Modification, CVSS 7.1
+
+```php
+// Handler checks nonce but NOT capability
+function save_settings() {
+    check_ajax_referer('save_settings_action', 'settings_nonce');
+    // Missing: if (!current_user_can('manage_options')) wp_die();
+    update_option($_POST['key'], $_POST['value']);
+}
+// Nonce leaked via wp_localize_script() or page source accessible to Subscriber
+```
+
+**Why vulnerable:** Nonces are anti-CSRF tokens, NOT authorization. When a nonce protecting admin-only settings is embedded in page source viewable by Subscribers (via `wp_localize_script()` on frontend or admin pages with low `read` capability), any authenticated user can steal the nonce and call the endpoint.
+**Detection:** `check_ajax_referer()` or `wp_verify_nonce()` as the SOLE protection without accompanying `current_user_can()`. Cross-reference with `wp_localize_script()` calls that include nonce values.
+
+---
+
 ## Attack Techniques
 
 ### 1. Endpoint Discovery

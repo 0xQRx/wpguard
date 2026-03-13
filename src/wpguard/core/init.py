@@ -13,50 +13,12 @@ from wpguard.core.findings import FINDINGS_FILENAME
 # Template directory relative to this file
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-# All wpguard MCP tools for permissions
-WPGUARD_MCP_TOOLS = [
-    "mcp__wpguard__wpguard_plugin_info",
-    "mcp__wpguard__wpguard_search",
-    "mcp__wpguard__wpguard_download",
-    "mcp__wpguard__wpguard_bulk_download",
-    "mcp__wpguard__wpguard_watch_add",
-    "mcp__wpguard__wpguard_watch_remove",
-    "mcp__wpguard__wpguard_watch_list",
-    "mcp__wpguard__wpguard_watch_check",
-    "mcp__wpguard__wpguard_svn_log",
-    "mcp__wpguard__wpguard_svn_diff",
-    "mcp__wpguard__wpguard_svn_revision",
-    "mcp__wpguard__wpguard_plugin_versions",
-    "mcp__wpguard__wpguard_state_info",
-    "mcp__wpguard__wpguard_sandbox_status",
-    "mcp__wpguard__wpguard_sandbox_install_plugin",
-    "mcp__wpguard__wpguard_sandbox_uninstall_plugin",
-    "mcp__wpguard__wpguard_sandbox_request",
-    "mcp__wpguard__wpguard_sandbox_wp_cli",
-    "mcp__wpguard__wpguard_sandbox_get_nonce",
-    # Sandbox management tools
-    "mcp__wpguard__wpguard_sandbox_start",
-    "mcp__wpguard__wpguard_sandbox_stop",
-    "mcp__wpguard__wpguard_sandbox_restart",
-    "mcp__wpguard__wpguard_sandbox_destroy",
-    "mcp__wpguard__wpguard_scope_check_plugin",
-    "mcp__wpguard__wpguard_scope_check_finding",
-    "mcp__wpguard__wpguard_scope_get_vulns",
-    "mcp__wpguard__wpguard_finding_create",
-    "mcp__wpguard__wpguard_finding_update",
-    "mcp__wpguard__wpguard_finding_get",
-    "mcp__wpguard__wpguard_finding_list",
-    "mcp__wpguard__wpguard_finding_delete",
-    "mcp__wpguard__wpguard_finding_stats",
-    "mcp__wpguard__wpguard_discord_notify_finding",
-    "mcp__wpguard__wpguard_discord_notify_summary",
-    "mcp__wpguard__wpguard_discord_send_message",
-    "mcp__wpguard__wpguard_init_research",
-    # Wordfence CVE database tools
-    "mcp__wpguard__wpguard_cve_download",
-    "mcp__wpguard__wpguard_cve_search",
-    "mcp__wpguard__wpguard_cve_get",
-    "mcp__wpguard__wpguard_cve_stats",
+# MCP tool permissions — wildcard per server
+MCP_TOOLS = [
+    "mcp__wpguard__*",
+    "mcp__playwright__*",
+    "mcp__plugin_claude-mem_mcp-search__*",
+    "mcp__devrag__*",
 ]
 
 # Slash commands for agent workflows
@@ -65,25 +27,16 @@ WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/pm)",
 ]
 
-# Common bash commands needed for research
-WPGUARD_BASH_COMMANDS = [
-    "Bash(mkdir:*)",
-    "Bash(curl:*)",
-    "Bash(python3:*)",
-    "Bash(ls:*)",
-    "Bash(grep:*)",
-    "Bash(cd:*)",
-    "Bash(cat:*)",
-    "Bash(svn:*)",
-]
 
 # Core Claude tools needed for autonomous operation
 WPGUARD_CORE_TOOLS = [
+    "Bash",
     "Read",
     "Write",
     "Edit",
     "Glob",
     "Grep",
+    "Agent",
     "Task",
     "WebFetch",
     "WebSearch",
@@ -96,16 +49,21 @@ EXPERT_AGENTS = [
     "file-rce-expert",
     "sqli-expert",
     "xss-expert",
-    "auth-expert",
+    "missing-auth-expert",
+    "idor-expert",
+    "priv-esc-expert",
     "object-injection-expert",
     "ssrf-expert",
     "race-condition-expert",
     "csrf-expert",
+    "critical-thinker",
     "lfi-rfi-expert",
     "xxe-expert",
     "deserialization-expert",
     "logic-flaw-expert",
     "info-disclosure-expert",
+    "code-injection-expert",
+    "open-redirect-expert",
 ]
 
 SUPPORT_AGENTS = [
@@ -178,9 +136,19 @@ def get_xss_expert_instructions() -> str:
     return _load_template("xss-expert.md")
 
 
-def get_auth_expert_instructions() -> str:
-    """Get authentication/authorization expert agent instructions."""
-    return _load_template("auth-expert.md")
+def get_missing_auth_expert_instructions() -> str:
+    """Get missing authorization expert agent instructions."""
+    return _load_template("missing-auth-expert.md")
+
+
+def get_idor_expert_instructions() -> str:
+    """Get IDOR expert agent instructions."""
+    return _load_template("idor-expert.md")
+
+
+def get_priv_esc_expert_instructions() -> str:
+    """Get privilege escalation expert agent instructions."""
+    return _load_template("priv-esc-expert.md")
 
 
 def get_object_injection_expert_instructions() -> str:
@@ -201,6 +169,11 @@ def get_race_condition_expert_instructions() -> str:
 def get_csrf_expert_instructions() -> str:
     """Get CSRF expert agent instructions."""
     return _load_template("csrf-expert.md")
+
+
+def get_critical_thinker_instructions() -> str:
+    """Get critical thinker cross-domain chain builder agent instructions."""
+    return _load_template("critical-thinker.md")
 
 
 def get_lfi_rfi_expert_instructions() -> str:
@@ -226,6 +199,16 @@ def get_logic_flaw_expert_instructions() -> str:
 def get_info_disclosure_expert_instructions() -> str:
     """Get information disclosure expert agent instructions."""
     return _load_template("info-disclosure-expert.md")
+
+
+def get_code_injection_expert_instructions() -> str:
+    """Get code injection expert agent instructions."""
+    return _load_template("code-injection-expert.md")
+
+
+def get_open_redirect_expert_instructions() -> str:
+    """Get open redirect expert agent instructions."""
+    return _load_template("open-redirect-expert.md")
 
 
 def initialize_research_project(output_dir: str) -> dict:
@@ -271,7 +254,7 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write settings.local.json with MCP tool permissions
         settings_local = {
             "permissions": {
-                "allow": WPGUARD_CORE_TOOLS + WPGUARD_MCP_TOOLS + WPGUARD_SLASH_COMMANDS + WPGUARD_BASH_COMMANDS,
+                "allow": WPGUARD_CORE_TOOLS + MCP_TOOLS + WPGUARD_SLASH_COMMANDS,
                 "deny": [],
                 "ask": [],
             }

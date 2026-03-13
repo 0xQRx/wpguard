@@ -157,6 +157,59 @@ $meta_query = array(
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-49613: Simple Code Insert Shortcode — Missing prepare() on Shortcode Attr
+**Impact:** Contributor+ UNION-based SQLi, CVSS 8.8 (UNPATCHED — plugin abandoned)
+
+```php
+// Shortcode attribute flows directly into SQL without prepare()
+$scis_id = $data['id'];  // From [scis id="..."]
+$scis_row = $wpdb->get_results(
+    "SELECT * FROM $wpdb->prefix" . SCIS_TABLE_NAME . " WHERE id=$scis_id"
+);
+// Payload: [scis id="1 UNION SELECT 1,user_login,user_pass FROM wp_users--"]
+```
+
+**Why vulnerable:** `shortcode_atts()` provides defaults but does NOT sanitize. `$scis_id` reaches `$wpdb->get_results()` without `$wpdb->prepare()` or `absint()`. Numeric context without quotes makes UNION injection trivial.
+**Detection:** `$wpdb->get_results|get_row|get_var|query` with string interpolation containing `$variable` not wrapped in `$wpdb->prepare()`. Shortcode callbacks are high-value targets.
+
+### CVE-2024-1071: Ultimate Member — ORDER BY Injection via Non-Strict in_array()
+**Impact:** Unauthenticated Time-Based Blind SQLi, CVSS 9.8 Critical
+
+```php
+// $_POST['sorting'] passes sanitize_text_field() (NOT SQL-safe!)
+$sortby = sanitize_text_field($_POST['sorting']);
+
+// Non-strict in_array() allows type juggling bypass
+} elseif (in_array($sortby, $numeric_sorting_keys)) {  // No strict!
+    // ...
+} else {
+    // FALLTHROUGH: unmatched $sortby becomes ORDER BY expression
+    $this->query_args['orderby'] = $sortby;
+    // WP_User_Query builds: ORDER BY {$sortby} ASC
+}
+// Payload: sorting=IF(1=1,SLEEP(3),0) → time-based blind extraction
+```
+
+**Why vulnerable:** `$wpdb->prepare()` CANNOT parameterize column names/ORDER BY — it wraps in quotes which breaks SQL syntax. `sanitize_text_field()` only strips HTML tags; `IF(1=1,SLEEP(3),0)` passes through unchanged. Non-strict `in_array()` enables type juggling bypass of the allowlist.
+**Detection:** `ORDER BY`, `GROUP BY`, or `LIMIT` clauses with `$variable` interpolation. Look for `in_array()` without `true` as third parameter. `sanitize_text_field()` before SQL is a red flag — it does NOT prevent SQLi.
+
+### CVE-2024-9186: FunnelKit Automations — Cookie-Based SQLi Across Multiple Methods
+**Impact:** Unauthenticated SQLi via tracking cookie, CVSS 9.8 Critical
+
+```php
+// Cookie value flows into SQL across virtually every method
+$cid = sanitize_text_field($_COOKIE['bwfan-track-id']);
+$query = "SELECT `id` FROM {$table} WHERE `c_id` = '$cid'";
+$result = $wpdb->get_var($query);  // Missing prepare() on cookie input
+```
+
+**Why vulnerable:** Systemic pattern — `BWFAN_Model_Engagement_Tracking` class had missing `$wpdb->prepare()` across virtually every method. Cookie values are attacker-controlled just like GET/POST. `sanitize_text_field()` strips tags but does NOT escape SQL metacharacters (`'`, `--`, etc.).
+**Detection:** `$_COOKIE` values reaching `$wpdb->` methods. Also check custom model/query builder classes — if they have a `prepare_value()` or `escape()` method, verify it actually uses `$wpdb->prepare()`.
+
+---
+
 ## Attack Techniques
 
 ### 1. Classic UNION Injection

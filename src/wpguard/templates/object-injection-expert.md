@@ -182,6 +182,56 @@ if (getimagesize($file)) {  // Phar triggers here!
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-22284: Asgaros Forum — maybe_unserialize() on Cookie
+**Impact:** Unauthenticated Object Injection, CVSS 9.8
+
+```php
+// Cookie value passed directly to maybe_unserialize() on every page load
+if (isset($_COOKIE['asgarosforum_unread_exclude'])) {
+    $this->excluded_items = maybe_unserialize(
+        sanitize_text_field($_COOKIE['asgarosforum_unread_exclude'])
+    );
+}
+// sanitize_text_field() does NOT prevent object injection!
+// Serialized payload: O:8:"ClassName":1:{s:4:"prop";s:7:"payload";}
+```
+
+**Why vulnerable:** `maybe_unserialize()` on cookie data = unauthenticated object injection. `sanitize_text_field()` only strips HTML tags — serialized PHP objects pass through unchanged. Fires on every page load, no auth needed. Fix: switched entirely to `json_encode()`/`json_decode()`.
+**Detection:** `maybe_unserialize()` or `unserialize()` on `$_COOKIE`, `$_POST`, `$_GET`, `$_REQUEST` values. Also check for `maybe_unserialize()` on `get_option()`/`get_post_meta()` values that were originally user-controlled.
+
+### CVE-2024-32830: BuddyForms — PHAR Deserialization via file_get_contents()
+**Impact:** Unauthenticated PHAR Deserialization → RCE, CVSS 9.3
+
+```php
+// User-supplied URL passed to file_get_contents() — supports phar:// wrapper
+$url = wp_kses_post(wp_unslash($_REQUEST['url']));
+$image_data = file_get_contents($url);
+// If url = "phar:///tmp/uploaded_evil.jpg"
+// PHP auto-deserializes PHAR metadata without calling unserialize()!
+```
+
+**Why vulnerable:** `file_get_contents()` (and `file_exists()`, `is_file()`, `getimagesize()`, etc.) automatically deserializes PHAR metadata when given a `phar://` URI. Attacker uploads a PHAR polyglot disguised as an image, then triggers deserialization via the file_get_contents call. Fix: check for `phar://` prefix or use `wp_http_validate_url()` which blocks non-HTTP schemes.
+**Detection:** Any filesystem function (`file_exists`, `is_file`, `file_get_contents`, `fopen`, `getimagesize`, `readfile`, `unlink`) with user-controlled path. Even `realpath()` on a `phar://` path triggers deserialization.
+
+### Systemic Pattern: recursive_unserialize_replace() in Backup/Migration Plugins
+**Impact:** Varies — typically requires admin access but dangerous in chain attacks
+
+```php
+// This pattern is copied from interconnectit/Search-Replace-DB into dozens of plugins
+if (is_serialized($data)) {
+    $unserialized = @unserialize($data);  // No allowed_classes restriction!
+    $data = recursive_unserialize_replace($from, $to, $unserialized, true);
+}
+// Found in: UpdraftPlus, Clone, Search & Replace, String Locator, WP Migrate DB
+```
+
+**Why dangerous:** The `@unserialize()` call has no `allowed_classes` parameter, allowing arbitrary object instantiation. While these typically require admin access (for backup/migration operations), they're exploitable when combined with CSRF or auth bypass vulnerabilities. Fix: add `['allowed_classes' => false]` to `unserialize()`.
+**Detection:** `@unserialize($` without second parameter, especially in functions named `*replace*`, `*migrate*`, `*import*`, `*restore*`.
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic Serialized Object Injection

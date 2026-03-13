@@ -192,6 +192,57 @@ foreach ($data as $key => $value) {
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2023-6875: POST SMTP — Type Juggling → Admin Takeover
+**Impact:** Unauthenticated admin account takeover, CVSS 9.8
+
+```php
+// Loose comparison of auth key — int 0 == "any_string" is TRUE in PHP < 8!
+$auth_key = $request->get_header('auth_key');
+$saved_key = get_transient('post_smtp_auth_nonce');
+if ($auth_key == $saved_key) {   // LOOSE comparison with ==
+    // Authenticated! Attacker registers FCM device token
+    // Then intercepts password reset emails → admin takeover
+}
+// Attack: send header auth_key: 0 (integer zero)
+```
+
+**Why vulnerable:** PHP `==` coerces `0 == "abc123..."` to TRUE (PHP < 8.0). Attacker sends `auth_key: 0` as integer, passes the check, registers their device for push notifications, then triggers a password reset and intercepts the email. Fix: change `==` to `===`.
+**Detection:** `==` or `!=` comparing auth tokens, API keys, nonces, or passwords. Search: `\$.*==\s*\$` in authentication contexts. Also `in_array()` without `true` as third parameter.
+
+### CVE-2023-25701: WatchTowerHQ — Loose Comparison on API Token
+**Impact:** Unauthenticated full site control, CVSS 9.1
+
+```php
+// REST API permission check uses loose comparison
+public function check_ota(WP_REST_Request $request) {
+    return $request->get_param('access_token') == get_option('watchtower_ota_token');
+    //                                          ^^ LOOSE — bypass with integer 0
+}
+// WatchTowerHQ grants full site management when auth passes
+```
+
+**Why vulnerable:** Same type juggling as POST SMTP. The `==` check allows integer `0` to match any string token. WatchTowerHQ provides site management capabilities (install plugins, modify files), so bypassing auth = full site compromise. Fix: `===` strict comparison.
+**Detection:** `permission_callback` functions in REST routes using `==` for token comparison. Also look for `get_option('*token*')` or `get_option('*key*')` in loose comparisons.
+
+### PHP Type Juggling Quick Reference
+
+```
+// PHP < 8.0 (still common in WordPress hosting)
+0 == "any_string"     → TRUE   // Most exploitable
+0 == ""               → TRUE
+"0e123" == "0e456"    → TRUE   // Both are float 0
+null == ""            → TRUE
+false == ""           → TRUE
+false == []           → TRUE
+
+// PHP 8.0+ fixed: 0 == "string" is now FALSE
+// But null/empty comparisons still juggle
+```
+
+---
+
 ## Attack Techniques
 
 ### 1. JSON Property Injection

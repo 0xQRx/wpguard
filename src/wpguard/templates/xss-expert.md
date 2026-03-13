@@ -173,6 +173,61 @@ document.referrer
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2025-13847: PhotoFade — Shortcode Attrs → JS Injection
+**Impact:** Contributor+ Stored XSS, CVSS 6.4
+
+```php
+// Shortcode callback injects $time and $order into <script> block
+extract(shortcode_atts(array(
+    "time" => 4000,
+    "order" => 'sequence',
+), $atts));
+
+$out = "<script type=\"text/javascript\">
+    $('.photofade').innerfade({
+        timeout: $time,       // VULNERABLE - direct interpolation in JS
+        type: '$order'        // VULNERABLE - direct interpolation in JS string
+    });
+</script>";
+```
+
+**Why vulnerable:** `shortcode_atts()` values are user-controlled (Contributor+ can create posts with `[photofade time="1});alert(1);//"]`). Direct interpolation into `<script>` block — no `esc_js()`, `absint()`, or `wp_json_encode()`.
+**Detection:** `extract(shortcode_atts(` followed by `$variable` in string interpolation inside `<script>` blocks or HTML attributes.
+
+### CVE-2024-11287: Ebook Store — REQUEST_URI Reflected XSS
+**Impact:** Unauthenticated Reflected XSS, CVSS 6.1
+
+```php
+// Raw $_SERVER['REQUEST_URI'] output in href attribute
+<a id="wpsc-dismiss" href="<?php echo $_SERVER['REQUEST_URI']; ?>&dismiss=wpsc">Dismiss</a>
+
+// Also in wp_die() JavaScript output
+die("<script>window.location = '" . add_query_arg('ebook_key', $key) . "';</script>");
+```
+
+**Why vulnerable:** `$_SERVER['REQUEST_URI']` contains raw request URL including query params. `add_query_arg()` without a base URL argument uses the unescaped current URI. Both output without `esc_url()` or `esc_attr()`.
+**Detection:** `$_SERVER['REQUEST_URI']` or `add_query_arg()` without `esc_url()` wrapper in `echo`, `href=`, or JS context.
+
+### CVE-2024-8967: PWA Plugin — SVG Upload XSS
+**Impact:** Author+ Stored XSS, CVSS 6.4
+
+```php
+// Plugin adds SVG MIME type with NO content sanitization
+public function upload_mimes( $mimes = array() ) {
+    $mimes['svg']  = 'image/svg+xml';
+    $mimes['svgz'] = 'image/svg+xml';
+    return $mimes;
+}
+// upload_check() only validates extension, never inspects SVG content
+```
+
+**Why vulnerable:** SVG files are XML that can contain `<script>` tags, event handlers (`onload`), and other executable content. Adding the MIME type without a sanitization library (like SVG Sanitizer) lets Author+ upload `<svg onload="alert(1)">`.
+**Detection:** `upload_mimes` filter adding `image/svg+xml` without corresponding SVG content sanitization (look for absence of DOMDocument parsing or svg-sanitizer library).
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic Payloads

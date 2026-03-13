@@ -224,6 +224,62 @@ add_action('wp_ajax_nopriv_data', 'return_sensitive_data');
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-6845: Starter Templates — API Key via Unauth REST Endpoint
+**Impact:** Unauthenticated API key theft, CVSS 5.8
+
+```php
+// REST route returns API key to anyone — __return_true = no auth!
+register_rest_route('myplugin/v1', 'api-key', array(
+    'methods'             => 'POST',
+    'callback'            => 'retrieve_api_key',
+    'permission_callback' => '__return_true',  // NO AUTHENTICATION
+));
+function retrieve_api_key() {
+    return ['key' => get_option('myplugin_openai_api_key')];
+}
+```
+
+**Why vulnerable:** `permission_callback => '__return_true'` means zero authentication. Any visitor can call the endpoint and receive the stored API key. Fix: either remove the endpoint entirely or add `current_user_can('manage_options')`.
+**Detection:** `register_rest_route` with `__return_true` or `function() { return true; }` as permission_callback. Check what data the callback returns — options containing `api_key`, `secret`, `token`, `password`.
+
+### CVE-2025-11504: Starter Templates — Debug File with Auth Tokens
+**Impact:** Unauthenticated token theft via debug file, CVSS 7.5
+
+```php
+// DEBUG LINE LEFT IN PRODUCTION: writes tokens to web-accessible file
+function verify_token($received_token) {
+    $saved_token = get_option('myplugin_token');
+    if ($received_token === $saved_token) { return true; }
+    // This file is accessible at /wp-content/plugins/myplugin/dupasrala.txt
+    file_put_contents(
+        plugin_dir_path(__FILE__) . '/dupasrala.txt',
+        $received_token . ' - ' . $saved_token  // DUMPS BOTH TOKENS
+    );
+}
+```
+
+**Why vulnerable:** Developer left debug `file_put_contents()` in production code. File is written to the plugin directory (web-accessible) with a static filename. Anyone can read `/wp-content/plugins/myplugin/dupasrala.txt` to obtain auth tokens. Fix: remove the debug line entirely.
+**Detection:** `file_put_contents()` in plugin directories writing to `.txt`, `.log`, `.debug` files. Also `error_log()` with sensitive variables. Search for filenames that look like debug artifacts.
+
+### CVE-2024-22294: IP2Location — Predictable Debug Log Filename
+**Impact:** Unauthenticated log access with server paths, CVSS 5.3
+
+```php
+// VULNERABLE: hash uses only public data — site_url and admin_email are known
+$this->debug_log = 'debug_' . substr(
+    hash('sha256', get_site_url() . get_option('admin_email')),
+    0, 32
+) . '.log';
+// Attacker computes the filename and reads it directly
+```
+
+**Why vulnerable:** Both `get_site_url()` and admin email are typically public (email via author archives, REST API, or page source). Attacker computes the SHA256 hash and requests the log file directly. Fix: include a private random key in the hash that's stored in `wp_options` and never exposed.
+**Detection:** Debug/log filenames built from `hash()` of public data (site URL, admin email, plugin version). Look for `file_put_contents()` to plugin directories without randomized filenames or `.htaccess` deny rules.
+
+---
+
 ## Attack Techniques
 
 ### 1. Error-Based Information Extraction

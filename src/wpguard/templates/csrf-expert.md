@@ -187,6 +187,42 @@ function handle_form() {
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-5324: XootiX Framework — No Nonce on Import/Export
+**Impact:** Unauthenticated CSRF → Arbitrary Options Update, CVSS 8.8
+
+```php
+// class-xoo-admin-settings.php — NO nonce verification
+public function import_settings(){
+    // Missing: wp_verify_nonce() or check_ajax_referer()
+    $settings = $_POST['import'];
+    // Directly overwrites WordPress options — attacker page auto-submits form
+    // targeting admin, setting default_role=administrator
+}
+```
+
+**Why vulnerable:** No nonce verification at all. An attacker page can auto-submit a form to the AJAX endpoint while the victim (admin) visits it. Combined with the missing capability check, this is both CSRF and missing auth — but even if cap checks existed, the CSRF alone is exploitable against admins.
+**Detection:** AJAX handlers (`wp_ajax_` hooks) that perform `update_option()`, `$wpdb->update`, or other state changes without any `check_ajax_referer()` or `wp_verify_nonce()` call.
+
+### Nonce-Only Protection Pattern (Common Anti-Pattern)
+**Impact:** Varies — false sense of security
+
+```php
+// INSUFFICIENT: nonce verified but no capability check
+function handle_sensitive_action() {
+    check_ajax_referer('my_nonce_action', 'security');
+    // This stops CSRF but NOT unauthorized access
+    // Any user who obtains the nonce (leaked via page source) can call this
+    update_option('dangerous_setting', $_POST['value']);
+}
+```
+
+**Why dangerous:** Developers often believe nonce verification provides both CSRF protection AND authorization. It only provides CSRF protection. If the nonce is leaked (via `wp_localize_script()`, HTML source, REST API), the endpoint is completely unprotected. Always pair with `current_user_can()`.
+**Detection:** `check_ajax_referer()` as the only security check — search for handlers where it's present but `current_user_can()` is absent.
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic CSRF Form

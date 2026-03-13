@@ -17,16 +17,21 @@ Delegated by `/pm` — not invoked directly.
 | `file-rce-expert` | File upload/read/write/delete, path traversal, RCE |
 | `sqli-expert` | SQL injection (UNION, blind, second-order) |
 | `xss-expert` | Stored, reflected, DOM XSS |
-| `auth-expert` | Auth bypass, priv esc, IDOR, missing authz |
+| `missing-auth-expert` | Missing capability checks on AJAX/REST/admin endpoints |
+| `idor-expert` | Insecure Direct Object Reference, object-level access control |
+| `priv-esc-expert` | Privilege escalation, options update chains, role manipulation, auth bypass |
 | `object-injection-expert` | PHP object injection, phar deserialization |
 | `ssrf-expert` | SSRF, cloud metadata |
 | `race-condition-expert` | TOCTOU, database races, limit bypass |
 | `csrf-expert` | CSRF, missing nonce validation |
+| `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 | `lfi-rfi-expert` | LFI/RFI, path traversal |
 | `xxe-expert` | XXE, SVG/XML processing |
 | `deserialization-expert` | Unsafe deserialization, type juggling |
 | `logic-flaw-expert` | Business logic, payment bypass |
 | `info-disclosure-expert` | Data exposure, debug endpoints |
+| `code-injection-expert` | eval, call_user_func, dynamic dispatch, callback injection |
+| `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
 
 ### Verification Pipeline
 ```

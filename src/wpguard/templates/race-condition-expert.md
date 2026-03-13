@@ -250,6 +250,43 @@ if (strpos($attached, '..') === false) {
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2024-7627: Bit File Manager — TOCTOU Temp File → RCE
+**Impact:** Authenticated (low priv) RCE via race condition, CVSS 8.1 (1M+ installations)
+
+```php
+// Writes user PHP content to PREDICTABLE web-accessible path for syntax check
+$tempFilePath = FM_UPLOAD_BASE_DIR . 'temp.php';  // predictable filename!
+$fp = fopen($tempFilePath, 'w+');
+fwrite($fp, $content);  // attacker's PHP code now on disk
+fclose($fp);
+exec('php -l ' . escapeshellarg($tempFilePath), $output, $return);
+// RACE WINDOW: between fclose() and unlink(), file is accessible at known URL
+unlink($tempFilePath);
+```
+
+**Why vulnerable:** The temp file exists at a known, web-accessible URL between `fclose()` and `unlink()`. Attacker sends malicious PHP, then races concurrent requests to `/wp-content/uploads/file-manager/temp.php` to execute it before deletion. Fix: use `tmpfile()` which writes to `/tmp/` (not web-accessible) and auto-deletes on close.
+**Detection:** `fopen()` + `fwrite()` to web-accessible directories (`wp-content/uploads/`, plugin dirs) followed by `unlink()`. Predictable filenames amplify exploitability.
+
+### CVE-2023-4642: kk Star Ratings — Database Race Multi-Vote
+**Impact:** Unauthenticated vote manipulation, CVSS 5.3
+
+```php
+// VULNERABLE: read-check-write without locking
+$count = (int) get_post_meta($post_id, '_vote_count', true);
+$ratings = (float) get_post_meta($post_id, '_ratings', true);
+// Concurrent requests all see the SAME $count value
+if ($count == $payload['count'] && $ratings == $payload['ratings']) {
+    update_post_meta($post_id, '_vote_count', $count + 1);  // all write count+1
+}
+```
+
+**Why vulnerable:** Classic check-then-act without locking. 50 concurrent requests all read `count=10`, all pass the check, all write `count=11` — only 1 vote recorded instead of 50. Fix: transient-based mutex lock (`$lock->acquire()` throws if already locked) or MySQL `LOCK TABLES`.
+**Detection:** `get_post_meta()` / `get_option()` followed by comparison, then `update_post_meta()` / `update_option()` — the read-check-write pattern without any locking mechanism.
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic Concurrent Request Attack

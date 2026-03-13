@@ -190,81 +190,26 @@ class DiscordNotifier:
 
     def _build_finding_embed(self, finding: Finding, title_prefix: str = "") -> dict:
         """
-        Build Discord embed from a security finding.
+        Build compact Discord embed from a security finding.
 
-        Args:
-            finding: Finding to format
-            title_prefix: Optional prefix for title (e.g., "VALIDATED: ")
-
-        Returns:
-            Discord embed dictionary
+        Designed to be small and scannable — bug type, severity, plugin, auth level.
         """
         color = self.SEVERITY_COLORS.get(finding.severity, self.EMBED_COLOR)
-
-        fields = [
-            {
-                "name": "Plugin",
-                "value": f"`{finding.plugin_slug}` v{finding.plugin_version}",
-                "inline": True,
-            },
-            {
-                "name": "Active Installs",
-                "value": f"{finding.active_installs:,}",
-                "inline": True,
-            },
-            {
-                "name": "Vulnerability Type",
-                "value": finding.vuln_type.replace("_", " ").title(),
-                "inline": True,
-            },
-            {
-                "name": "Auth Required",
-                "value": finding.auth_level.title(),
-                "inline": True,
-            },
-            {
-                "name": "CVSS Score",
-                "value": f"**{finding.cvss_score}** ({finding.severity})\n`{finding.cvss_vector}`",
-                "inline": True,
-            },
-            {
-                "name": "Tier",
-                "value": finding.tier.replace("_", " ").title() if finding.tier else "N/A",
-                "inline": True,
-            },
-            {
-                "name": "Affected File",
-                "value": f"`{finding.affected_file}`",
-                "inline": False,
-            },
-        ]
-
-        if finding.affected_function:
-            fields.append({
-                "name": "Function / Line",
-                "value": f"`{finding.affected_function}` (line {finding.affected_line})",
-                "inline": False,
-            })
-
-        if finding.description:
-            # Truncate description if too long
-            desc = finding.description[:500]
-            if len(finding.description) > 500:
-                desc += "..."
-            fields.append({
-                "name": "Description",
-                "value": desc,
-                "inline": False,
-            })
-
+        vuln_type = finding.vuln_type.replace("_", " ").title()
+        auth = finding.auth_level.title()
         title = f"{title_prefix}{finding.title}"
+
+        description = (
+            f"**{vuln_type}** · CVSS **{finding.cvss_score}** ({finding.severity})\n"
+            f"`{finding.plugin_slug}` v{finding.plugin_version} · {finding.active_installs:,} installs\n"
+            f"Auth: **{auth}** · `{finding.affected_file}`"
+        )
 
         return {
             "title": title,
-            "description": f"**Finding ID:** `{finding.id}` | **Status:** {finding.status.upper()}",
+            "description": description,
             "color": color,
-            "fields": fields,
-            "footer": {"text": "WordPressGuard Security Research"},
+            "footer": {"text": f"wpguard · {finding.id}"},
             "timestamp": finding.created_at,
         }
 

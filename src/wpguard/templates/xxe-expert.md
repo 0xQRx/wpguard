@@ -178,6 +178,51 @@ wp_get_image_editor($file);  // SVG handling?
 
 ---
 
+## Real-World CVE Patterns
+
+### CVE-2025-14478: Demo Importer Plus — XXE via SVG Upload
+**Impact:** Author+ Blind XXE / RCE on PHP < 8.0, CVSS 7.5
+
+```php
+// SVG file parsed without entity protection
+public static function get_svg_dimensions( $svg ) {
+    $svg = simplexml_load_file( $svg );  // XXE: no flags to disable entities
+    $attributes = $svg->attributes();
+    $width  = (string) $attributes->width;
+    $height = (string) $attributes->height;
+}
+// Malicious SVG with <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+// triggers entity expansion during simplexml_load_file()
+```
+
+**Why vulnerable:** `simplexml_load_file()` without `LIBXML_NONET` flag allows external entity loading on PHP < 8.0. Even on PHP 8.0+, `LIBXML_NOENT` flag re-enables entity substitution. SVG files are XML and commonly processed by image-handling plugins.
+**Detection:** `simplexml_load_file()`, `simplexml_load_string()`, or `new SimpleXMLElement()` without `LIBXML_NONET` flag, especially in SVG dimension extraction or XML import functions.
+
+### CVE-2025-32138: Easy Google Maps — LIBXML_NOENT Trap
+**Impact:** Author+ XXE, CVSS 8.5
+
+```php
+// Developer used LIBXML_NOENT thinking it disables entities — it does the OPPOSITE
+$dom = new DOMDocument();
+$dom->loadXML($svg_content, LIBXML_NOENT | LIBXML_DTDLOAD);
+// LIBXML_NOENT = "substitute entities" (expand them), NOT "no entities"
+// LIBXML_DTDLOAD = load external DTD definitions
+// This ENABLES XXE even on PHP 8.0+ where it's otherwise disabled by default
+```
+
+**Why vulnerable:** `LIBXML_NOENT` is the most misleading flag name in PHP. It means "substitute entity references with their values" — the exact opposite of what developers expect. Combined with `LIBXML_DTDLOAD`, it creates a fully exploitable XXE on any PHP version.
+**Detection:** Search for `LIBXML_NOENT` in any XML parsing context — it's almost always a vulnerability. Also flag `LIBXML_DTDLOAD` with `DOMDocument::loadXML()`.
+
+### Critical libxml Flag Reference
+
+| Flag | Effect | Safe? |
+|------|--------|-------|
+| `LIBXML_NOENT` | **Substitutes entities (expands them)** | **NO — This ENABLES XXE!** |
+| `LIBXML_NONET` | Prevents network access during parsing | YES — Always use |
+| `LIBXML_DTDLOAD` | Loads external DTD | NO — Allows fetching external DTDs |
+
+---
+
 ## Attack Techniques
 
 ### 1. Basic XXE - File Read
