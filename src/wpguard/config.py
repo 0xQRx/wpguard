@@ -58,6 +58,10 @@ PLUGINS_SUBDIR = "plugins"
 REPORTS_SUBDIR = "reports"
 STATE_FILENAME = "state.json"
 
+# Wordfence Intelligence API
+WORDFENCE_API_KEY = os.environ.get("WORDFENCE_API_KEY")
+WORDFENCE_API_BASE = "https://www.wordfence.com/api/intelligence/v3"
+
 # Discord - only env var supported
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 

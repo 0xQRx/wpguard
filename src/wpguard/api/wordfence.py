@@ -1,8 +1,8 @@
 """
-Wordfence Intelligence API client for CVE/vulnerability data.
+Wordfence Intelligence API client for CVE/vulnerability data (v3).
 
 Downloads and caches the Wordfence vulnerability database for searching
-known CVEs by plugin slug - useful for the PoC Creator workflow.
+known CVEs by plugin slug. Requires WORDFENCE_API_KEY env var.
 """
 
 import json
@@ -13,11 +13,15 @@ from typing import Any
 
 import requests
 
-from wpguard.config import DEFAULT_TIMEOUT, USER_AGENT
+from wpguard.config import (
+    DEFAULT_TIMEOUT,
+    USER_AGENT,
+    WORDFENCE_API_BASE,
+    WORDFENCE_API_KEY,
+)
 
-
-# Wordfence Intelligence API
-WORDFENCE_VULNS_URL = "https://www.wordfence.com/api/intelligence/v2/vulnerabilities/production"
+# v3 production feed endpoint
+WORDFENCE_VULNS_URL = f"{WORDFENCE_API_BASE}/vulnerabilities/production"
 
 # Cache settings
 DEFAULT_CACHE_PATH = Path("/tmp/wordfence_vulns.json")
@@ -36,6 +40,7 @@ class WorkfenceVulnDB:
         self,
         cache_path: Path = DEFAULT_CACHE_PATH,
         timeout: int = DEFAULT_TIMEOUT,
+        api_key: str | None = None,
     ):
         """
         Initialize the Wordfence vulnerability database client.
@@ -43,11 +48,17 @@ class WorkfenceVulnDB:
         Args:
             cache_path: Path to cache the downloaded JSON file
             timeout: Request timeout in seconds (increased for large download)
+            api_key: Wordfence API key (falls back to WORDFENCE_API_KEY env var)
         """
         self.cache_path = cache_path
         self.timeout = max(timeout, 120)  # At least 2 minutes for large file
+        self.api_key = api_key or WORDFENCE_API_KEY
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT})
+        if self.api_key:
+            self.session.headers.update(
+                {"Authorization": f"Bearer {self.api_key}"}
+            )
         self._data: dict[str, Any] | None = None
 
     def _is_cache_valid(self) -> bool:
@@ -88,6 +99,27 @@ class WorkfenceVulnDB:
         Returns:
             dict with status and statistics about the database
         """
+        # Check API key — allow cache fallback if missing
+        if not self.api_key:
+            if self.cache_path.exists():
+                self._data = self._load_cache()
+                if self._data:
+                    return {
+                        "success": True,
+                        "source": "cache",
+                        "warning": "WORDFENCE_API_KEY not set — using stale cache. Set key to refresh.",
+                        "cache_path": str(self.cache_path),
+                        "total_vulnerabilities": len(self._data),
+                    }
+            return {
+                "success": False,
+                "error": (
+                    "WORDFENCE_API_KEY environment variable is not set. "
+                    "The Wordfence Intelligence v3 API requires authentication. "
+                    "Get a free key: pip install wordfence && wordfence register"
+                ),
+            }
+
         # Check cache first
         if not force and self._is_cache_valid():
             self._data = self._load_cache()
@@ -99,9 +131,9 @@ class WorkfenceVulnDB:
                     "total_vulnerabilities": len(self._data),
                 }
 
-        # Download fresh data
+        # Download fresh data from v3 API
         try:
-            print(f"[INFO] Downloading Wordfence vulnerability database...", file=sys.stderr)
+            print("[INFO] Downloading Wordfence vulnerability database (v3 API)...", file=sys.stderr)
             response = self.session.get(
                 WORDFENCE_VULNS_URL,
                 timeout=self.timeout,
@@ -122,18 +154,22 @@ class WorkfenceVulnDB:
                 "total_vulnerabilities": len(self._data),
             }
 
+        except requests.HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                return {
+                    "success": False,
+                    "error": (
+                        "401 Unauthorized — WORDFENCE_API_KEY is invalid or expired. "
+                        "Get a new key: pip install wordfence && wordfence register"
+                    ),
+                }
+            return {"success": False, "error": str(e)}
         except requests.RequestException as e:
             print(f"[ERROR] Failed to download Wordfence DB: {e}", file=sys.stderr)
-            return {
-                "success": False,
-                "error": str(e),
-            }
+            return {"success": False, "error": str(e)}
         except json.JSONDecodeError as e:
             print(f"[ERROR] Invalid JSON from Wordfence API: {e}", file=sys.stderr)
-            return {
-                "success": False,
-                "error": f"Invalid JSON response: {e}",
-            }
+            return {"success": False, "error": f"Invalid JSON response: {e}"}
 
     def _ensure_loaded(self) -> bool:
         """Ensure data is loaded (from cache or download)."""
