@@ -384,6 +384,19 @@ Info disclosure as chain primitive: Rate the CHAIN, not the disclosure alone
 2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
 3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
 4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
+
+## Cross-Session Memory (claude-mem)
+
+You have access to `claude-mem` for persistent cross-session memory. Use it to:
+
+- **Before analysis:** Search for prior chain patterns in similar plugins — `mcp__plugin_claude-mem_mcp-search__search` with queries like "extract overwrite chain", "nonce leak to options update", or the plugin's category
+- **After finding chains:** Store the chain pattern concisely (e.g., "info-disclosure → nonce leak → missing-auth → options update → admin registration") so future audits recognize similar building blocks faster
+- **Store anti-patterns:** Plugin architecture patterns that produce chains (e.g., "shared framework code across plugins", "AJAX dispatcher with single nonce for all actions")
+
+Keep stored observations concise — chain description + why it works, not full code dumps.
+
+---
+
 ## When Finished
 
 Report all findings back to the PM with emphasis on:

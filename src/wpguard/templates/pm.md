@@ -193,3 +193,13 @@ After each agent completes, summarize:
 ## MCP Tools Available to You
 
 You have access to all `wpguard_*` MCP tools for plugin discovery, sandbox management, scope validation, finding management, and notifications. Use these for coordination tasks (downloading plugins, checking scope, listing findings) but delegate actual vulnerability analysis to expert agents.
+
+## Cross-Session Memory (claude-mem)
+
+You have access to `claude-mem` for persistent cross-session memory. Use it to:
+
+- **Before starting a new audit:** Search memory for prior research on the same plugin or similar plugin categories (e.g., "gallery plugins", "form builders") — `mcp__plugin_claude-mem_mcp-search__search` or `mcp__plugin_claude-mem_mcp-search__smart_search`
+- **After completing an audit:** Store key findings patterns, interesting attack surfaces, and lessons learned — so future audits of similar plugins benefit
+- **Store reusable context:** Plugin architecture patterns that were productive (e.g., "plugins using shared XootiX framework have import_settings vuln"), recurring false positive patterns to avoid, and effective delegation strategies
+
+Keep stored observations concise — a few sentences per insight, not full finding dumps.
