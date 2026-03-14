@@ -424,39 +424,16 @@ Account takeover via email change: 8.1 High
 
 ---
 
-## Draft Findings (When PoC Fails)
+---
 
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=500,
-    vuln_type="privilege_escalation",
-    title="[DRAFT] Potential Priv Esc via User Meta Update",
-    description="""
-## Status: DRAFT - PoC Not Working
+## Progress Saving (CRITICAL)
 
-## Why This Is Flagged
-update_user_meta() called with $_POST['meta_key'] allowing potential wp_capabilities overwrite.
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
 
-## Code Location
-File: includes/profile.php:178
-Function: save_profile_fields()
-Sink: update_user_meta($user_id, $key, $value)
-
-## What Was Tried
-1. meta_key=wp_capabilities — got sanitized
-2. meta_key prefix may be forced
-
-## Recommendation for QA
-Check if meta_key is validated against an allowlist.
-Check if the prefix can be bypassed.
-    """,
-    auth_level="subscriber",
-    cvss_score=8.8,
-    status="draft"
-)
-```
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
 ---
 

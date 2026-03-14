@@ -363,38 +363,16 @@ IDOR — modify admin settings via user_id: 8.8 High
 
 ---
 
-## Draft Findings (When PoC Fails)
+---
 
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=50000,
-    vuln_type="idor",
-    title="[DRAFT] Potential IDOR in User Settings Endpoint",
-    description="""
-## Status: DRAFT - PoC Not Working
+## Progress Saving (CRITICAL)
 
-## Why This Is Flagged
-user_id parameter taken from $_POST without ownership comparison to get_current_user_id().
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
 
-## Code Location
-File: includes/settings.php:156
-Function: save_user_settings()
-Parameter: $_POST['user_id'] → update_user_meta()
-
-## What Was Tried
-1. Changed user_id to admin (1) — got generic error
-2. May have indirect check via parent function
-
-## Recommendation for QA
-Trace full call chain for hidden ownership checks.
-    """,
-    auth_level="subscriber",
-    cvss_score=6.5,
-    status="draft"
-)
-```
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
 ---
 

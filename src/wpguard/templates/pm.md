@@ -164,6 +164,7 @@ QA Triage validates confirmed findings
 3. **Provide context** — tell each agent which plugin, where source code is, what to focus on
 4. **Track what's been done** — don't re-delegate work that's already completed
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
+6. **Remind agents to save immediately** — when delegating, tell each agent: "Save findings via wpguard_finding_create() immediately as you discover them. Do NOT accumulate findings in memory — if you run out of context, unsaved work is lost."
 
 ## Agent Delegation Format
 

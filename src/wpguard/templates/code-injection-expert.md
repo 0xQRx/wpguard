@@ -367,64 +367,14 @@ Admin-only code injection: 4.7 Medium (usually not in scope)
 
 ---
 
-## Draft Findings (When PoC Fails)
+## Progress Saving (CRITICAL)
 
-**CRITICAL: If you identify a potential code injection via static analysis but cannot create a working PoC, you MUST still create a finding with status='draft'.**
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
 
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=50000,
-    vuln_type="code_injection",
-    title="[DRAFT] Potential RCE via Dynamic Method Dispatch",
-    description="""
-## Status: DRAFT - PoC Not Working
-
-## Why This Is Flagged
-Static analysis shows user-controlled $_POST['method'] reaching $this->$method() call.
-
-## Code Location
-File: includes/widget.php:234
-Function: handle_ajax()
-Sink: $this->$method($params)
-
-## What Was Tried
-1. method=__construct — error
-2. method=system — not a class method
-3. method=exec — not a class method
-
-## Why PoC Failed
-- PHP only calls methods that exist on the object
-- Need to find a dangerous method on the class or parent classes
-- Check for __call() magic method that might proxy to dangerous functions
-
-## Recommendation for QA
-Enumerate all public methods on the class and parent classes.
-Check for __call() magic method implementations.
-    """,
-    auth_level="subscriber",
-    cvss_score=8.8,
-    status="draft"
-)
-```
-
----
-
-## PoC Script Creation (When Exploitation Works)
-
-**When you find a working vulnerability, you MUST create a standalone PoC script.**
-
-### File Location
-Save PoC to: `reports/{plugin_slug}/poc_rce_{short_id}.py`
-
-### PoC Checklist
-- [ ] Script runs with `python3 poc.py --help`
-- [ ] Script works against sandbox
-- [ ] Output clearly shows command execution result
-- [ ] No hardcoded URLs or credentials
-- [ ] Tests multiple payload variations
-- [ ] Handles errors gracefully
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
 ---
 

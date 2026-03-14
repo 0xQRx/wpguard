@@ -374,43 +374,16 @@ Info disclosure as chain primitive: Rate the CHAIN, not the disclosure alone
 
 ---
 
-## Draft Findings (When Chain is Incomplete)
-
-If you identify a promising chain but can't complete exploitation:
-
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=50000,
-    vuln_type="missing_authorization",
-    title="[DRAFT] Potential Chain: Nonce Leak + Missing Cap Check → Options Update",
-    description="""
-## Status: DRAFT - Chain Partially Verified
-
-## Chain Steps Identified
-1. ✅ VERIFIED: Admin nonce leaked via wp_localize_script() on frontend (subscriber can read)
-2. ✅ VERIFIED: AJAX handler checks nonce but NOT current_user_can()
-3. ⚠️ UNVERIFIED: Can the endpoint update arbitrary options?
-4. ⚠️ UNVERIFIED: Can we set default_role to escalate?
-
-## What Was Verified
-- Nonce extraction from page source as subscriber: SUCCESS
-- AJAX call with stolen nonce accepted: SUCCESS
-- Endpoint parameter handling: NEEDS FURTHER TESTING
-
-## Recommendation for QA
-Chain steps 1-2 are confirmed. Steps 3-4 need parameter fuzzing
-to determine if arbitrary option names are accepted.
-    """,
-    auth_level="subscriber",
-    cvss_score=6.5,
-    status="draft"
-)
-```
-
 ---
 
+## Progress Saving (CRITICAL)
+
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
+
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 ## When Finished
 
 Report all findings back to the PM with emphasis on:

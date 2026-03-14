@@ -382,46 +382,16 @@ Open redirect via header injection (CRLF): 6.1 Medium (also report as separate v
 
 ---
 
-## Draft Findings (When PoC Fails)
+---
 
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=50000,
-    vuln_type="open_redirect",
-    title="[DRAFT] Potential Open Redirect in Return URL Handler",
-    description="""
-## Status: DRAFT - PoC Not Working
+## Progress Saving (CRITICAL)
 
-## Why This Is Flagged
-Static analysis shows wp_redirect() with user-controlled $_GET['return_url'].
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
 
-## Code Location
-File: includes/checkout.php:89
-Function: handle_payment_return()
-Sink: wp_redirect($return_url) without wp_validate_redirect()
-
-## What Was Tried
-1. Direct external URL - redirected to home instead
-2. Protocol-relative URL - blocked
-3. Subdomain confusion - blocked
-
-## Why PoC Failed
-- May have wp_validate_redirect() called elsewhere
-- Or allowed_redirect_hosts filter restricting
-- Need to check full call chain
-
-## Recommendation for QA
-1. Check if wp_validate_redirect is applied in parent function
-2. Test URL encoding bypasses
-3. Check allowed_redirect_hosts filter
-    """,
-    auth_level="unauthenticated",
-    cvss_score=4.3,
-    status="draft"
-)
-```
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
 ---
 

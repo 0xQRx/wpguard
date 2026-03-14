@@ -351,38 +351,16 @@ REST API __return_true on write endpoint: 7.5-9.8 Critical
 
 ---
 
-## Draft Findings (When PoC Fails)
+---
 
-```python
-wpguard_finding_create(
-    plugin_slug="example-plugin",
-    plugin_version="1.0.0",
-    active_installs=50000,
-    vuln_type="missing_authorization",
-    title="[DRAFT] Potential Missing Auth on REST Endpoint",
-    description="""
-## Status: DRAFT - PoC Not Working
+## Progress Saving (CRITICAL)
 
-## Why This Is Flagged
-REST route registered with '__return_true' permission_callback.
+**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
 
-## Code Location
-File: includes/api.php:89
-Route: /plugin/v1/settings (POST)
-Issue: permission_callback => '__return_true'
-
-## What Was Tried
-1. Unauthenticated POST - returned 401
-2. May have additional auth middleware
-
-## Recommendation for QA
-Check if WP core enforces auth via another mechanism.
-    """,
-    auth_level="unauthenticated",
-    cvss_score=7.5,
-    status="draft"
-)
-```
+1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
+2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
+3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
+4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
 ---
 
