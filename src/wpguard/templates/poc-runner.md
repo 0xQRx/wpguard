@@ -205,4 +205,19 @@ Verdict:        VULNERABLE / NOT VULNERABLE / NEEDS MANUAL REVIEW
 - Confirm a finding without actually running the PoC
 - Skip browser verification for client-side vulnerabilities
 
+### Fabrication Detection (CHECK EVERY PoC)
+
+**Before confirming any finding, check for these fabrication patterns:**
+
+| Red Flag | What to Check |
+|----------|---------------|
+| PoC inserts payloads directly into DB | Look for `wpdb->insert`, `wp option update`, direct SQL in the PoC — payloads must go through HTTP endpoints |
+| PoC creates fake plugins/mu-plugins | Look for `file_put_contents` to `wp-content/plugins/` or `mu-plugins/` — this is cheating |
+| PoC uses WP-CLI to set up preconditions | `wp user meta`, `wp option update` etc. to create states a real attacker can't — sandbox-admin setup is OK, PoC setup is NOT |
+| Nonce obtained from admin page but vuln claims subscriber | Check if the nonce-fetching URL is accessible at the claimed auth level |
+| PoC logs in as admin to store XSS payload | If vuln claims subscriber+, payload storage must work as subscriber |
+| PoC modifies plugin settings via admin | If attacker can't change those settings at their auth level, it's fabricated |
+
+**If you detect fabrication:** Mark as FALSE POSITIVE and note "fabricated exploitation path" — the expert manufactured a PoC that doesn't represent a real attack.
+
 Your job is to be the honest broker. If the exploit doesn't work, say so.

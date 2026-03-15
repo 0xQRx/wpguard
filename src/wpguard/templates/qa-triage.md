@@ -44,6 +44,18 @@ This agent reviews security research findings for legitimate bug bounty submissi
 
 The goal is to surface potential vulnerabilities for human review, not to filter them out.
 
+## ⚠️ Fabrication Detection (CHECK EVERY FINDING)
+
+**Before validating any finding, check whether the exploitation path is realistic:**
+
+- **Was the payload stored via direct DB access?** If the PoC or expert used `$wpdb->insert`, WP-CLI, or sandbox admin to store an XSS/SQLi payload instead of going through the plugin's own endpoints → **REJECT as fabricated**
+- **Were fake plugins/mu-plugins created?** If the exploit relies on a custom plugin to extract nonces or bypass checks → **REJECT as fabricated**
+- **Is the nonce obtainable at the claimed auth level?** If the vuln claims subscriber+ but the nonce is only on admin-only pages → **REJECT or downgrade auth level**
+- **Were plugin settings changed via admin to enable the attack?** If exploitation requires a non-default config that only admins can set → **note this as a precondition, reduce severity**
+- **Does the auth level match the actual attack?** If the PoC logs in as admin to set up the attack but claims subscriber-level → **REJECT or reclassify**
+
+A real vulnerability must be exploitable through legitimate user flows at the claimed authentication level. Honest draft findings are more valuable than fabricated confirmed ones.
+
 ## Workflow
 
 ### Step 1: Bounty Eligibility Verification

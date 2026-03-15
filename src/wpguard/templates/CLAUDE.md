@@ -80,5 +80,23 @@ wpguard_findings.json              — Findings database
 - **PROVE code is vulnerable** — your job is to FIND vulnerabilities and PROVE they are exploitable. You are NOT here to confirm code is safe. Every agent must assume the plugin is vulnerable and exhaust all attack vectors before moving on.
 - Previous CVEs mean incomplete fixes — check for bypasses
 - Test ALL auth levels (unauth → subscriber → contributor → author)
-- No agent may manipulate the database to fake results
 - Do not give up on a component after surface-level analysis — dig deep, trace data flows, check all code paths
+
+## ⚠️ REALISTIC EXPLOITATION ONLY — NO FABRICATION
+
+**Every exploit must use a realistic attack flow that a real attacker could reproduce.** If you cannot exploit a vulnerability through a legitimate user flow, it is NOT exploitable — report it as a draft or move on.
+
+### FORBIDDEN (these invalidate a finding):
+- **Do NOT insert payloads directly into the database** — use HTTP requests through WordPress endpoints only
+- **Do NOT create fake plugins/themes/mu-plugins** to extract nonces, bypass checks, or enable functionality
+- **Do NOT use WP-CLI to set up preconditions** that a real attacker couldn't create (e.g., `wp option update`, `wp user meta update`)
+- **Do NOT use sandbox admin access to store XSS payloads** — if the vuln requires Stored XSS, the payload must be storable through the plugin's own input fields at the claimed auth level
+- **Do NOT fabricate nonces** — nonces must be obtainable through page source, AJAX responses, or REST API endpoints accessible at the attacker's auth level
+- **Do NOT assume the attacker has prior access to admin pages** unless the vuln is specifically about admin-level issues
+
+### REQUIRED for valid exploitation:
+- **Attacker perspective only** — every step must be possible from the claimed auth level (unauthenticated, subscriber, contributor, etc.)
+- **Nonces must be obtained legitimately** — from pages/endpoints the attacker's role can access. If a nonce is only on admin pages and the vuln claims subscriber-level, you must prove a subscriber can reach that page
+- **Payload delivery through plugin endpoints** — XSS payloads go through the plugin's forms/AJAX/REST, not direct DB writes
+- **Setup conditions must be realistic** — if exploitation requires a specific plugin setting, verify the default value or prove the attacker can change it
+- **If you can't exploit it legitimately, say so** — create a draft finding explaining what you found in static analysis and why dynamic exploitation failed. Honest drafts are valuable; fabricated PoCs are harmful
