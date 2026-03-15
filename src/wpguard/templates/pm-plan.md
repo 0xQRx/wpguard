@@ -12,6 +12,14 @@
 - [ ] Scope check passed (`wpguard_scope_check_plugin`)
 - [ ] CVE history reviewed (`wpguard_cve_search`)
 - [ ] Sandbox prepared (`sandbox-admin` — plugin installed, users reset)
+- [ ] Attack surface mapped (`surface-mapper`) → see `reports/{plugin_slug}/surface_map.md`
+
+### Surface Map Summary
+```
+ENDPOINTS: (fill from surface-mapper output)
+DANGEROUS FUNCTIONS: (fill from surface-mapper output)
+RECOMMENDED EXPERTS: (fill from surface-mapper output)
+```
 
 ## Expert Analysis
 - [ ] `file-rce-expert` — File upload/read/write/delete, RCE

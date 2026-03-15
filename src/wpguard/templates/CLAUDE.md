@@ -6,6 +6,10 @@ Wordfence Bug Bounty Program research project. Use `/pm` to start.
 
 - `/pm` - PM orchestrator — coordinates all research, delegates to agents
 - `/target-research` - Find and scope WordPress plugins for analysis
+- `/status` - Quick dashboard of current audit progress
+- `/recon` - Lightweight plugin assessment before full audit (installs, CVE history, scope)
+- `/findings` - List all findings with status and severity
+- `/nday` - N-day research shortcut — PoCs for known/patched CVEs
 
 ## Agents
 
@@ -48,6 +52,7 @@ Expert finds vuln → PoC Writer → PoC Runner → QA Triage
 |-------|------|
 | `poc-creator` | n-day research — changelog/CVE analysis, PoCs for patched vulns |
 | `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
+| `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |
 
 ## Directory Structure
 

@@ -25,6 +25,10 @@ MCP_TOOLS = [
 WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/target-research)",
     "SlashCommand(/pm)",
+    "SlashCommand(/status)",
+    "SlashCommand(/recon)",
+    "SlashCommand(/findings)",
+    "SlashCommand(/nday)",
 ]
 
 
@@ -72,6 +76,7 @@ SUPPORT_AGENTS = [
     "poc-writer",
     "poc-runner",
     "sandbox-admin",
+    "surface-mapper",
 ]
 
 ALL_AGENTS = EXPERT_AGENTS + SUPPORT_AGENTS
@@ -243,12 +248,24 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write PM plan template to project root
         (root / "pm-plan.md").write_text(_load_template("pm-plan.md"))
 
-        # Write slash commands (only pm and target-research)
+        # Write slash commands
         (root / ".claude" / "commands" / "target-research.md").write_text(
             get_target_researcher_instructions()
         )
         (root / ".claude" / "commands" / "pm.md").write_text(
             get_pm_instructions()
+        )
+        (root / ".claude" / "commands" / "status.md").write_text(
+            _load_template("status.md")
+        )
+        (root / ".claude" / "commands" / "recon.md").write_text(
+            _load_template("recon.md")
+        )
+        (root / ".claude" / "commands" / "findings.md").write_text(
+            _load_template("findings.md")
+        )
+        (root / ".claude" / "commands" / "nday.md").write_text(
+            _load_template("nday.md")
         )
 
         # Write settings.local.json with MCP tool permissions
@@ -336,6 +353,10 @@ def initialize_research_project(output_dir: str) -> dict:
                 "commands": [
                     "/pm",
                     "/target-research",
+                    "/status",
+                    "/recon",
+                    "/findings",
+                    "/nday",
                 ],
                 "agents": [f"{name}" for name in ALL_AGENTS],
                 "directories": [

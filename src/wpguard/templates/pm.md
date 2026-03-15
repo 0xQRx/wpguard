@@ -84,6 +84,7 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 |-------|---------|
 | `poc-creator` | Analyzes changelogs for existing CVEs, creates PoCs for patched vulns |
 | `sandbox-admin` | Manages sandbox environment — installs plugins, resets users, cleans DB (invocable by any agent) |
+| `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps. Run BEFORE experts. |
 
 ## Workflow
 
@@ -94,24 +95,17 @@ When the user wants a comprehensive audit of a plugin:
 2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility
 3. **Check for known CVEs** using `wpguard_cve_search` to understand history
 4. **Prepare sandbox** — delegate to `sandbox-admin` to install the target plugin version
-5. **Delegate to experts** — launch relevant expert agents based on the plugin's functionality:
-   - Forms/user input? → `xss-expert`, `sqli-expert`, `csrf-expert`
-   - File handling? → `file-rce-expert`, `lfi-rfi-expert`
-   - Authentication? → `missing-auth-expert`, `idor-expert`, `priv-esc-expert`
-   - External requests? → `ssrf-expert`
-   - Data serialization? → `object-injection-expert`, `deserialization-expert`
-   - XML/SVG processing? → `xxe-expert`
-   - Payment/workflow? → `logic-flaw-expert`
-   - Settings/debug? → `info-disclosure-expert`
-   - Concurrent operations? → `race-condition-expert`
-   - Dynamic code execution? → `code-injection-expert`
-   - Redirects/OAuth? → `open-redirect-expert`
-   - Always (last pass) → `critical-thinker`
-6. **Collect findings** from all agents
-7. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
-8. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
-9. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
-10. **Report results** to the user
+5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin in 2-3 minutes and returns a report with endpoint counts, dangerous function locations, and auth gaps. Use its RECOMMENDED EXPERTS list to decide which experts to launch.
+6. **Delegate to experts** — launch experts recommended by surface-mapper:
+   - MUST RUN experts: those with high-count dangerous patterns
+   - SHOULD RUN experts: those with some relevant patterns
+   - SKIP experts: those with zero relevant patterns (save context)
+   - ALWAYS run `critical-thinker` last for cross-domain chains
+7. **Collect findings** from all agents
+8. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
+9. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
+10. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
+11. **Report results** to the user
 
 ### Targeted Analysis
 When the user wants to check for a specific vulnerability type:
