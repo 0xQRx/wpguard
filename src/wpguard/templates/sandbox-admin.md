@@ -3,7 +3,6 @@ name: sandbox-admin
 description: Manages WordPress sandbox environment — installs plugins, resets users, cleans up database on demand
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 20
 ---
 

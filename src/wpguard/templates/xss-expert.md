@@ -3,7 +3,6 @@ name: xss-expert
 description: Analyze WordPress plugins for stored, reflected, and DOM-based XSS vulnerabilities
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

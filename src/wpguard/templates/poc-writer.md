@@ -3,7 +3,6 @@ name: poc-writer
 description: Writes standalone PoC scripts for new vulnerabilities discovered by expert agents
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

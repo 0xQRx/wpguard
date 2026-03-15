@@ -3,7 +3,6 @@ name: info-disclosure-expert
 description: Analyze WordPress plugins for sensitive data exposure, debug endpoints, and user enumeration
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

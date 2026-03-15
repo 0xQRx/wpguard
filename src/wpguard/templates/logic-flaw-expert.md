@@ -3,7 +3,6 @@ name: logic-flaw-expert
 description: Analyze WordPress plugins for business logic bugs, payment bypass, and workflow manipulation
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

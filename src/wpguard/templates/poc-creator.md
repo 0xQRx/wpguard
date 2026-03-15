@@ -3,7 +3,6 @@ name: poc-creator
 description: Analyzes changelogs for security fixes and creates PoCs for patched vulnerabilities
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

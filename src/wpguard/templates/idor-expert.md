@@ -3,7 +3,6 @@ name: idor-expert
 description: Find Insecure Direct Object Reference (IDOR) vulnerabilities — unauthorized access to other users' data via ID manipulation
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

@@ -3,7 +3,6 @@ name: missing-auth-expert
 description: Find missing capability checks on AJAX handlers, REST API endpoints, and admin actions in WordPress plugins
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

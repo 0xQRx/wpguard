@@ -3,7 +3,6 @@ name: critical-thinker
 description: Cross-domain chain builder finding subtle multi-step vulnerabilities, logic flaws, and attack chains that individual experts miss
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

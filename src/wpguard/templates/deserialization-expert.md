@@ -3,7 +3,6 @@ name: deserialization-expert
 description: Analyze WordPress plugins for unsafe deserialization, JSON/YAML parsing, property injection, and type juggling
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

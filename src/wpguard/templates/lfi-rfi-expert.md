@@ -3,7 +3,6 @@ name: lfi-rfi-expert
 description: Analyze WordPress plugins for local/remote file inclusion and path traversal vulnerabilities
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

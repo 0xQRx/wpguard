@@ -3,7 +3,6 @@ name: qa-triage
 description: Validates findings, tests PoCs, checks Wordfence scope, creates submission writeups
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

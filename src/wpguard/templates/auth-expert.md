@@ -3,7 +3,6 @@ name: auth-expert
 description: Analyze WordPress plugins for authentication bypass, privilege escalation, IDOR, and missing authorization
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 

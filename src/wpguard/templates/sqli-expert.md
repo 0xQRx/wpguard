@@ -3,7 +3,6 @@ name: sqli-expert
 description: Analyze WordPress plugins for SQL injection vulnerabilities including UNION, blind, and second-order
 model: opus
 memory: project
-tools: Read, Glob, Grep, Bash, Edit, Write, WebFetch, WebSearch
 maxTurns: 50
 ---
 
