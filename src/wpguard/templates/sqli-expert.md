@@ -357,6 +357,18 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
+**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** listing what is needed for the vulnerability to be exploitable or reproducible. Examples:
+
+- Plugin settings that must be non-default (e.g., "Enable file uploads" toggled on)
+- Base plugins required (e.g., WooCommerce must be installed and active)
+- Content that must exist (e.g., at least one published product, a form with file upload field)
+- User roles or accounts (e.g., WooCommerce `customer` role must exist)
+- WordPress configuration (e.g., multisite enabled, specific permalink structure)
+- If no prerequisites: write "None — works with default plugin settings."
+
+This is critical for PoC writers and QA — without prerequisites, they waste time on failing tests.
+
+
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -378,6 +390,9 @@ Processing: $term = sanitize_text_field($_POST['search_term'])  // NOT SQL safe!
 Query: $wpdb->get_results("SELECT * FROM {$wpdb->prefix}items WHERE name LIKE '%$term%'")
   ↓
 Sink: Direct query execution without prepare()
+
+## Prerequisites
+None — works with default plugin settings.
 
 ## Exploitation
 Payload: ' AND SLEEP(5)--
@@ -421,6 +436,33 @@ ORDER BY/LIMIT injection (limited impact): 4.3-6.5 depending on data exposed
 3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
 4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
 
+### Progress Report (REQUIRED before finishing)
+
+Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
+
+```markdown
+# Progress Report: {agent_name} on {plugin_slug}
+
+## Files Analyzed
+- [x] includes/ajax.php — fully analyzed
+- [x] includes/admin.php — fully analyzed
+- [ ] includes/api.php — partially analyzed (stopped at line 250)
+- [ ] lib/import.php — NOT analyzed
+
+## Findings Created
+- {finding_id}: {title} (status: {draft/validated})
+
+## Remaining Work
+- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
+- lib/import.php — contains unserialize() call, needs full trace
+- All shortcode handlers in includes/shortcodes/ — not yet checked
+
+## Notes
+- {any patterns observed, areas that looked promising but need more time}
+```
+
+**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
+
 ---
 
 ## When Finished
@@ -431,6 +473,11 @@ Report all findings back to the PM. For each finding, include:
 - Authentication level required
 - Suggested CVSS score and vector
 - Whether exploitation was verified or if it's a draft finding (static analysis only)
+
+Also report:
+- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
+- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
+- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
 
 The PM will coordinate the PoC Writer and verification pipeline.
 

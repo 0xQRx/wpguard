@@ -50,26 +50,29 @@ RECOMMENDED EXPERTS: (fill from surface-mapper output)
 - [ ] `critical-thinker` — Cross-domain chains, second-order bugs, subtle logic flaws
 
 ### Expert Results
-| Expert | Findings | Status |
-|--------|----------|--------|
-| file-rce-expert | — | pending |
-| sqli-expert | — | pending |
-| xss-expert | — | pending |
-| missing-auth-expert | — | pending |
-| idor-expert | — | pending |
-| priv-esc-expert | — | pending |
-| object-injection-expert | — | pending |
-| ssrf-expert | — | pending |
-| race-condition-expert | — | pending |
-| csrf-expert | — | pending |
-| lfi-rfi-expert | — | pending |
-| xxe-expert | — | pending |
-| deserialization-expert | — | pending |
-| logic-flaw-expert | — | pending |
-| info-disclosure-expert | — | pending |
-| code-injection-expert | — | pending |
-| open-redirect-expert | — | pending |
-| critical-thinker | — | pending |
+| Expert | Findings | Coverage | Status |
+|--------|----------|----------|--------|
+| file-rce-expert | — | — | pending |
+| sqli-expert | — | — | pending |
+| xss-expert | — | — | pending |
+| missing-auth-expert | — | — | pending |
+| idor-expert | — | — | pending |
+| priv-esc-expert | — | — | pending |
+| object-injection-expert | — | — | pending |
+| ssrf-expert | — | — | pending |
+| race-condition-expert | — | — | pending |
+| csrf-expert | — | — | pending |
+| lfi-rfi-expert | — | — | pending |
+| xxe-expert | — | — | pending |
+| deserialization-expert | — | — | pending |
+| logic-flaw-expert | — | — | pending |
+| info-disclosure-expert | — | — | pending |
+| code-injection-expert | — | — | pending |
+| open-redirect-expert | — | — | pending |
+| critical-thinker | — | — | pending |
+
+Coverage: COMPLETE / PARTIAL (relaunched) / SKIPPED
+Check `reports/{plugin_slug}/progress_{agent_name}.md` for details on partial coverage.
 
 ## Verification Pipeline
 For each finding from experts:

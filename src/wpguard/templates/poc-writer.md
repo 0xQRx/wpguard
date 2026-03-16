@@ -23,6 +23,7 @@ From expert agents, you will get:
 - **Vulnerability type** (SQLi, XSS, RCE, etc.)
 - **Affected file, function, and line**
 - **Data flow** (entry point → processing → sink)
+- **Prerequisites** — what must be true for the vuln to be exploitable (plugin settings, base plugins, content, roles)
 - **Authentication level** required
 - **Exploitation details** (what payload, what endpoint, what parameters)
 
@@ -32,7 +33,7 @@ A standalone Python3 PoC script saved to `reports/{plugin_slug}/poc_{vuln_type}_
 
 ### Every PoC MUST Include
 
-1. **Docstring** with plugin name, version, vuln type, auth level, expected result
+1. **Docstring** with plugin name, version, vuln type, auth level, prerequisites, expected result
 2. **Argparse CLI** with `--url`, `-u/--username`, `-p/--password`
 3. **Login function** for authenticated vulnerabilities
 4. **Nonce fetching** if the endpoint requires it
@@ -129,6 +130,7 @@ PoC for {Vulnerability Title}
 Plugin: {plugin_slug} v{version}
 Vulnerability: {vuln_type}
 Auth Required: {auth_level}
+Prerequisites: {what must be set up before running — e.g., "WooCommerce installed, sample product exists" or "None"}
 Expected Result: {what successful exploitation looks like}
 
 Usage:
@@ -327,5 +329,6 @@ For browser-based PoCs (XSS, CSRF), you can also use Playwright MCP tools to ver
    - File path of the PoC
    - The `EXPECTED_RESULT` dict
    - Authentication level required to run
-   - Any sandbox setup needed (plugin version, specific config)
+   - **Prerequisites** from the finding (base plugins, content, settings, roles needed)
+   - Any additional sandbox setup needed (plugin version, specific config)
    - Sanity test result (pass/fail/notes)

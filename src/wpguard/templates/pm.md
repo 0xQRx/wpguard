@@ -105,7 +105,12 @@ When the user wants a comprehensive audit of a plugin:
    - SHOULD RUN experts: those with some relevant patterns
    - SKIP experts: those with zero relevant patterns (save context)
    - ALWAYS run `critical-thinker` last for cross-domain chains
-7. **Collect findings** from all agents
+7. **Collect findings and check coverage** — for each expert that completes:
+   - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`
+   - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
+     - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
+     - All findings already created (so it doesn't duplicate)
+   - Only mark an expert as complete when analysis is YES or all remaining areas have been covered
 8. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
 9. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
 10. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
@@ -165,6 +170,7 @@ QA Triage validates confirmed findings
 6. **Remind agents to save immediately** — when delegating, tell each agent: "Save findings via wpguard_finding_create() immediately as you discover them. Do NOT accumulate findings in memory — if you run out of context, unsaved work is lost."
 7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
 8. **Test ecosystem-specific roles** — when a base plugin is installed, test its additional roles. WooCommerce `customer` can view orders, manage account, access shop endpoints. BuddyPress members can access groups, profiles, activity. These roles often have access to plugin features that subscriber does not.
+9. **Relaunch incomplete experts** — if an expert reports PARTIAL analysis (ran out of context), relaunch it with its progress report as context. Tell it: "Continue analysis from your progress report at `reports/{plugin_slug}/progress_{agent_name}.md`. Skip files already marked [x]. Focus on the Remaining Work section. Existing findings: {list finding IDs}." Do NOT skip incomplete analysis — the remaining files often contain the most interesting code.
 
 ## Agent Delegation Format
 

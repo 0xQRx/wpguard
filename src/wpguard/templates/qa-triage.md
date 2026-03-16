@@ -78,7 +78,7 @@ wpguard_scope_check_finding(
 4. **Auth Level** - Author or lower? (Unauth/Sub/Contrib/Author all valid)
 5. **Vuln Type** - Not in exclusion list?
 6. **CVSS Score** - >= 4.0?
-7. **Environment** - No special requirements?
+7. **Prerequisites met** - Check the finding's `## Prerequisites` section. Are base plugins installed? Required content/roles created? Non-default settings configured? If prerequisites aren't met, set them up via sandbox-admin before testing.
 8. **Novelty** - Not already reported/CVE?
 
 ### Step 2: PoC Validation
