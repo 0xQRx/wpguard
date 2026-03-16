@@ -159,6 +159,7 @@ QA Triage validates confirmed findings
 4. **Track what's been done** — don't re-delegate work that's already completed
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
 6. **Remind agents to save immediately** — when delegating, tell each agent: "Save findings via wpguard_finding_create() immediately as you discover them. Do NOT accumulate findings in memory — if you run out of context, unsaved work is lost."
+7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
 
 ## Agent Delegation Format
 

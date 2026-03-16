@@ -66,17 +66,26 @@ wpguard_findings.json              — Findings database
 
 - Sandbox: `172.17.0.1:8000` (Docker: wp_app)
 - Test users: subscriber/subscriber, contributor/contributor, author/author
-- Editor and Administrator are OUT OF SCOPE
+- Editor and Administrator are OUT OF SCOPE for the attacker role
+- Author IS IN SCOPE — author-level RCE, file upload, SQLi etc. are all bounty-eligible
 
 ## Scope Quick Reference
 
-| Min Installs | Vulnerability Types |
-|--------------|---------------------|
-| 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc |
-| 500 | SQL Injection, Stored XSS |
-| 50,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection |
+| Min Installs | Vulnerability Types | Max Auth Level |
+|--------------|---------------------|----------------|
+| 25 | RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc | Author |
+| 500 | SQL Injection, Stored XSS | Author |
+| 50,000 | Reflected XSS*, CSRF*, Missing Auth, IDOR, SSRF, Object Injection | Author (Reflected XSS/CSRF: unauthenticated*) |
 
 *Reflected XSS and CSRF are always `auth_level="unauthenticated"` — attacker crafts payload locally, victim executes it.
+
+**Author-level bugs are HIGH VALUE.** Authors can upload media, publish posts, and access post editor features. Bugs exploitable at Author level include:
+- RCE via media upload (SVG, image processing, EXIF)
+- File read/delete via attachment handling
+- SQL injection via post meta, custom fields, shortcode attributes
+- Stored XSS via post content rendered to other users
+- Object injection via metadata
+- SSRF via embed/oEmbed processing
 
 ## Rules
 
@@ -84,7 +93,7 @@ wpguard_findings.json              — Findings database
 - **NEVER SKIP PHASES** — every phase in the PM plan must be fully completed. Do not skip experts, do not shortcut verification, do not mark phases done without running them.
 - **PROVE code is vulnerable** — your job is to FIND vulnerabilities and PROVE they are exploitable. You are NOT here to confirm code is safe. Every agent must assume the plugin is vulnerable and exhaust all attack vectors before moving on.
 - Previous CVEs mean incomplete fixes — check for bypasses
-- Test ALL auth levels (unauth → subscriber → contributor → author)
+- **Test ALL auth levels** (unauth → subscriber → contributor → author) — do NOT stop at contributor. Author-level bugs are bounty-eligible for all vulnerability types.
 - Do not give up on a component after surface-level analysis — dig deep, trace data flows, check all code paths
 
 ## ⚠️ REALISTIC EXPLOITATION ONLY — NO FABRICATION
