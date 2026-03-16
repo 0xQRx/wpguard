@@ -68,6 +68,8 @@ wpguard_findings.json              — Findings database
 - Test users: subscriber/subscriber, contributor/contributor, author/author
 - Editor and Administrator are OUT OF SCOPE for the attacker role
 - Author IS IN SCOPE — author-level RCE, file upload, SQLi etc. are all bounty-eligible
+- **Addon dependencies:** surface-mapper detects base plugin requirements (WooCommerce, Elementor, etc.) during recon. PM delegates ecosystem setup to sandbox-admin BEFORE launching experts.
+- **Ecosystem-specific roles:** `customer` (WooCommerce), BuddyPress members, etc. are created during ecosystem setup and should be tested by experts as additional auth levels.
 
 ## Scope Quick Reference
 

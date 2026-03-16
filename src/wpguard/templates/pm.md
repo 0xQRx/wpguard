@@ -95,7 +95,11 @@ When the user wants a comprehensive audit of a plugin:
 2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility
 3. **Check for known CVEs** using `wpguard_cve_search` to understand history
 4. **Prepare sandbox** — delegate to `sandbox-admin` to install the target plugin version
-5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin in 2-3 minutes and returns a report with endpoint counts, dangerous function locations, and auth gaps. Use its RECOMMENDED EXPERTS list to decide which experts to launch.
+5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin in 2-3 minutes and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. Use its RECOMMENDED EXPERTS list to decide which experts to launch.
+5.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
+   - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
+   - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
+   - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
 6. **Delegate to experts** — launch experts recommended by surface-mapper:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns
@@ -160,6 +164,7 @@ QA Triage validates confirmed findings
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
 6. **Remind agents to save immediately** — when delegating, tell each agent: "Save findings via wpguard_finding_create() immediately as you discover them. Do NOT accumulate findings in memory — if you run out of context, unsaved work is lost."
 7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
+8. **Test ecosystem-specific roles** — when a base plugin is installed, test its additional roles. WooCommerce `customer` can view orders, manage account, access shop endpoints. BuddyPress members can access groups, profiles, activity. These roles often have access to plugin features that subscriber does not.
 
 ## Agent Delegation Format
 
@@ -169,12 +174,26 @@ When delegating, provide the agent with:
 - Active install count (for scope validation)
 - Any specific areas of focus
 - Known CVE history if relevant
+- **Base plugin installed:** yes/no (if addon)
+- **Ecosystem:** WooCommerce, Elementor, etc. (if addon)
+- **Available test data:** products, orders, courses, forms, etc. (if ecosystem setup was run)
+- **Additional roles to test:** customer, member, etc. (if ecosystem-specific roles exist)
 
-Example:
+Example (standalone plugin):
 ```
 Analyze targets/gallery-pro/extracted/gallery-pro/ for SQL injection vulnerabilities.
 Plugin: gallery-pro v2.1.4, 15,000 active installs.
 Known CVE history: CVE-2023-1234 (SQLi in search, patched in 2.1.0) - check for incomplete fix and similar patterns.
+```
+
+Example (addon plugin):
+```
+Analyze targets/wc-product-table/extracted/wc-product-table/ for SQL injection vulnerabilities.
+Plugin: wc-product-table v3.2.1, 8,000 active installs.
+Base plugin installed: YES (WooCommerce)
+Ecosystem: WooCommerce
+Available test data: sample product ($19.99), sample order (processing)
+Additional roles to test: customer (WooCommerce role — can view orders, manage account)
 ```
 
 ## Progress Tracking

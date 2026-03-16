@@ -30,7 +30,54 @@ A structured attack surface report with counts and file locations for each categ
 
 Work inside the plugin's extracted source directory at `targets/{plugin_slug}/extracted/`. Run grep commands to count and locate attack surface elements. Do NOT open files to read logic. Do NOT attempt to understand vulnerability details. Just map what exists.
 
-### Step 1: Endpoint Inventory
+### Step 1: Dependency Detection
+
+Detect base plugin dependencies FIRST — the PM needs this to set up the sandbox before experts run.
+
+**A. Plugin header parsing:**
+```bash
+# Check for WordPress 6.5+ "Requires Plugins" header
+grep -rn "Requires Plugins:" --include="*.php" . | head -5
+```
+
+**B. Grep-based ecosystem detection** — check for these patterns:
+
+| Ecosystem | Slug | Detection Patterns |
+|-----------|------|--------------------|
+| WooCommerce | `woocommerce` | `class_exists.*WooCommerce`, `WC()`, `wc_get_`, `woocommerce` in Requires Plugins |
+| Elementor | `elementor` | `defined.*ELEMENTOR`, `Elementor\\Plugin`, `\Elementor\` |
+| BuddyPress | `buddypress` | `function_exists.*buddypress`, `bp_get_`, `bp_core_` |
+| LearnDash | `learndash` | `class_exists.*SFWD_LMS`, `learndash_get_` |
+| LifterLMS | `lifterlms` | `class_exists.*LifterLMS`, `llms()` |
+| Tutor LMS | `tutor` | `function_exists.*tutor`, `tutor_utils` |
+| Contact Form 7 | `contact-form-7` | `defined.*WPCF7`, `wpcf7_` |
+| WPForms | `wpforms-lite` | `defined.*WPFORMS`, `wpforms()` |
+| Gravity Forms | `gravityforms` | `class_exists.*GFForms`, `GFAPI::` |
+| Ninja Forms | `ninja-forms` | `class_exists.*Ninja_Forms` |
+| ACF | `advanced-custom-fields` | `function_exists.*acf`, `get_field(` |
+| MemberPress | `memberpress` | `defined.*MEPR`, `MeprUser` |
+| Paid Memberships Pro | `paid-memberships-pro` | `defined.*PMPRO`, `pmpro_` |
+
+```bash
+# Run ecosystem detection — check each pattern
+grep -rn "class_exists.*WooCommerce\|WC()\|wc_get_" --include="*.php" . | head -3
+grep -rn "defined.*ELEMENTOR\|Elementor.Plugin" --include="*.php" . | head -3
+grep -rn "function_exists.*buddypress\|bp_get_\|bp_core_" --include="*.php" . | head -3
+grep -rn "class_exists.*SFWD_LMS\|learndash_get_" --include="*.php" . | head -3
+grep -rn "class_exists.*LifterLMS\|llms()" --include="*.php" . | head -3
+grep -rn "function_exists.*tutor\|tutor_utils" --include="*.php" . | head -3
+grep -rn "defined.*WPCF7\|wpcf7_" --include="*.php" . | head -3
+grep -rn "defined.*WPFORMS\|wpforms()" --include="*.php" . | head -3
+grep -rn "class_exists.*GFForms\|GFAPI::" --include="*.php" . | head -3
+grep -rn "class_exists.*Ninja_Forms" --include="*.php" . | head -3
+grep -rn "function_exists.*acf\|get_field(" --include="*.php" . | head -3
+grep -rn "defined.*MEPR\|MeprUser" --include="*.php" . | head -3
+grep -rn "defined.*PMPRO\|pmpro_" --include="*.php" . | head -3
+```
+
+**Premium plugins** (not on wordpress.org — static analysis only): LearnDash, Gravity Forms, MemberPress.
+
+### Step 2: Endpoint Inventory
 
 ```bash
 # AJAX handlers — split into nopriv (unauthenticated) vs auth-only
@@ -54,7 +101,7 @@ grep -rn "add_shortcode" --include="*.php" .
 grep -rn "\$_POST\|\$_GET\|\$_REQUEST" --include="*.php" . | wc -l
 ```
 
-### Step 2: Dangerous Functions
+### Step 3: Dangerous Functions
 
 ```bash
 # SQL — potential SQLi
@@ -83,7 +130,7 @@ grep -rn "simplexml\|DOMDocument\|xml_parse\|XMLReader\|SimpleXMLElement\|libxml
 grep -rn "wp_remote_get\|wp_remote_post\|wp_remote_request\|file_get_contents.*http\|curl_exec\|curl_init" --include="*.php" .
 ```
 
-### Step 3: Auth Patterns
+### Step 4: Auth Patterns
 
 ```bash
 # Capability checks
@@ -98,7 +145,7 @@ grep -rn "is_admin()" --include="*.php" .
 
 Compare endpoint count vs auth check count. Large gaps indicate missing authorization.
 
-### Step 4: Additional Signals
+### Step 5: Additional Signals
 
 ```bash
 # Options API (potential options update vulns)
@@ -123,6 +170,12 @@ Produce a report in exactly this structure:
 ```
 ATTACK SURFACE REPORT: {plugin_slug} v{version}
 ================================================
+
+DEPENDENCIES:
+  Base plugins required: {slugs or "none"}
+  Ecosystem:            {ecosystem name or "standalone"}
+  Free/Premium:         {Free (auto-install) / Premium (static analysis only) / N/A}
+  Setup needed:         {YES — PM must invoke sandbox-admin / NO}
 
 ENDPOINTS:
   AJAX (nopriv):     {count}  ← HIGH PRIORITY (unauthenticated)
@@ -183,6 +236,19 @@ Use these rules to determine RECOMMENDED EXPERTS:
 | Database races, token reuse | `race-condition-expert` |
 
 Mark an expert as **MUST RUN** if its category has HIGH PRIORITY items or a significant count. Mark as **SHOULD RUN** if counts are non-zero but low. Mark as **SKIP** if counts are zero. `critical-thinker` always runs last regardless.
+
+### Ecosystem-Aware Expert Overrides
+
+When a base plugin dependency is detected, ALWAYS add these experts to the MUST RUN list:
+
+| Ecosystem | Additional MUST RUN Experts |
+|-----------|-----------------------------|
+| WooCommerce | `logic-flaw-expert` (payment/cart/order flows), `priv-esc-expert` (customer role) |
+| BuddyPress | `priv-esc-expert` (member roles), `idor-expert` (group/profile access) |
+| LifterLMS / Tutor LMS / LearnDash | `logic-flaw-expert` (enrollment/course access), `idor-expert` (course content) |
+| MemberPress / Paid Memberships Pro | `logic-flaw-expert` (subscription bypass), `priv-esc-expert` (membership levels) |
+| Contact Form 7 / WPForms / Gravity Forms / Ninja Forms | `xss-expert` (form output rendering), `file-rce-expert` (file upload fields) |
+| ACF | `sqli-expert` (custom field queries), `xss-expert` (field output) |
 
 ---
 

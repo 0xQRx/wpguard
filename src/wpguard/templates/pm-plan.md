@@ -14,8 +14,16 @@
 - [ ] Sandbox prepared (`sandbox-admin` — plugin installed, users reset)
 - [ ] Attack surface mapped (`surface-mapper`) → see `reports/{plugin_slug}/surface_map.md`
 
+### Dependencies
+- [ ] Dependency detection (surface-mapper)
+- [ ] Base plugin(s) installed: {slugs or N/A}
+- [ ] Ecosystem setup: {completed / premium-static-only / N/A}
+- [ ] Additional test users: {customer, member, etc. or N/A}
+- [ ] Test data seeded: {products, orders, courses, forms, etc. or N/A}
+
 ### Surface Map Summary
 ```
+DEPENDENCIES: (fill from surface-mapper output)
 ENDPOINTS: (fill from surface-mapper output)
 DANGEROUS FUNCTIONS: (fill from surface-mapper output)
 RECOMMENDED EXPERTS: (fill from surface-mapper output)
