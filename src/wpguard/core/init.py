@@ -229,6 +229,9 @@ def initialize_research_project(output_dir: str) -> dict:
     root = Path(output_dir).expanduser().resolve()
 
     try:
+        # Detect if this is a fresh init or update of existing project
+        is_update = (root / FINDINGS_FILENAME).exists() or (root / "CLAUDE.md").exists()
+
         # Create directories
         root.mkdir(parents=True, exist_ok=True)
         (root / "targets").mkdir(exist_ok=True)
@@ -280,14 +283,17 @@ def initialize_research_project(output_dir: str) -> dict:
             json.dumps(settings_local, indent=2)
         )
 
-        # Initialize empty findings file (matches FindingsManager schema)
-        initial_findings = {
-            "version": "1.0",
-            "updated_at": None,
-            "total_findings": 0,
-            "findings": [],
-        }
-        (root / FINDINGS_FILENAME).write_text(json.dumps(initial_findings, indent=2))
+        # Initialize empty findings file only if it doesn't exist
+        # (preserve existing findings on re-init / update)
+        findings_path = root / FINDINGS_FILENAME
+        if not findings_path.exists():
+            initial_findings = {
+                "version": "1.0",
+                "updated_at": None,
+                "total_findings": 0,
+                "findings": [],
+            }
+            findings_path.write_text(json.dumps(initial_findings, indent=2))
 
         # Write per-project devrag config
         devrag_config = {
@@ -343,10 +349,13 @@ def initialize_research_project(output_dir: str) -> dict:
         except Exception as e:
             wordfence_status = {"success": False, "error": str(e)}
 
+        action = "updated" if is_update else "initialized"
+
         return {
             "success": True,
             "path": str(root),
-            "message": f"Research project initialized at {root}",
+            "is_update": is_update,
+            "message": f"Research project {action} at {root}",
             "wordfence_db": wordfence_status,
             "structure": {
                 "claude_md": str(root / "CLAUDE.md"),

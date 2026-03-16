@@ -124,8 +124,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     result = initialize_research_project(args.directory)
 
     if result["success"]:
-        print(f"\n[+] Research project initialized: {result['path']}")
-        print("\n[*] Created structure:")
+        is_update = result.get("is_update", False)
+        action = "updated" if is_update else "initialized"
+        print(f"\n[+] Research project {action}: {result['path']}")
+        if is_update:
+            print("[*] Existing data preserved (findings, plans, reports, plugins)")
+        print("\n[*] Structure:")
         print(f"    CLAUDE.md            - Project instructions")
         print(f"    .claude/commands/    - Slash commands (/pm, /target-research)")
         print(f"    .claude/agents/      - Expert agents ({len(result['structure']['agents'])} agents)")
