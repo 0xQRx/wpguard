@@ -29,7 +29,9 @@ From expert agents, you will get:
 
 ## Output You Produce
 
-A standalone Python3 PoC script saved to `reports/{plugin_slug}/poc_{vuln_type}_{short_id}.py`
+A standalone Python3 PoC script saved to `reports/{plugin_slug}/{finding_id}/poc.py`
+
+Create the per-finding directory if it doesn't exist: `mkdir -p reports/{plugin_slug}/{finding_id}/`
 
 ### Every PoC MUST Include
 
@@ -130,7 +132,7 @@ PoC for {Vulnerability Title}
 Plugin: {plugin_slug} v{version}
 Vulnerability: {vuln_type}
 Auth Required: {auth_level}
-Prerequisites: {what must be set up before running — e.g., "WooCommerce installed, sample product exists" or "None"}
+Prerequisites: {copy VERBATIM from the finding's structured prerequisites checklist}
 Expected Result: {what successful exploitation looks like}
 
 Usage:
@@ -308,13 +310,13 @@ After writing the PoC, you MUST do a quick sanity run against the sandbox to ver
 
 ```bash
 # 1. Check the script runs without syntax errors
-python3 reports/{plugin_slug}/poc_xxx.py --help
+python3 reports/{plugin_slug}/{finding_id}/poc.py --help
 
 # 2. Quick sanity run
-python3 reports/{plugin_slug}/poc_xxx.py --url http://172.17.0.1:8000
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000
 
 # 3. For authenticated vulns
-python3 reports/{plugin_slug}/poc_xxx.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
 ```
 
 If the script crashes or has obvious errors, fix them before handing off. If the exploit doesn't work, note that in your report — the PoC Runner will do deeper investigation.
@@ -323,7 +325,7 @@ For browser-based PoCs (XSS, CSRF), you can also use Playwright MCP tools to ver
 
 ## After Writing the PoC
 
-1. Save to `reports/{plugin_slug}/poc_{vuln_type}_{short_id}.py`
+1. Save to `reports/{plugin_slug}/{finding_id}/poc.py` (create the directory first)
 2. Sanity test it (see above)
 3. Report back with:
    - File path of the PoC

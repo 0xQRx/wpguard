@@ -3,7 +3,7 @@
 Read the current PLAN file and provide a concise status report.
 
 ## Steps:
-1. Find the active PLAN file: `ls PLAN_*.md` in the project root
+1. Find the active PLAN file: `ls reports/*/PLAN.md` (or fall back to `ls PLAN_*.md` for legacy projects)
 2. Read it
 3. Summarize in this format:
 
@@ -27,5 +27,5 @@ VERIFICATION:
 NEXT: {what should happen next}
 ```
 
-4. If no PLAN file exists, say "No active audit. Use /pm to start."
+4. If no PLAN file exists in either location, say "No active audit. Use /pm to start."
 5. Also call `wpguard_finding_list()` to get current finding counts if findings exist.

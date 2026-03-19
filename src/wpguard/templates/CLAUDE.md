@@ -39,7 +39,7 @@ Delegated by `/pm` — not invoked directly.
 
 ### Verification Pipeline
 ```
-Expert finds vuln → PoC Writer → PoC Runner → QA Triage
+Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assessor
 ```
 | Agent | Role |
 |-------|------|
@@ -53,12 +53,21 @@ Expert finds vuln → PoC Writer → PoC Runner → QA Triage
 | `poc-creator` | n-day research — changelog/CVE analysis, PoCs for patched vulns |
 | `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |
+| `impact-assessor` | Post-QA impact review — removes low-impact findings, downgrades inflated CVSS |
+| `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact, chains findings |
 
 ## Directory Structure
 
 ```
 targets/{plugin_slug}/extracted/   — Plugin source code
-reports/{plugin_slug}/             — Findings, writeups, PoC scripts
+reports/{plugin_slug}/             — All audit artifacts for this plugin
+  PLAN.md                          — Audit plan and progress tracking
+  SUMMARY.md                       — Engagement summary
+  surface_map.md                   — Attack surface report
+  progress_{agent}.md              — Expert progress reports
+  {finding_id}/                    — Per-finding directory
+    poc.py                         — PoC script
+    writeup.md                     — Vulnerability writeup
 wpguard_findings.json              — Findings database
 ```
 

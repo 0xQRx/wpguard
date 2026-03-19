@@ -77,6 +77,8 @@ SUPPORT_AGENTS = [
     "poc-runner",
     "sandbox-admin",
     "surface-mapper",
+    "impact-assessor",
+    "vuln-escalator",
 ]
 
 ALL_AGENTS = EXPERT_AGENTS + SUPPORT_AGENTS

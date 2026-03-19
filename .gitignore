@@ -73,6 +73,8 @@ venv.bak/
 # Project specific
 wp-plugins/
 wpguard_state.json
+wpguard_findings.json
+cve_research_tracker.json
 *.zip
 
 # OS

@@ -11,6 +11,7 @@
 - [ ] Plugin downloaded and extracted to targets/
 - [ ] Scope check passed (`wpguard_scope_check_plugin`)
 - [ ] CVE history reviewed (`wpguard_cve_search`)
+- [ ] Sandbox destroyed and rebuilt (`wpguard_sandbox_destroy` → `wpguard_sandbox_start`)
 - [ ] Sandbox prepared (`sandbox-admin` — plugin installed, users reset)
 - [ ] Attack surface mapped (`surface-mapper`) → see `reports/{plugin_slug}/surface_map.md`
 
@@ -74,12 +75,17 @@ RECOMMENDED EXPERTS: (fill from surface-mapper output)
 Coverage: COMPLETE / PARTIAL (relaunched) / SKIPPED
 Check `reports/{plugin_slug}/progress_{agent_name}.md` for details on partial coverage.
 
+## Escalation
+- [ ] `vuln-escalator` — Auth level escalation, impact expansion, chain building
+  - New findings created: {count}
+  - Findings updated: {count}
+
 ## Verification Pipeline
 For each finding from experts:
 
 ### Finding: {finding_title}
 - [ ] `poc-writer` — PoC script created
-  - PoC path: reports/{plugin_slug}/poc_xxx.py
+  - PoC path: reports/{plugin_slug}/{finding_id}/poc.py
   - Expected result: {description}
   - Sanity test: pass/fail
 - [ ] `poc-runner` — PoC verified against sandbox
@@ -90,14 +96,14 @@ For each finding from experts:
   - Scope check: pass/fail
   - CVSS: {score}
   - Auth level verified (tested bottom-up): {level}
-  - Writeup: reports/{plugin_slug}/{vuln_type}_{id}.md
+  - Writeup: reports/{plugin_slug}/{finding_id}/writeup.md
   - Discord notified: YES/NO
 
 ## Summary
 - [ ] All experts completed
 - [ ] All findings through verification pipeline
 - [ ] All confirmed findings have writeups in reports/
-- [ ] Engagement summary created (SUMMARY_{plugin_slug}.md)
+- [ ] Engagement summary created (reports/{plugin_slug}/SUMMARY.md)
 - [ ] Discord summary sent
 - [ ] Sandbox cleaned up
 

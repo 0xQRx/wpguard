@@ -265,3 +265,11 @@ Sandbox:    Running, target addon installed without base plugin.
 - Test users: subscriber/subscriber, contributor/contributor, author/author, customer/customer
 - WP-CLI available via `wpguard_sandbox_wp_cli`
 - HTTP requests via `wpguard_sandbox_request`
+
+**NOTE:** The sandbox is intentionally permissive for security testing:
+- Apache processes alternate PHP extensions (.php5, .phtml, .pht, .phar, etc.)
+- `disable_functions` is empty (allows exec, system, passthru, etc.)
+- `allow_url_include` is On
+- This does NOT reflect standard WordPress hosting. Most hosts only execute
+  .php files and disable dangerous functions. If a PoC relies on these
+  non-standard settings, it MUST be noted in the finding prerequisites.

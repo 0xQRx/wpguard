@@ -66,6 +66,39 @@ setup_wordpress() {
     wp user create author author@localhost.local --role=author --user_pass=author --allow-root 2>/dev/null || true
     wp user create editor editor@localhost.local --role=editor --user_pass=editor --allow-root 2>/dev/null || true
 
+    # Overwrite wp-config.php with hardcoded credentials (mirrors real-world installs)
+    # Done AFTER wp core install so docker-entrypoint.sh won't overwrite our version
+    echo "[WP-Setup] Writing realistic wp-config.php..."
+    cat > /var/www/html/wp-config.php << 'WPCONFIG'
+<?php
+define( 'DB_NAME', 'wordpress' );
+define( 'DB_USER', 'wp_user' );
+define( 'DB_PASSWORD', 'wp_pass' );
+define( 'DB_HOST', 'db:3306' );
+define( 'DB_CHARSET', 'utf8mb4' );
+define( 'DB_COLLATE', '' );
+
+define( 'AUTH_KEY',         'wpguard-test-auth-key-not-for-production' );
+define( 'SECURE_AUTH_KEY',  'wpguard-test-secure-auth-key' );
+define( 'LOGGED_IN_KEY',    'wpguard-test-logged-in-key' );
+define( 'NONCE_KEY',        'wpguard-test-nonce-key' );
+define( 'AUTH_SALT',        'wpguard-test-auth-salt' );
+define( 'SECURE_AUTH_SALT', 'wpguard-test-secure-auth-salt' );
+define( 'LOGGED_IN_SALT',   'wpguard-test-logged-in-salt' );
+define( 'NONCE_SALT',       'wpguard-test-nonce-salt' );
+
+$table_prefix = 'wp_';
+
+define( 'WP_DEBUG', true );
+define( 'WP_DEBUG_LOG', true );
+
+if ( ! defined( 'ABSPATH' ) ) {
+    define( 'ABSPATH', __DIR__ . '/' );
+}
+require_once ABSPATH . 'wp-settings.php';
+WPCONFIG
+    chown www-data:www-data /var/www/html/wp-config.php
+
     echo "[WP-Setup] =========================================="
     echo "[WP-Setup] WordPress setup complete!"
     echo "[WP-Setup] Site URL: $SITE_URL"

@@ -178,6 +178,7 @@ class FindingsManager:
         allowed_fields = {
             "title", "description", "cvss_score", "cvss_vector",
             "affected_function", "affected_line", "tier",
+            "auth_level",
         }
         for key, value in kwargs.items():
             if key in allowed_fields and hasattr(finding, key):

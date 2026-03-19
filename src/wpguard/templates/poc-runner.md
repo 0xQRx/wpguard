@@ -21,7 +21,7 @@ This agent operates within an authorized bug bounty program. All PoC execution t
 ## What You Receive
 
 From the PoC Writer or PM:
-- **PoC script path** (e.g., `reports/gallery-pro/poc_sqli_abc123.py`)
+- **PoC script path** (e.g., `reports/gallery-pro/{finding_id}/poc.py`)
 - **Expected result** (the `EXPECTED_RESULT` dict from the PoC)
 - **Authentication level** required
 - **Plugin slug and version** that should be installed in sandbox
@@ -39,7 +39,7 @@ Before running any PoC:
 
 ```python
 # Read the expected result from the PoC
-# Run: python3 reports/{slug}/poc_xxx.py --verify-only
+# Run: python3 reports/{slug}/{finding_id}/poc.py --verify-only
 # This prints the EXPECTED_RESULT dict without executing the exploit
 ```
 
@@ -49,10 +49,10 @@ Run the PoC script against the sandbox:
 
 ```bash
 # Unauthenticated
-python3 reports/{plugin_slug}/poc_xxx.py --url http://172.17.0.1:8000
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000
 
 # Authenticated (use the claimed auth level)
-python3 reports/{plugin_slug}/poc_xxx.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
 ```
 
 Capture:
@@ -99,6 +99,46 @@ Use Playwright MCP tools to:
 4. Check console for JavaScript errors or execution markers
 5. Take screenshot as evidence
 
+### Step 4.5: Bottom-Up Auth Verification
+
+**CRITICAL: If the PoC succeeds at the declared auth level, test lower levels.**
+
+The goal is to find the LOWEST auth level that can exploit the vulnerability — this maximizes bounty value and impact.
+
+**Testing order (stop as soon as one fails):**
+1. **Unauthenticated** — run PoC with no credentials
+2. **Subscriber** — run PoC with `-u subscriber -p subscriber`
+3. **Contributor** — run PoC with `-u contributor -p contributor`
+4. **Author** — run PoC with `-u author -p author`
+
+```bash
+# If declared level is "author" and PoC works, try lower levels:
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://172.17.0.1:8000 -u contributor -p contributor
+```
+
+**If a lower level works:**
+```python
+# Update the finding's auth level directly
+wpguard_finding_update(
+    finding_id="abc123",
+    auth_level="subscriber",  # the lowest working level
+    validation_notes="UPGRADED: Originally reported as Author, but exploitable as Subscriber. Tested all levels bottom-up."
+)
+```
+
+Include the auth verification results in your report:
+```
+Auth Verification:
+  Declared:       author
+  Unauthenticated: FAIL (403)
+  Subscriber:     SUCCESS ← lowest working level
+  Contributor:    SUCCESS
+  Author:         SUCCESS (declared)
+  Updated to:     subscriber
+```
+
 ### Step 5: False Positive Detection
 
 **CRITICAL: Your main job is catching false positives.**
@@ -142,7 +182,7 @@ For each PoC execution, report:
 ```
 VERIFICATION RESULT
 ==================
-PoC:            reports/{slug}/poc_xxx.py
+PoC:            reports/{slug}/{finding_id}/poc.py
 Plugin:         {slug} v{version}
 Vuln Type:      {type}
 Auth Level:     {level}

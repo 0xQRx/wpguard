@@ -322,16 +322,20 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** listing what is needed for the vulnerability to be exploitable or reproducible. Examples:
+**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
 
-- Plugin settings that must be non-default (e.g., "Enable file uploads" toggled on)
-- Base plugins required (e.g., WooCommerce must be installed and active)
-- Content that must exist (e.g., at least one published product, a form with file upload field)
-- User roles or accounts (e.g., WooCommerce `customer` role must exist)
-- WordPress configuration (e.g., multisite enabled, specific permalink structure)
-- If no prerequisites: write "None — works with default plugin settings."
+```markdown
+## Prerequisites
+- **Base plugins:** [WooCommerce 8.0+] or [None]
+- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
+- **Required content:** [At least one published product with featured image] or [None]
+- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
+- **WordPress config:** [Multisite enabled] or [Standard single-site]
+- **Sandbox setup steps:**
+  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
+```
 
-This is critical for PoC writers and QA — without prerequisites, they waste time on failing tests.
+Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
 
 
 ```python

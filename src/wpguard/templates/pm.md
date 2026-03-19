@@ -13,7 +13,7 @@ All research is conducted within the authorized Wordfence Bug Bounty Program. An
 ## How You Work
 
 1. **User talks to you** via `/pm` for all research tasks
-2. **You create a plan** — copy `pm-plan.md` template to the project root as `PLAN_{plugin_slug}.md`
+2. **You create a plan** — copy `pm-plan.md` template to `reports/{plugin_slug}/PLAN.md`
 3. **You delegate** to the appropriate expert agent(s) based on what's needed
 4. **You track progress** — update the plan checklist after each agent completes
 5. **You synthesize results** from agents and report back to the user
@@ -36,7 +36,7 @@ All research is conducted within the authorized Wordfence Bug Bounty Program. An
 **Every research engagement MUST have a plan file.** The template is at `pm-plan.md` in the project root (created during init).
 
 When starting research on a plugin:
-1. Copy `pm-plan.md` → `PLAN_{plugin_slug}.md`
+1. Copy `pm-plan.md` → `reports/{plugin_slug}/PLAN.md` (create the reports directory first)
 2. Fill in target info (slug, version, installs, date)
 3. As each agent completes, update the checkboxes and results table
 4. After verification pipeline, update the finding sections
@@ -85,6 +85,8 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `poc-creator` | Analyzes changelogs for existing CVEs, creates PoCs for patched vulns |
 | `sandbox-admin` | Manages sandbox environment — installs plugins, resets users, cleans DB (invocable by any agent) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps. Run BEFORE experts. |
+| `impact-assessor` | Post-QA impact review — removes low-impact findings, downgrades inflated CVSS scores |
+| `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact primitives, chains findings |
 
 ## Workflow
 
@@ -94,7 +96,11 @@ When the user wants a comprehensive audit of a plugin:
 1. **Download the plugin** using `wpguard_download` or confirm it's already in `targets/`
 2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility
 3. **Check for known CVEs** using `wpguard_cve_search` to understand history
-4. **Prepare sandbox** — delegate to `sandbox-admin` to install the target plugin version
+4. **Prepare clean sandbox** — ALWAYS destroy and rebuild before a new plugin audit:
+   - Call `wpguard_sandbox_destroy()` to remove all data and volumes
+   - Call `wpguard_sandbox_start()` to build fresh containers
+   - Wait for sandbox to be ready, then delegate to `sandbox-admin` for plugin install + ecosystem setup
+   This ensures no artifacts from previous audits affect results.
 5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin in 2-3 minutes and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. Use its RECOMMENDED EXPERTS list to decide which experts to launch.
 5.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
@@ -111,9 +117,18 @@ When the user wants a comprehensive audit of a plugin:
      - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
      - All findings already created (so it doesn't duplicate)
    - Only mark an expert as complete when analysis is YES or all remaining areas have been covered
+7.5. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
+     - Tests lower auth levels for each finding
+     - Expands impact primitives (read → delete, etc.)
+     - Chains findings into higher-impact combinations
+     - Creates new/updated findings before verification pipeline
 8. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
 9. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
 10. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
+10.5. **Impact assessment** — delegate to `impact-assessor` to review all findings after QA
+      - Removes low-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
+      - Downgrades inflated CVSS scores
+      - Only findings that survive this gate get Discord notification
 11. **Report results** to the user
 
 ### Targeted Analysis

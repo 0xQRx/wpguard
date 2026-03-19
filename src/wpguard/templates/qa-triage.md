@@ -78,7 +78,7 @@ wpguard_scope_check_finding(
 4. **Auth Level** - Author or lower? (Unauth/Sub/Contrib/Author all valid)
 5. **Vuln Type** - Not in exclusion list?
 6. **CVSS Score** - >= 4.0?
-7. **Prerequisites met** - Check the finding's `## Prerequisites` section. Are base plugins installed? Required content/roles created? Non-default settings configured? If prerequisites aren't met, set them up via sandbox-admin before testing.
+7. **Prerequisites met** - Check the finding's `## Prerequisites` section. Every field must be explicitly filled — reject findings where any prerequisite field is vague (e.g., "check plugin settings") instead of naming specific settings/steps. Valid prerequisites use the structured format: `Base plugins`, `Plugin settings`, `Required content`, `Required roles/users`, `WordPress config`, `Sandbox setup steps`. If prerequisites are properly specified, set them up via sandbox-admin before testing.
 8. **Novelty** - Not already reported/CVE?
 
 ### Step 2: PoC Validation
@@ -86,8 +86,8 @@ wpguard_scope_check_finding(
 **Every finding MUST have a Python3 PoC. Validate it works:**
 
 ```bash
-# Test the PoC script directly (located in reports/{plugin_slug}/)
-cd reports/example-plugin/
+# Test the PoC script directly (located in reports/{plugin_slug}/{finding_id}/)
+cd reports/example-plugin/{finding_id}/
 
 # For unauthenticated vulns
 python3 poc.py --url http://172.17.0.1:8000
@@ -104,6 +104,22 @@ python3 poc.py --url http://172.17.0.1:8000 -u author -p author
 - [ ] Script fetches nonce if required by the endpoint
 - [ ] Script clearly shows success/failure output
 - [ ] No hardcoded URLs or credentials
+
+### Step 2.5: Clean Sandbox Rebuild (REQUIRED)
+
+Before reproducing ANY findings, destroy and rebuild the sandbox to ensure
+a clean environment with no leftover state from expert testing or PoC development.
+
+```python
+wpguard_sandbox_destroy()
+wpguard_sandbox_start()
+wpguard_sandbox_install_plugin(slug="{plugin_slug}", version="{version}")
+```
+
+Set up prerequisites from the finding (base plugins, test data, etc.) via sandbox-admin.
+
+A finding that only works on a dirty sandbox is a false positive.
+Only one rebuild is needed per QA session — not per finding.
 
 ### Step 3: Reproduction in Sandbox
 
@@ -181,9 +197,9 @@ wpguard_sandbox_uninstall_plugin(slug="example-plugin")
 # If finding was reported as "author" but works as "subscriber":
 wpguard_finding_update(
     finding_id="abc123",
+    auth_level="subscriber",
     validation_notes="UPGRADED: Originally reported as Author, but exploitable as Subscriber! Tested all levels bottom-up."
 )
-# Then manually update auth_level in the finding or create corrected finding
 ```
 
 **Sandbox Credentials:**
@@ -379,149 +395,86 @@ Recommend: {next_steps}
 
 ### Step 5: Create Vulnerability Writeup (REQUIRED)
 
-**Every finding MUST have a formal writeup saved to `reports/{plugin-slug}/`**
+**Every finding MUST have a submission-ready writeup saved to its finding directory.**
 
-Create a markdown file for each finding: `reports/{plugin-slug}/{vuln_type}_{finding_id}.md`
+Create a markdown file for each finding: `reports/{plugin-slug}/{finding_id}/writeup.md`
 
-**Writeup Template:**
+**Writeup Template (concise, Wordfence submission format):**
 
 ```markdown
-# {Plugin Name} - {Vulnerability Title}
-
-## Summary
-| Field | Value |
-|-------|-------|
-| Plugin | {plugin_name} ({plugin_slug}) |
-| Version | {version} (and likely prior) |
-| Active Installs | {active_installs} |
-| Vulnerability Type | {vuln_type} |
-| CVSS Score | {cvss_score} ({severity}) |
-| CVSS Vector | {cvss_vector} |
-| Authentication | {auth_level} |
-| Finding ID | {finding_id} |
-| Status | {status} (validated/rejected/draft) |
+# {Plugin Name} <= {Version} - {Vulnerability Type} via {Vector} ({Auth Level}+)
 
 ## Description
-
-{Detailed description of the vulnerability, what it allows an attacker to do}
+{2-3 sentences: what the vulnerability is, where it exists, what an attacker can do}
 
 ## Affected Code
-
-**File:** `{affected_file}`
-**Function:** `{affected_function}()`
-**Line:** {affected_line}
-
+**File:** `{affected_file}:{affected_line}` — `{affected_function}()`
 ```php
-// Vulnerable code snippet
-{code_snippet}
+{minimal vulnerable code snippet — the sink, not the whole function}
 ```
 
-## Data Flow
-
-```
-{Entry point} → {Processing} → {Sink}
-```
-
-1. User input enters via: {entry_point}
-2. Data passes through: {intermediate_steps}
-3. Reaches vulnerable sink: {sink}
+## Prerequisites
+{Copy verbatim from finding — structured checklist format}
 
 ## Proof of Concept
-
-### Manual Reproduction
-
-{Step-by-step instructions to reproduce manually}
-
-### PoC Script
+1. {Step-by-step reproduction, 3-6 numbered steps}
+2. ...
+3. Observe: {what confirms exploitation}
 
 ```bash
-python3 poc.py --url http://target.com -u {username} -p {password}
+python3 reports/{plugin_slug}/{finding_id}/poc.py --url http://target.com [-u user -p pass]
 ```
 
-**PoC Location:** `reports/{plugin_slug}/poc.py`
-
 ## Impact
+{1-2 sentences: real-world consequence}
 
-{What can an attacker achieve? Data theft, RCE, privilege escalation, etc.}
-
-## Remediation
-
-{How should the developer fix this vulnerability?}
-
-## Timeline
-
-| Date | Action |
-|------|--------|
-| {date} | Vulnerability discovered |
-| {date} | Finding created |
-| {date} | PoC validated |
-| {date} | Status: {final_status} |
-
-## References
-
-- [Wordfence Bug Bounty Program](https://www.wordfence.com/threat-intel/bug-bounty-program/)
-- {Any relevant CWE, CVE references, or similar vulnerabilities}
+CVSS: {score} ({severity}) — `{cvss_vector}`
 ```
 
 **Example Implementation:**
 
 ```python
-# After validating/rejecting a finding, create the writeup
-writeup_content = f"""# {plugin_name} - {finding['title']}
-
-## Summary
-| Field | Value |
-|-------|-------|
-| Plugin | {plugin_name} ({plugin_slug}) |
-| Version | {finding['plugin_version']} (and likely prior) |
-| Active Installs | {finding['active_installs']:,} |
-| Vulnerability Type | {finding['vuln_type']} |
-| CVSS Score | {finding['cvss_score']} |
-| CVSS Vector | {finding['cvss_vector']} |
-| Authentication | {finding['auth_level']} |
-| Finding ID | {finding['id']} |
-| Status | {finding['status']} |
+writeup_content = f"""# {plugin_name} <= {finding['plugin_version']} - {finding['vuln_type']} via {vector} ({finding['auth_level']}+)
 
 ## Description
-
-{finding['description']}
+{description_2_3_sentences}
 
 ## Affected Code
+**File:** `{finding['affected_file']}:{finding.get('affected_line', 'N/A')}` — `{finding.get('affected_function', 'N/A')}()`
+```php
+{vulnerable_code_snippet}
+```
 
-**File:** `{finding['affected_file']}`
-**Function:** `{finding.get('affected_function', 'N/A')}()`
-**Line:** {finding.get('affected_line', 'N/A')}
+## Prerequisites
+{finding_prerequisites}
 
-## Validation Notes
+## Proof of Concept
+{numbered_steps}
 
-{finding.get('validation_notes', 'No validation notes')}
+```bash
+python3 reports/{plugin_slug}/{finding['id'][:8]}/poc.py --url http://target.com {auth_args}
+```
 
-## Timeline
+## Impact
+{impact_statement}
 
-| Date | Action |
-|------|--------|
-| {finding['created_at'][:10]} | Finding created |
-| {datetime.now().strftime('%Y-%m-%d')} | QA triage completed - {finding['status']} |
+CVSS: {finding['cvss_score']} ({severity}) — `{finding['cvss_vector']}`
 """
 
-# Write to reports directory
-writeup_path = f"reports/{plugin_slug}/{finding['vuln_type']}_{finding['id'][:8]}.md"
-# Use Write tool to save the writeup
+writeup_path = f"reports/{plugin_slug}/{finding['id'][:8]}/writeup.md"
 ```
 
 **Writeup Checklist:**
-- [ ] Created `reports/{plugin-slug}/` directory if not exists
-- [ ] Saved writeup as `{vuln_type}_{finding_id}.md`
-- [ ] Included all finding metadata in summary table
-- [ ] Documented affected code location
-- [ ] Explained data flow clearly
-- [ ] Referenced PoC script location
-- [ ] Added validation notes and final status
-- [ ] Included remediation recommendations
+- [ ] Title matches Wordfence CVE naming convention
+- [ ] Description is 2-3 sentences max
+- [ ] Affected code shows the sink, not the entire function
+- [ ] Prerequisites copied verbatim from finding (structured format)
+- [ ] PoC steps are numbered, 3-6 steps
+- [ ] Impact is 1-2 sentences with CVSS score and vector
 
 ### Step 6: Create Engagement Summary (REQUIRED)
 
-**Create a brief summary document in the main project folder: `SUMMARY_{plugin_slug}.md`**
+**Create a brief summary document under reports: `reports/{plugin_slug}/SUMMARY.md`**
 
 This provides a quick overview of the entire engagement for this plugin.
 
@@ -638,6 +591,7 @@ wpguard_discord_notify_summary(
 # If finding was incorrectly reported as subscriber-level CSRF:
 wpguard_finding_update(
     finding_id="abc123",
+    auth_level="unauthenticated",
     validation_notes="CORRECTED: auth_level changed from 'subscriber' to 'unauthenticated'. CSRF always unauthenticated - attacker needs no account to craft the attack page."
 )
 ```
@@ -667,7 +621,7 @@ wpguard_finding_update(
 
 Report all results back to the PM. Include:
 - Summary of all findings triaged (validated/rejected/draft)
-- Writeups saved to `reports/{plugin-slug}/`
-- Engagement summary in `SUMMARY_{plugin_slug}.md`
+- Writeups saved to `reports/{plugin-slug}/{finding_id}/writeup.md`
+- Engagement summary in `reports/{plugin_slug}/SUMMARY.md`
 - Discord notifications sent for all findings
 - Any draft findings that need manual review with detailed notes

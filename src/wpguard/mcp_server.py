@@ -624,7 +624,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_finding_update",
-            description="Update an existing finding (status, validation notes, etc.)",
+            description="Update an existing finding (status, validation notes, auth level, etc.)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -637,6 +637,11 @@ async def list_tools() -> list[Tool]:
                     "validation_notes": {"type": "string", "description": "Validation notes"},
                     "submission_id": {"type": "string", "description": "Submission ID if submitted"},
                     "poc_path": {"type": "string", "description": "Path to PoC script"},
+                    "auth_level": {
+                        "type": "string",
+                        "description": "Updated auth level (use when QA discovers a lower exploitable level)",
+                        "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
+                    },
                     "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
                 },
                 "required": ["finding_id"],
@@ -1027,6 +1032,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("submission_id"),
             arguments.get("poc_path"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+            auth_level=arguments.get("auth_level"),
         )
 
     elif name == "wpguard_finding_get":
@@ -1827,15 +1833,20 @@ def _finding_update_sync(
     submission_id: str | None,
     poc_path: str | None,
     output_dir: str,
+    auth_level: str | None = None,
 ) -> dict[str, Any]:
     """Update a finding (sync version)."""
     manager = FindingsManager(output_dir)
+    kwargs = {}
+    if auth_level is not None:
+        kwargs["auth_level"] = auth_level
     finding = manager.update_finding(
         finding_id=finding_id,
         status=status,
         validation_notes=validation_notes,
         submission_id=submission_id,
         poc_path=poc_path,
+        **kwargs,
     )
     if finding:
         return {"success": True, "finding": finding.to_dict()}
@@ -1849,11 +1860,12 @@ async def _finding_update(
     submission_id: str | None,
     poc_path: str | None,
     output_dir: str,
+    auth_level: str | None = None,
 ) -> dict[str, Any]:
     """Update a finding."""
     return await run_in_executor(
         _finding_update_sync, finding_id, status, validation_notes,
-        submission_id, poc_path, output_dir,
+        submission_id, poc_path, output_dir, auth_level,
     )
 
 

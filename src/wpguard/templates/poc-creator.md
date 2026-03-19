@@ -542,7 +542,7 @@ versions = wpguard_plugin_versions(slug="plugin-name")
 For each changelog-discovered vulnerability:
 
 ### 1. Changelog Analysis Report
-`./reports/{slug}/changelog-analysis.md`
+`reports/{slug}/changelog-analysis.md`
 ```markdown
 # Changelog Security Analysis: {plugin_name}
 
@@ -569,7 +569,7 @@ Auth Required: subscriber/contributor/author/unauthenticated
 ```
 
 ### 2. PoC Script
-`./reports/{slug}/poc_changelog_001.py`
+`reports/{slug}/{finding_id}/poc.py`
 
 ### 3. Finding Record
 Created via `wpguard_finding_create()`
