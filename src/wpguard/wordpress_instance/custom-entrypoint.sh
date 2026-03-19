@@ -108,6 +108,15 @@ WPCONFIG
     echo "[WP-Setup] =========================================="
 }
 
+# Replace Apache log symlinks with real files, tail to stdout/stderr
+for logfile in access.log error.log other_vhosts_access.log; do
+    rm -f /var/log/apache2/$logfile
+    touch /var/log/apache2/$logfile
+    chown www-data:www-data /var/log/apache2/$logfile
+done
+tail -f /var/log/apache2/access.log /var/log/apache2/other_vhosts_access.log >/dev/stdout 2>/dev/null &
+tail -f /var/log/apache2/error.log >/dev/stderr 2>/dev/null &
+
 # Run setup in background so it doesn't block Apache startup
 setup_wordpress &
 

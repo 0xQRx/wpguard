@@ -20,6 +20,10 @@ COPY php-custom.ini /usr/local/etc/php/conf.d/99-wpguard.ini
 # Handle alternate PHP extensions (.php5, .phtml, .pht, etc.) for upload bypass testing
 COPY wpguard-php-extensions.conf /etc/apache2/conf-enabled/wpguard-php-extensions.conf
 
+# Ensure log directories exist with correct permissions
+RUN mkdir -p /var/log/apache2 /var/log/wpguard \
+    && chown www-data:www-data /var/log/apache2 /var/log/wpguard
+
 # Copy custom entrypoint
 COPY custom-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 RUN chmod +x /usr/local/bin/custom-entrypoint.sh
