@@ -39,13 +39,14 @@ Delegated by `/pm` — not invoked directly.
 
 ### Verification Pipeline
 ```
-Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assessor
+Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assessor → BB Submission
 ```
 | Agent | Role |
 |-------|------|
 | `poc-writer` | Writes PoC scripts with declared expected results |
 | `poc-runner` | Executes PoCs, verifies results, catches false positives (has Playwright) |
 | `qa-triage` | Final validation, scope check, CVSS, writeups, Discord notifications |
+| `bb-submission` | Submission prep — polished writeups, clean repro, Wordfence format |
 
 ### Utility
 | Agent | Role |

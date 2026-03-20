@@ -81,7 +81,10 @@ Check `reports/{plugin_slug}/progress_{agent_name}.md` for details on partial co
   - Findings updated: {count}
 
 ## Verification Pipeline
-For each finding from experts:
+
+### QA Sandbox Rebuild (MANDATORY)
+- [ ] Sandbox destroyed and rebuilt for QA verification (`wpguard_sandbox_destroy` → `wpguard_sandbox_start`)
+- [ ] Target plugin reinstalled in clean sandbox
 
 ### Finding: {finding_title}
 - [ ] `poc-writer` — PoC script created
@@ -98,11 +101,15 @@ For each finding from experts:
   - Auth level verified (tested bottom-up): {level}
   - Writeup: reports/{plugin_slug}/{finding_id}/writeup.md
   - Discord notified: YES/NO
+- [ ] `bb-submission` — Submission report prepared
+  - Clean sandbox repro: pass/fail
+  - Submission path: reports/{plugin_slug}/{finding_id}/submission.md
+  - Status: READY / NEEDS REVIEW / BLOCKED
 
 ## Summary
 - [ ] All experts completed
 - [ ] All findings through verification pipeline
-- [ ] All confirmed findings have writeups in reports/
+- [ ] All confirmed findings have submission reports in reports/
 - [ ] Engagement summary created (reports/{plugin_slug}/SUMMARY.md)
 - [ ] Discord summary sent
 - [ ] Sandbox cleaned up

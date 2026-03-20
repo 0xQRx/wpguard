@@ -78,6 +78,7 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `poc-writer` | Writes standalone PoC scripts for new findings from expert agents |
 | `poc-runner` | Executes PoCs against sandbox, verifies expected results, detects false positives (has Playwright) |
 | `qa-triage` | Final validation of confirmed findings, scope checks, creates submission writeups |
+| `bb-submission` | Submission prep — polished writeups, clean sandbox repro, Wordfence submission format |
 
 ### Utility Agents
 | Agent | Purpose |
@@ -96,7 +97,8 @@ When the user wants a comprehensive audit of a plugin:
 1. **Download the plugin** using `wpguard_download` or confirm it's already in `targets/`
 2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility
 3. **Check for known CVEs** using `wpguard_cve_search` to understand history
-4. **Prepare clean sandbox** — ALWAYS destroy and rebuild before a new plugin audit:
+   **CVE History Sweet Spot:** The ideal target has 5-20 previous CVEs for a medium-size codebase. This signals complex attack surface with potentially incomplete patches — check for bypasses. Very new/unaudited plugins with ZERO CVE history are also high-value: they haven't been scrutinized by researchers yet. Plugins with 50+ CVEs are usually well-hardened (diminishing returns). Plugins with 1-4 CVEs may have limited attack surface.
+4. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:
    - Call `wpguard_sandbox_destroy()` to remove all data and volumes
    - Call `wpguard_sandbox_start()` to build fresh containers
    - Wait for sandbox to be ready, then delegate to `sandbox-admin` for plugin install + ecosystem setup
@@ -129,7 +131,11 @@ When the user wants a comprehensive audit of a plugin:
       - Removes low-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
       - Downgrades inflated CVSS scores
       - Only findings that survive this gate get Discord notification
-11. **Report results** to the user
+11. **Submission prep** — delegate to `bb-submission` for each finding that survived impact assessment
+      - Destroys/rebuilds sandbox for clean reproduction
+      - Generates polished submission report in Wordfence format
+      - Verifies PoC works from scratch on clean install
+12. **Report results** to the user
 
 ### Targeted Analysis
 When the user wants to check for a specific vulnerability type:

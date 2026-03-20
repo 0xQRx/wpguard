@@ -79,6 +79,7 @@ SUPPORT_AGENTS = [
     "surface-mapper",
     "impact-assessor",
     "vuln-escalator",
+    "bb-submission",
 ]
 
 ALL_AGENTS = EXPERT_AGENTS + SUPPORT_AGENTS

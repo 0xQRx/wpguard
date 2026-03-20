@@ -55,6 +55,31 @@ The goal is to surface potential vulnerabilities for human review, not to filter
 
 A real vulnerability must be exploitable through legitimate user flows at the claimed authentication level. Honest draft findings are more valuable than fabricated confirmed ones.
 
+### Nonce Accessibility Verification (CRITICAL)
+
+**Always verify nonce accessibility before claiming a nonce-only missing auth finding.**
+
+A vulnerability that requires a nonce is only exploitable if the attacker can actually OBTAIN that nonce at their claimed auth level. This is the #1 source of false positives.
+
+Verification steps:
+1. **Identify the nonce action** — what `wp_create_nonce('action_name')` or `wp_nonce_field()` generates it?
+2. **Find where the nonce is rendered** — which page/endpoint outputs the nonce in HTML or JSON?
+3. **Test access at claimed auth level** — log in as the claimed role (subscriber, contributor, etc.) and verify you can actually reach that page/endpoint
+4. **Check alternative nonce sources** — REST API endpoints, AJAX responses, page source of public/frontend pages that embed the nonce
+
+**If the nonce is ONLY available on admin pages (wp-admin/*) and the finding claims subscriber-level exploitation, the finding is INVALID unless you can prove a subscriber can access that admin page.**
+
+Common false positive patterns:
+- Plugin admin settings pages that embed nonces — subscribers cannot access these
+- wp-admin AJAX endpoints where the nonce is only on the admin page that triggers the AJAX
+- REST API endpoints that check nonces — but the nonce is only generated on admin screens
+
+**Valid nonce sources for low-auth findings:**
+- Public-facing pages (shortcode output, frontend forms, popups)
+- REST API responses accessible at the attacker's auth level
+- AJAX responses from endpoints the attacker's role can call
+- wp-login.php or other publicly accessible WordPress pages
+
 ## Workflow
 
 ### Step 1: Bounty Eligibility Verification
@@ -105,10 +130,9 @@ python3 poc.py --url http://172.17.0.1:8000 -u author -p author
 - [ ] Script clearly shows success/failure output
 - [ ] No hardcoded URLs or credentials
 
-### Step 2.5: Clean Sandbox Rebuild (REQUIRED)
+### Step 2.5: Clean Sandbox Rebuild (MANDATORY)
 
-Before reproducing ANY findings, destroy and rebuild the sandbox to ensure
-a clean environment with no leftover state from expert testing or PoC development.
+⚠️ **Before reproducing ANY findings, you MUST destroy and rebuild the sandbox.** This is not optional. Expert PoC runs leave behind modified options, injected data, and leftover files that contaminate QA verification. A finding that only reproduces on a dirty sandbox is a false positive.
 
 ```python
 wpguard_sandbox_destroy()
@@ -116,9 +140,8 @@ wpguard_sandbox_start()
 wpguard_sandbox_install_plugin(slug="{plugin_slug}", version="{version}")
 ```
 
-Set up prerequisites from the finding (base plugins, test data, etc.) via sandbox-admin.
+Set up prerequisites from the finding (base plugins, test data, etc.) via sandbox-admin. Test users are recreated automatically with the fresh sandbox.
 
-A finding that only works on a dirty sandbox is a false positive.
 Only one rebuild is needed per QA session — not per finding.
 
 ### Step 3: Reproduction in Sandbox
