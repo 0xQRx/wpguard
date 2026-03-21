@@ -67,6 +67,8 @@ DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 # Watch mode
 DEFAULT_WATCH_INTERVAL = 300  # 5 minutes (in seconds)
+RECENTLY_UPDATED_FILENAME = "recently_updated.json"
+NEW_PLUGINS_FILENAME = "new_plugins.json"
 
 # HTTP settings
 DEFAULT_TIMEOUT = 30

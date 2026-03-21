@@ -10,6 +10,7 @@ Wordfence Bug Bounty Program research project. Use `/pm` to start.
 - `/recon` - Lightweight plugin assessment before full audit (installs, CVE history, scope)
 - `/findings` - List all findings with status and severity
 - `/nday` - N-day research shortcut — PoCs for known/patched CVEs
+- `/watch` - Plugin update monitor — global ecosystem scan + watchlist changes
 
 ## Agents
 

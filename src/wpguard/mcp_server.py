@@ -251,6 +251,56 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_watch_global",
+            description="Query WordPress.org for recently updated plugins. Returns only NEW updates since last check. Writes recently_updated.json to output dir.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "min_installs": {
+                        "type": "integer",
+                        "description": "Minimum active installations filter (default: 1000)",
+                        "default": 1000,
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "Maximum API pages to fetch, 250 plugins/page (default: 2)",
+                        "default": 2,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_watch_new",
+            description="Query WordPress.org for newly added plugins. Returns only plugins not seen in previous checks. Writes new_plugins.json to output dir.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "min_installs": {
+                        "type": "integer",
+                        "description": "Minimum active installations filter (default: 0)",
+                        "default": 0,
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "Maximum API pages to fetch, 250 plugins/page (default: 2)",
+                        "default": 2,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
             name="wpguard_svn_log",
             description="Get SVN commit history for a WordPress plugin",
             inputSchema={
@@ -907,6 +957,20 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     elif name == "wpguard_watch_check":
         return await _watch_check(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
 
+    elif name == "wpguard_watch_global":
+        return await _watch_global(
+            arguments.get("min_installs", 1000),
+            arguments.get("max_pages", 2),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_watch_new":
+        return await _watch_new(
+            arguments.get("min_installs", 0),
+            arguments.get("max_pages", 2),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
     elif name == "wpguard_svn_log":
         return await _svn_log(
             arguments["slug"],
@@ -1363,6 +1427,28 @@ def _watch_check_sync(output_dir: str) -> dict[str, Any]:
 async def _watch_check(output_dir: str) -> dict[str, Any]:
     """Check for plugin updates."""
     return await run_in_executor(_watch_check_sync, output_dir)
+
+
+def _watch_global_sync(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check global WordPress plugin updates (sync version)."""
+    watcher = PluginWatcher(output_dir=output_dir)
+    return watcher.check_global_updates(min_installs=min_installs, max_pages=max_pages)
+
+
+async def _watch_global(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check global WordPress plugin updates."""
+    return await run_in_executor(_watch_global_sync, min_installs, max_pages, output_dir)
+
+
+def _watch_new_sync(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check for newly added WordPress plugins (sync version)."""
+    watcher = PluginWatcher(output_dir=output_dir)
+    return watcher.check_new_plugins(min_installs=min_installs, max_pages=max_pages)
+
+
+async def _watch_new(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check for newly added WordPress plugins."""
+    return await run_in_executor(_watch_new_sync, min_installs, max_pages, output_dir)
 
 
 def _svn_log_sync(slug: str, limit: int) -> dict[str, Any]:

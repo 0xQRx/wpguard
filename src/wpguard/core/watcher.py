@@ -12,15 +12,15 @@ from typing import Any, Callable
 from wpguard.api.wordpress import WordPressPluginAPI
 from wpguard.config import (
     DEFAULT_OUTPUT_DIR,
-    PLUGINS_SUBDIR,
+    NEW_PLUGINS_FILENAME,
+    RECENTLY_UPDATED_FILENAME,
     REPORTS_SUBDIR,
     STATE_FILENAME,
     DEFAULT_WATCH_INTERVAL,
 )
-from wpguard.core.downloader import PluginDownloader, SVNClient, SVNChangeInfo
+from wpguard.core.downloader import SVNClient, SVNChangeInfo
 from wpguard.core.models import ChangeReport, PluginInfo
 from wpguard.notifications.discord import DiscordNotifier
-from wpguard.utils.helpers import compute_directory_hashes
 
 
 class PluginWatcher:
@@ -41,10 +41,6 @@ class PluginWatcher:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Subdirectories
-        self.plugins_dir = self.output_dir / PLUGINS_SUBDIR
-        self.plugins_dir.mkdir(parents=True, exist_ok=True)
-
         self.reports_dir = self.output_dir / REPORTS_SUBDIR
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -52,7 +48,6 @@ class PluginWatcher:
         self.state_file = self.output_dir / STATE_FILENAME
 
         self.api = WordPressPluginAPI()
-        self.downloader = PluginDownloader(self.plugins_dir)
         self.svn = SVNClient()
         self.notifier = DiscordNotifier(discord_webhook) if discord_webhook else None
 
@@ -89,13 +84,6 @@ class PluginWatcher:
             print(f"[ERROR] Plugin '{slug}' not found", file=sys.stderr)
             return False
 
-        # Download and compute initial hashes
-        result = self.downloader.download_plugin(plugin, extract=True, svn=False)
-        file_hashes: dict[str, str] = {}
-
-        if result.plugin_dir:
-            file_hashes = compute_directory_hashes(result.plugin_dir)
-
         # Get current SVN revision for future diff tracking
         svn_revision = self.svn.get_latest_revision(slug)
 
@@ -103,8 +91,8 @@ class PluginWatcher:
             "version": plugin.version,
             "last_updated": plugin.last_updated,
             "name": plugin.name,
+            "active_installs": plugin.active_installs,
             "download_link": plugin.download_link,
-            "file_hashes": file_hashes,
             "svn_revision": svn_revision,
             "added_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -112,8 +100,6 @@ class PluginWatcher:
         print(f"[+] Added {plugin.name} ({slug}) v{plugin.version} to watchlist", file=sys.stderr)
         if svn_revision:
             print(f"    SVN revision: r{svn_revision}", file=sys.stderr)
-        if result.extracted_path:
-            print(f"    Files: {result.extracted_path}", file=sys.stderr)
         return True
 
     def remove_plugin(self, slug: str) -> bool:
@@ -173,46 +159,6 @@ class PluginWatcher:
 
         if self.state.get("last_check"):
             print(f"Last check: {self.state['last_check']}", file=sys.stderr)
-
-    def _compare_versions(
-        self, slug: str, old_hashes: dict[str, str], new_dir: Path
-    ) -> ChangeReport:
-        """
-        Compare two versions and generate change report.
-
-        Args:
-            slug: Plugin slug
-            old_hashes: Dictionary of old file hashes
-            new_dir: Path to new version directory
-
-        Returns:
-            ChangeReport with detected changes
-        """
-        new_hashes = compute_directory_hashes(new_dir)
-
-        old_files = set(old_hashes.keys())
-        new_files = set(new_hashes.keys())
-
-        added = sorted(list(new_files - old_files))
-        removed = sorted(list(old_files - new_files))
-        changed = []
-
-        for f in sorted(old_files & new_files):
-            if old_hashes[f] != new_hashes[f]:
-                changed.append(f)
-
-        plugin_info = self.state["plugins"].get(slug, {})
-
-        return ChangeReport(
-            plugin_slug=slug,
-            plugin_name=plugin_info.get("name", slug),
-            old_version=plugin_info.get("version", "unknown"),
-            new_version="",  # Will be filled by caller
-            changed_files=changed,
-            added_files=added,
-            removed_files=removed,
-            download_link=plugin_info.get("download_link", ""),
-        )
 
     def save_report(
         self,
@@ -312,50 +258,36 @@ class PluginWatcher:
                     print(f"[*] Getting SVN diff (r{old_svn_rev} -> r{new_svn_rev})...", file=sys.stderr)
                     svn_change = self.svn.compare_revisions(slug, old_svn_rev, new_svn_rev)
 
-                # Download new version for analysis
-                result = self.downloader.download_plugin(
-                    current_info, extract=True, svn=False
+                # Build report from SVN data
+                report = ChangeReport(
+                    plugin_slug=slug,
+                    plugin_name=stored_info.get("name", slug),
+                    old_version=stored_info.get("version", "unknown"),
+                    new_version=current_info.version,
+                    changed_files=svn_change.changed_files if svn_change else [],
+                    added_files=svn_change.added_files if svn_change else [],
+                    removed_files=svn_change.removed_files if svn_change else [],
+                    download_link=current_info.download_link,
                 )
 
-                if result.plugin_dir:
-                    # Use SVN change info if available, otherwise fall back to hash comparison
-                    if svn_change and svn_change.total_changes > 0:
-                        report = ChangeReport(
-                            plugin_slug=slug,
-                            plugin_name=stored_info.get("name", slug),
-                            old_version=stored_info.get("version", "unknown"),
-                            new_version=current_info.version,
-                            changed_files=svn_change.changed_files,
-                            added_files=svn_change.added_files,
-                            removed_files=svn_change.removed_files,
-                            download_link=current_info.download_link,
-                        )
-                    else:
-                        report = self._compare_versions(
-                            slug, stored_info.get("file_hashes", {}), result.plugin_dir
-                        )
-                        report.new_version = current_info.version
-                        report.download_link = current_info.download_link
+                # Save report locally
+                if save_reports:
+                    self.save_report(report, svn_change)
 
-                    # Save report locally
-                    if save_reports:
-                        self.save_report(report, svn_change)
+                # Update state with new info
+                self.state["plugins"][slug] = {
+                    "version": current_info.version,
+                    "last_updated": current_info.last_updated,
+                    "name": current_info.name,
+                    "active_installs": current_info.active_installs,
+                    "download_link": current_info.download_link,
+                    "svn_revision": new_svn_rev,
+                    "added_at": stored_info.get(
+                        "added_at", datetime.now(timezone.utc).isoformat()
+                    ),
+                }
 
-                    # Update state with new info
-                    new_hashes = compute_directory_hashes(result.plugin_dir)
-                    self.state["plugins"][slug] = {
-                        "version": current_info.version,
-                        "last_updated": current_info.last_updated,
-                        "name": current_info.name,
-                        "download_link": current_info.download_link,
-                        "file_hashes": new_hashes,
-                        "svn_revision": new_svn_rev,
-                        "added_at": stored_info.get(
-                            "added_at", datetime.now(timezone.utc).isoformat()
-                        ),
-                    }
-
-                    reports.append((report, svn_change))
+                reports.append((report, svn_change))
             else:
                 print(f"[*] {slug} is up to date (v{current_info.version})", file=sys.stderr)
 
@@ -437,3 +369,147 @@ class PluginWatcher:
             "state_file": str(self.state_file),
             "output_dir": str(self.output_dir),
         }
+
+    def check_global_updates(
+        self,
+        min_installs: int = 1000,
+        max_pages: int = 2,
+    ) -> dict[str, Any]:
+        """
+        Query WordPress.org for recently updated plugins.
+
+        Returns only NEW updates not seen in previous checks.
+
+        Args:
+            min_installs: Minimum active installations filter
+            max_pages: Maximum API pages to fetch (250 plugins/page)
+
+        Returns:
+            Dict with new_updates list, total_new count, last_checked timestamp
+        """
+        # Fetch recently updated plugins from WordPress.org API
+        limit = max_pages * 250
+        plugins = self.api.fetch_all_plugins(
+            browse="updated",
+            min_installs=min_installs,
+            limit=limit,
+        )
+
+        # Initialize global monitor state if needed
+        if "global_monitor" not in self.state:
+            self.state["global_monitor"] = {
+                "last_checked": None,
+                "seen_versions": {},
+            }
+
+        seen = self.state["global_monitor"]["seen_versions"]
+        new_updates = []
+
+        for plugin in plugins:
+            # Only report if this slug+version combo hasn't been seen before
+            if seen.get(plugin.slug) != plugin.version:
+                new_updates.append({
+                    "slug": plugin.slug,
+                    "name": plugin.name,
+                    "version": plugin.version,
+                    "active_installs": plugin.active_installs,
+                    "last_updated": plugin.last_updated,
+                    "download_link": plugin.download_link,
+                    "short_description": plugin.short_description,
+                })
+                # Update seen versions
+                seen[plugin.slug] = plugin.version
+
+        now = datetime.now(timezone.utc).isoformat()
+        self.state["global_monitor"]["last_checked"] = now
+        self._save_state()
+
+        result = {
+            "last_checked": now,
+            "new_updates": new_updates,
+            "total_new": len(new_updates),
+        }
+
+        # Write recently_updated.json to output dir
+        output_path = self.output_dir / RECENTLY_UPDATED_FILENAME
+        with open(output_path, "w") as f:
+            json.dump(result, f, indent=2)
+
+        print(
+            f"[*] Global monitor: {len(plugins)} plugins checked, "
+            f"{len(new_updates)} new updates",
+            file=sys.stderr,
+        )
+
+        return result
+
+    def check_new_plugins(
+        self,
+        min_installs: int = 0,
+        max_pages: int = 2,
+    ) -> dict[str, Any]:
+        """
+        Query WordPress.org for newly added plugins.
+
+        Returns only plugins not seen in previous checks.
+
+        Args:
+            min_installs: Minimum active installations filter
+            max_pages: Maximum API pages to fetch (250 plugins/page)
+
+        Returns:
+            Dict with new_plugins list, total_new count, last_checked timestamp
+        """
+        limit = max_pages * 250
+        plugins = self.api.fetch_all_plugins(
+            browse="new",
+            min_installs=min_installs,
+            limit=limit,
+        )
+
+        # Initialize new plugins monitor state if needed
+        if "new_plugins_monitor" not in self.state:
+            self.state["new_plugins_monitor"] = {
+                "last_checked": None,
+                "seen_slugs": [],
+            }
+
+        seen = set(self.state["new_plugins_monitor"]["seen_slugs"])
+        new_plugins = []
+
+        for plugin in plugins:
+            if plugin.slug not in seen:
+                new_plugins.append({
+                    "slug": plugin.slug,
+                    "name": plugin.name,
+                    "version": plugin.version,
+                    "active_installs": plugin.active_installs,
+                    "last_updated": plugin.last_updated,
+                    "download_link": plugin.download_link,
+                    "short_description": plugin.short_description,
+                })
+                seen.add(plugin.slug)
+
+        now = datetime.now(timezone.utc).isoformat()
+        self.state["new_plugins_monitor"]["last_checked"] = now
+        self.state["new_plugins_monitor"]["seen_slugs"] = sorted(seen)
+        self._save_state()
+
+        result = {
+            "last_checked": now,
+            "new_plugins": new_plugins,
+            "total_new": len(new_plugins),
+        }
+
+        # Write new_plugins.json to output dir
+        output_path = self.output_dir / NEW_PLUGINS_FILENAME
+        with open(output_path, "w") as f:
+            json.dump(result, f, indent=2)
+
+        print(
+            f"[*] New plugins monitor: {len(plugins)} plugins checked, "
+            f"{len(new_plugins)} new",
+            file=sys.stderr,
+        )
+
+        return result
