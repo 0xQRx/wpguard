@@ -72,13 +72,14 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 
-### Verification Pipeline Agents
+### Verification Pipeline Agents (ALL MANDATORY — no finding skips any step)
 | Agent | Purpose |
 |-------|---------|
 | `poc-writer` | Writes standalone PoC scripts for new findings from expert agents |
 | `poc-runner` | Executes PoCs against sandbox, verifies expected results, detects false positives (has Playwright) |
 | `qa-triage` | Final validation of confirmed findings, scope checks, creates submission writeups |
-| `bb-submission` | Submission prep — polished writeups, clean sandbox repro, Wordfence submission format |
+| `impact-assessor` | **MANDATORY** — reviews EVERY finding for real-world impact, rejects obscure impact, downgrades inflated CVSS |
+| `bb-submission` | **MANDATORY** — submission prep, clean sandbox repro, polished writeup in Wordfence format |
 
 ### Utility Agents
 | Agent | Purpose |
@@ -86,7 +87,6 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `poc-creator` | Analyzes changelogs for existing CVEs, creates PoCs for patched vulns |
 | `sandbox-admin` | Manages sandbox environment — installs plugins, resets users, cleans DB (invocable by any agent) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps. Run BEFORE experts. |
-| `impact-assessor` | Post-QA impact review — removes low-impact findings, downgrades inflated CVSS scores |
 | `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact primitives, chains findings |
 
 ## Workflow
@@ -127,21 +127,22 @@ When the user wants a comprehensive audit of a plugin:
 8. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
 9. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
 10. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
-10.5. **Impact assessment** — delegate to `impact-assessor` to review all findings after QA
-      - Removes low-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
+11. **⚠️ MANDATORY: Impact assessment** — delegate to `impact-assessor` for EVERY finding after QA. This is NOT optional.
+      - Removes low-impact or obscure-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
       - Downgrades inflated CVSS scores
-      - Only findings that survive this gate get Discord notification
-11. **Submission prep** — delegate to `bb-submission` for each finding that survived impact assessment
+      - Rejects findings with no real-world consequence — if a real attacker wouldn't care, it's not a finding
+      - Only findings that survive this gate proceed to submission
+12. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that survived impact assessment
       - Destroys/rebuilds sandbox for clean reproduction
       - Generates polished submission report in Wordfence format
       - Verifies PoC works from scratch on clean install
-12. **Report results** to the user
+13. **Report results** to the user
 
 ### Targeted Analysis
 When the user wants to check for a specific vulnerability type:
 - Delegate directly to the relevant expert agent
 - Pass along any context the user provides (specific files, functions, endpoints)
-- Still run through verification pipeline: expert → poc-writer → poc-runner → qa-triage
+- Still run through the FULL verification pipeline: expert → poc-writer → poc-runner → qa-triage → impact-assessor → bb-submission
 
 ### Changelog-Based Research (n-day)
 When the user wants to find vulnerabilities in existing CVEs/patches:
@@ -150,7 +151,7 @@ When the user wants to find vulnerabilities in existing CVEs/patches:
 
 ### Verification Pipeline
 
-**Every finding must pass through the full verification chain:**
+**Every finding must pass through the FULL verification chain. No steps may be skipped:**
 
 ```
 Expert finds vulnerability
@@ -164,6 +165,12 @@ PoC Runner executes PoC against sandbox
     ↓
 QA Triage validates confirmed findings
   (scope check, CVSS, writeup, Discord notification)
+    ↓
+Impact Assessor reviews EVERY finding       ← MANDATORY
+  (rejects obscure/low real-world impact, downgrades inflated CVSS)
+    ↓
+BB Submission prepares final reports        ← MANDATORY
+  (clean sandbox repro, polished writeup, Wordfence format)
 ```
 
 **Sandbox Admin** is available on-demand at any stage — any agent can request sandbox setup, cleanup, or user resets.

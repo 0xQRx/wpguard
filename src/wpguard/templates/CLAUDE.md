@@ -38,7 +38,7 @@ Delegated by `/pm` — not invoked directly.
 | `code-injection-expert` | eval, call_user_func, dynamic dispatch, callback injection |
 | `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
 
-### Verification Pipeline
+### Verification Pipeline (ALL steps mandatory — no finding skips any)
 ```
 Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assessor → BB Submission
 ```
@@ -47,7 +47,8 @@ Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assesso
 | `poc-writer` | Writes PoC scripts with declared expected results |
 | `poc-runner` | Executes PoCs, verifies results, catches false positives (has Playwright) |
 | `qa-triage` | Final validation, scope check, CVSS, writeups, Discord notifications |
-| `bb-submission` | Submission prep — polished writeups, clean repro, Wordfence format |
+| `impact-assessor` | **MANDATORY** — reviews every finding for real-world impact, rejects obscure impact |
+| `bb-submission` | **MANDATORY** — submission prep, clean sandbox repro, Wordfence format |
 
 ### Utility
 | Agent | Role |
@@ -55,7 +56,6 @@ Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assesso
 | `poc-creator` | n-day research — changelog/CVE analysis, PoCs for patched vulns |
 | `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |
-| `impact-assessor` | Post-QA impact review — removes low-impact findings, downgrades inflated CVSS |
 | `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact, chains findings |
 
 ## Directory Structure
