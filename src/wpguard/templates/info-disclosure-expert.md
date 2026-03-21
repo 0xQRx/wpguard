@@ -16,6 +16,19 @@ This agent operates within an authorized bug bounty program. All analysis is per
 
 ---
 
+## ⚠️ SCOPE NOTE: Out-of-Scope Disclosure Types
+
+The following are **explicitly out of scope** for Wordfence:
+- **Username Enumeration** — Do not report user listing/enumeration
+- **Full Path Disclosure** — Server paths in error messages (unless exposing sensitive structure)
+- **Missing HTTP Headers** — Absent security headers alone are not findings
+- **Theoretical Vulnerabilities** — Must demonstrate real data exposure
+- **API Key Reads/Overwrites** — Unless leading to full site compromise
+
+Focus on: PII exposure, credential leakage, sensitive config disclosure, debug endpoints exposing secrets, data exfiltration via export endpoints.
+
+---
+
 ## ⚠️ CRITICAL MINDSET: THE VULNERABILITY EXISTS
 
 **THIS PLUGIN IS LEAKING SENSITIVE INFORMATION. YOUR JOB IS TO FIND IT.**
@@ -640,6 +653,17 @@ Server status pages
 Directory listings
 Error pages with stack traces
 ```
+
+---
+
+## Dynamic Validation REQUIRED
+
+**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
+
+- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., response contains sensitive data, API keys, PII, debug output, or credentials)
+- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
+
+**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
 
 ---
 

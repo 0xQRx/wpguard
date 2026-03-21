@@ -623,20 +623,40 @@ wpguard_finding_update(
 
 - CSV Injection
 - IP Spoofing (integrity only)
+- Plaintext secrets in DB without exploitable vuln chain
 - WAF Bypass
-- CSS/HTML Injection (without significant impact)
-- DoS (without significant impact)
+- CSS/HTML Injection (without considerable security impact)
+- DoS (without considerable and demonstrable impact)
 - CAPTCHA Bypass
 - CORS Issues
+- Software with vulnerable dependencies (unless verifiably exploitable in that plugin)
+- Any vulnerability requiring PR:H (Administrator, Editor, Shop Manager, or any role with unfiltered_html)
 - Open Redirect
 - Tabnabbing
+- Race conditions not easily replicable in common configuration
+- Cache Poisoning (without considerable and demonstrable impact)
+- TOCTOU (without considerable and demonstrable impact)
 - Self-XSS
 - Username Enumeration
-- Missing Headers
+- Theoretical Vulnerabilities
+- Missing HTTP Headers
 - Clickjacking
 - SSRF via DNS Rebinding
-- CSRF without impact
-- Race Conditions (unless easily replicable)
+- API Key Updates/Overwrites/Reads
+- Full Path Disclosure
+- CSRF on unauthenticated forms or forms with no sensitive actions
+- Vulnerabilities only affecting outdated browsers (2+ stable versions behind latest)
+- CVSS < 4.0 that can't be leveraged to achieve higher score
+- Only exploitable on EOL software (PHP, MySQL, Apache, nginx, OpenSSL)
+- SQLi requiring wp_magic_quotes to be disabled
+- Vulnerabilities requiring local server access
+- Admin explicitly granting access to lower-privileged user (where likelihood is minimal)
+- Excessive brute force required (case-by-case; high-likelihood brute force may be accepted)
+- File uploads with embedded client-side scripts (PDF XSS, macros)
+- Double extension file upload attacks (.php.png)
+- Uploaded files in public directories not leading to full site compromise
+- Private/Hidden/Draft/Pending/Password Protected Post Access
+- Vulnerabilities requiring enabling/disabling PHP functions (e.g., allow_url_fopen)
 
 ---
 

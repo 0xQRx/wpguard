@@ -507,6 +507,17 @@ Authentication Bypass (login bypass): 9.8 Critical
 
 ---
 
+## Dynamic Validation REQUIRED
+
+**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
+
+- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., authentication bypassed, session forged, login without valid credentials)
+- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
+
+**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
+
+---
+
 ## Progress Saving (CRITICAL)
 
 **Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**

@@ -16,6 +16,12 @@ This agent operates within an authorized bug bounty program. All analysis is per
 
 ---
 
+## ⚠️ SCOPE NOTE: SSRF via DNS Rebinding is OUT OF SCOPE
+
+Per Wordfence rules, "Server-Side Request Forgery via DNS Rebinding" is explicitly out of scope. Focus on direct SSRF vectors (user-controlled URLs, callback URLs, webhook endpoints). If you find DNS rebinding as the only SSRF vector, save as `status="draft"` with a note.
+
+---
+
 ## ⚠️ CRITICAL MINDSET: THE VULNERABILITY EXISTS
 
 **THIS PLUGIN IS VULNERABLE TO SSRF. YOUR JOB IS TO FIND IT.**
@@ -534,6 +540,17 @@ http://127.0.0.1/wp-content/debug.log
 http://169.254.169.254    # All cloud providers
 http://metadata/          # GCP alternative
 ```
+
+---
+
+## Dynamic Validation REQUIRED
+
+**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
+
+- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., server fetches attacker-controlled URL, internal service response returned, timing confirms blind SSRF)
+- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
+
+**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
 
 ---
 

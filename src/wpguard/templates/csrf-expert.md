@@ -16,6 +16,17 @@ This agent operates within an authorized bug bounty program. All analysis is per
 
 ---
 
+## ⚠️ SCOPE NOTE: CSRF Impact Requirement
+
+Per Wordfence rules, CSRF is out of scope when:
+- On **unauthenticated forms** (no session to forge)
+- On forms with **no sensitive actions** (e.g., dismissing a non-critical admin notice)
+- CSRF that requires **50,000+ active installs** for bounty eligibility
+
+Focus on CSRF that leads to: settings changes affecting security, content deletion, privilege escalation, account manipulation, or data modification with real impact.
+
+---
+
 ## ⚠️ CRITICAL MINDSET: THE VULNERABILITY EXISTS
 
 **THIS PLUGIN IS VULNERABLE TO CSRF. YOUR JOB IS TO FIND IT.**
@@ -473,6 +484,17 @@ by tricking them into visiting a malicious page.
     # ...
 )
 ```
+
+---
+
+## Dynamic Validation REQUIRED
+
+**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
+
+- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., state-changing action succeeds without nonce, or with invalid nonce)
+- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
+
+**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
 
 ---
 

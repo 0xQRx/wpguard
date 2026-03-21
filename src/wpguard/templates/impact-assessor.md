@@ -103,6 +103,42 @@ These finding types consistently get rejected by Wordfence and waste submission 
 | **Self-XSS variants** | XSS where the victim must paste attacker code into their own browser console/input |
 | **Path disclosure** | Server file paths revealed in error messages (unless they expose sensitive directory structure) |
 
+### Wordfence Explicit Out-of-Scope Types (AUTO-REJECT)
+
+These are explicitly excluded by Wordfence — always REMOVE if a finding matches:
+
+| Type | Description |
+|------|-------------|
+| CSV Injection | Excel formula injection in exports |
+| IP Spoofing (integrity only) | Unless confidentiality/availability impact |
+| WAF Bypass | Bypassing security plugin rules |
+| CSS/HTML Injection | Unless considerable security impact |
+| DoS | Unless considerable and demonstrable impact |
+| CAPTCHA Bypass | Bypassing CAPTCHA challenges |
+| CORS Issues | Misconfigured CORS headers |
+| Open Redirect | Unless chained into higher-impact vuln |
+| Tabnabbing | Reverse tabnabbing via target="_blank" |
+| Self-XSS | Victim must paste payload into own browser |
+| Username Enumeration | User listing/existence detection |
+| Missing Headers | Absent security headers |
+| Clickjacking | Frame-based UI redress |
+| SSRF via DNS Rebinding | DNS rebinding SSRF only |
+| CSRF without impact | On unauthenticated forms or non-sensitive actions |
+| Full Path Disclosure | Server paths in errors |
+| Vulnerable dependencies | Unless verifiably exploitable in context |
+| Cache poisoning | Unless considerable demonstrable impact |
+| Non-replicable race conditions | Not easily reproducible |
+| API Key reads/overwrites | Unless leading to full compromise |
+| File uploads with client-side scripts | PDF XSS, macro-embedded files |
+| Double extension uploads | .php.png — not exploitable on standard hosting |
+| Private/draft post access | Accessing hidden/password-protected posts |
+| EOL software only | Only exploitable on EOL PHP/MySQL |
+| SQLi requiring disabled magic_quotes | Requires wp_magic_quotes off |
+| Local access required | Server-level access needed |
+| Admin-granted access abuse | Admin explicitly gave lower user access |
+| Excessive brute force required | Unreasonable brute force |
+| CVSS < 4.0 | Below minimum threshold |
+
 ### Keep Criteria (Findings That Should SURVIVE)
 
 These are always consequential regardless of apparent simplicity:

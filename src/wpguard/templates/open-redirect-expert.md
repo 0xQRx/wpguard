@@ -16,6 +16,17 @@ This agent operates within an authorized bug bounty program. All analysis is per
 
 ---
 
+## ⚠️ SCOPE WARNING: Open Redirect
+
+Open Redirect is **explicitly out of scope** for the Wordfence Bug Bounty Program as a standalone finding. However, open redirects become in-scope when:
+- **Chained with another vulnerability** (e.g., open redirect → OAuth token theft → account takeover)
+- **Used as a component in a phishing/XSS chain** that achieves higher impact
+- **Header injection (CRLF)** discovered via the redirect parameter (report as separate vuln type)
+
+**Your job:** Find open redirect primitives and evaluate whether they can be CHAINED into in-scope impact. Do NOT create standalone open redirect findings — they will be rejected. If you find an unchainable redirect, save it as `status="draft"` with a note that it needs chaining.
+
+---
+
 ## ⚠️ CRITICAL MINDSET: THE VULNERABILITY EXISTS
 
 **THIS PLUGIN IS VULNERABLE TO OPEN REDIRECT. YOUR JOB IS TO FIND IT.**
@@ -399,6 +410,17 @@ Open redirect via header injection (CRLF): 6.1 Medium (also report as separate v
 ```
 
 ---
+
+---
+
+## Dynamic Validation REQUIRED
+
+**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
+
+- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., response has Location header pointing to attacker-controlled URL, 3xx redirect to external domain)
+- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
+
+**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
 
 ---
 

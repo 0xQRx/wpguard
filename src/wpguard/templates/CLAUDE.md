@@ -91,6 +91,12 @@ wpguard_findings.json              — Findings database
 
 *Reflected XSS and CSRF are always `auth_level="unauthenticated"` — attacker crafts payload locally, victim executes it.
 
+### Out of Scope (Common Traps)
+Open Redirect, Self-XSS, Username Enumeration, SSRF via DNS Rebinding, Missing Headers,
+Clickjacking, CSV Injection, CAPTCHA Bypass, CORS, Full Path Disclosure, Tabnabbing,
+non-replicable Race Conditions, CSRF without impact, DoS without impact, CVSS < 4.0.
+See QA Triage for complete list. Editor/Admin/Shop Manager = always OOS (PR:H).
+
 **Author-level bugs are HIGH VALUE.** Authors can upload media, publish posts, and access post editor features. Bugs exploitable at Author level include:
 - RCE via media upload (SVG, image processing, EXIF)
 - File read/delete via attachment handling

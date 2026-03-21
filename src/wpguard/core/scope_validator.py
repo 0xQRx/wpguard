@@ -91,6 +91,7 @@ ELITE_1337_VULNS = STANDARD_VULNS
 
 # Out of scope vulnerability types
 OUT_OF_SCOPE_VULNS = {
+    # Core OOS types
     "csv_injection",
     "ip_spoofing",
     "waf_bypass",
@@ -108,6 +109,22 @@ OUT_OF_SCOPE_VULNS = {
     "ssrf_dns_rebinding",
     "full_path_disclosure",
     "csrf_no_impact",
+    # Extended OOS — from full Wordfence program rules
+    "plaintext_secrets_db_only",     # 2FA secrets in DB without exploitable vuln
+    "vulnerable_dependency",         # Unverifiably exploitable dependency
+    "cache_poisoning",               # Unless considerable impact
+    "toctou_not_replicable",         # Race condition not easily replicable
+    "api_key_overwrite",             # API key updates/overwrites/reads
+    "theoretical_vulnerability",     # No demonstrable exploit path
+    "file_upload_client_scripts",    # PDF/file with embedded XSS
+    "double_extension_upload",       # .php.png attacks
+    "uploaded_file_no_compromise",   # Public uploads not leading to full compromise
+    "private_post_access",           # Private/hidden/draft/password protected posts
+    "eol_software_only",             # Only exploitable on EOL PHP/MySQL/etc
+    "disabled_magic_quotes_sqli",    # SQLi requiring wp_magic_quotes disabled
+    "local_access_required",         # Requires local server access
+    "admin_granted_access",          # Admin explicitly granting access to lower user
+    "excessive_brute_force",         # Requires excessive brute force
 }
 
 # Excluded vendors/products
