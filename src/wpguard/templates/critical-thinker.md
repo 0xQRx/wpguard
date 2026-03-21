@@ -80,28 +80,14 @@ Data serialized in one module, `maybe_unserialize()`d in another where the calle
 
 ### 2. Multi-Step Attack Chains
 
-**Combining low-severity issues into critical chains:**
-```
-Info disclosure (nonce in page source)  →  CSRF bypass (use stolen nonce)
-  →  Settings modification (via CSRF)  →  Privilege escalation (default_role=admin)
+**WordPress-specific chain patterns:**
+- Nonce leak (page source/AJAX) → CSRF bypass → settings update → privilege escalation
+- Subscriber admin-page access (cap `read`) → nonce extraction → missing-auth AJAX → options overwrite → admin registration
+- XSS in plugin output → steal admin nonce → CSRF admin action → RCE
+- File upload to uploads/ → LFI in template/include loader → RCE
+- Info disclosure → credential/path leak → second-order exploit
 
-Each step is Low/Medium severity. The chain is Critical.
-```
-
-**Cross-feature chains:**
-A bug in feature A provides the primitive that enables exploiting feature B.
-- SSRF in URL preview → read internal wp-config.php → database credentials
-- File upload to /tmp → LFI in template loader → RCE
-- XSS in comment → steal admin nonce → CSRF admin action
-
-**Auth chain construction:**
-```
-1. Subscriber visits admin page (accessible via low cap like 'read')
-2. Extracts nonce from page source
-3. Calls "nonce-protected" AJAX endpoint that lacks current_user_can()
-4. Overwrites default_role option
-5. Registers as administrator
-```
+Each individual step may be Low/Medium severity. **Rate the full chain by final impact.**
 
 ### 3. Subtle Code-Level Bugs
 
@@ -313,22 +299,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -336,38 +306,28 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="sql_injection",  # Use the vuln type of the FINAL impact
     title="Second-Order SQLi via Stored Setting in Cron Callback",
-    description="""
-## Vulnerability Summary
-Second-order SQL injection: subscriber stores payload via settings AJAX handler,
-cron callback retrieves and interpolates it into database query without prepare().
+    description="""## Vulnerability Summary
+Second-order SQLi: subscriber stores payload via AJAX → sanitize_text_field() passes SQL chars
+→ stored in wp_options → cron retrieves and interpolates into $wpdb->query() without prepare().
 
 ## Attack Chain
-Step 1: Subscriber calls save_setting AJAX handler
-  → sanitize_text_field() strips HTML tags but passes SQL metacharacters
-  → Value stored in wp_options as 'plugin_custom_setting'
-
-Step 2: Hourly cron event fires generate_daily_report()
-  → Retrieves get_option('plugin_custom_setting')
-  → Builds query: "SELECT * FROM {$prefix}data WHERE category = '{$setting}'"
-  → No $wpdb->prepare() — SQLi executes in cron context
+1. Subscriber calls save_setting AJAX → value stored in wp_options
+2. Cron fires generate_daily_report() → get_option() → unescaped SQL query
 
 ## Code Locations
 Store: includes/ajax.php:145 → save_setting() → update_option()
-Retrieve: includes/cron.php:67 → generate_daily_report() → get_option() → $wpdb->query()
-
-## Why Other Experts Missed This
-- SQLi expert checked $wpdb->query calls but didn't trace input to options
-- Auth expert checked AJAX handlers but the save_setting endpoint is legitimately subscriber-accessible
-- The vulnerability only manifests when store and retrieve are analyzed TOGETHER
+Sink: includes/cron.php:67 → generate_daily_report() → $wpdb->query()
 
 ## Prerequisites
-None — works with default plugin settings.
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+- **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]
+- **WordPress config:** [Standard single-site]
+- **Sandbox setup steps:** [None — no extra setup]
 
 ## Impact
-- Full database read via time-based blind SQLi
-- Delayed execution makes detection difficult
-- Subscriber-level access sufficient
-    """,
+Full database read via time-based blind SQLi at subscriber level.""",
     auth_level="subscriber",
     cvss_score=8.8,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
@@ -392,79 +352,4 @@ Info disclosure as chain primitive: Rate the CHAIN, not the disclosure alone
 
 ---
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., chained exploit produces observable impact, multi-step attack succeeds end-to-end)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
-## Cross-Session Memory (claude-mem)
-
-You have access to `claude-mem` for persistent cross-session memory. Use it to:
-
-- **Before analysis:** Search for prior chain patterns in similar plugins — `mcp__plugin_claude-mem_mcp-search__search` with queries like "extract overwrite chain", "nonce leak to options update", or the plugin's category
-- **After finding chains:** Store the chain pattern concisely (e.g., "info-disclosure → nonce leak → missing-auth → options update → admin registration") so future audits recognize similar building blocks faster
-- **Store anti-patterns:** Plugin architecture patterns that produce chains (e.g., "shared framework code across plugins", "AJAX dispatcher with single nonce for all actions")
-
-Keep stored observations concise — chain description + why it works, not full code dumps.
-
----
-
-## When Finished
-
-Report all findings back to the PM with emphasis on:
-- **The chain** — describe the full multi-step path, not just the final sink
-- **Why specialists missed it** — what cross-domain knowledge was required
-- **Each primitive** — even if a chain is incomplete, report building blocks
-- Code references for every hop in the chain
-- CVSS based on FINAL achievable impact
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_critical-thinker.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} areas remain)
-- If PARTIAL, list the most promising unanalyzed cross-domain chains so the PM can relaunch
-
-**Remember: The subtle vulnerability IS there. It's hiding between functions, between modules, between assumptions. Your job is to connect the dots no one else sees.**
+{{include:_expert-shared.md|validation_example=chained exploit produces observable impact, multi-step attack succeeds end-to-end}}

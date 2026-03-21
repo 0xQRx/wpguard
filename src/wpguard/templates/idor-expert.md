@@ -191,10 +191,10 @@ register_rest_route('plugin/v1', '/user/(?P<id>\d+)/data', [
 
 ## Attack Techniques
 
-### 1. User ID Enumeration + Access
+### WordPress-Specific IDOR Testing
 ```python
-# WordPress user IDs are sequential starting from 1
-# Admin is usually ID 1
+# WordPress user IDs are sequential starting from 1 (admin = ID 1)
+# Test: subscriber reading admin's data via user_id parameter
 for user_id in range(1, 20):
     resp = sandbox_request(
         method="POST",
@@ -205,48 +205,7 @@ for user_id in range(1, 20):
     # If we get data for user_id != our own = IDOR
 ```
 
-### 2. Post ID Enumeration
-```python
-# Access private/draft posts of other users
-for post_id in range(1, 100):
-    resp = sandbox_request(
-        method="GET",
-        path=f"/wp-json/plugin/v1/post/{post_id}",
-        auth="subscriber"
-    )
-    # Check if we get content from posts we don't own
-```
-
-### 3. Horizontal Privilege Escalation
-```python
-# User A modifying User B's settings
-subscriber_a_id = 2
-subscriber_b_id = 3
-
-# As subscriber A, update subscriber B's profile
-resp = sandbox_request(
-    method="POST",
-    path="/wp-admin/admin-ajax.php",
-    data={
-        "action": "update_profile",
-        "user_id": subscriber_b_id,  # NOT our ID
-        "email": "attacker@evil.com"
-    },
-    auth="subscriber"  # We are subscriber A
-)
-```
-
-### 4. Attachment Access via ID
-```python
-# Access private attachments by iterating IDs
-for attachment_id in range(1, 50):
-    resp = sandbox_request(
-        method="GET",
-        path="/wp-admin/admin-ajax.php",
-        data={"action": "download_file", "id": attachment_id},
-        auth="subscriber"
-    )
-```
+Also test: **Post ID enumeration** (access private/draft posts via sequential IDs), **Horizontal priv esc** (User A modifying User B's settings by swapping user_id), **Attachment access** (iterate attachment IDs to read/download files owned by others).
 
 ---
 
@@ -304,22 +263,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -327,33 +270,23 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="idor",
     title="Subscriber+ IDOR — Read Any User's Private Profile Data",
-    description="""
-## Vulnerability Summary
+    description="""## Vulnerability Summary
 AJAX endpoint returns user profile data for any user_id without ownership verification.
 
 ## Data Flow
 Entry: AJAX action "get_user_profile" (subscriber+)
-  ↓
 Input: $_POST['user_id'] — attacker-controlled
-  ↓
-Auth Check: is_user_logged_in() — YES, but no ownership check
-  ↓
+Auth Check: is_user_logged_in() — no ownership check
 Processing: get_user_meta($user_id, 'profile', true)
-  ↓
 Impact: Any authenticated user reads ANY user's private profile
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Login as subscriber (user_id=2)
-2. POST action=get_user_profile&user_id=1 (admin)
-3. Receive admin's private profile data (email, phone, address)
-
-## Impact
-- Read any user's private data
-- Enumerate all users and their metadata
-- Access PII (email, phone, address)
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+- **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]
+- **WordPress config:** [Standard single-site]
+- **Sandbox setup steps:** [None — no extra setup]
     """,
     auth_level="subscriber",
     cvss_score=6.5,
@@ -381,72 +314,4 @@ IDOR — modify admin settings via user_id: 8.8 High
 
 ---
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., accessing another user's object by ID, modifying resources owned by other users)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type (IDOR read/write/delete)
-- Affected object type (user, post, file, order, entry)
-- Data flow (parameter → lookup → missing ownership check → impact)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or draft
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_idor-expert.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=accessing another user's object by ID, modifying resources owned by other users}}

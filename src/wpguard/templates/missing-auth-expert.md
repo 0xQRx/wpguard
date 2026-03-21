@@ -167,78 +167,16 @@ public function db_string_replace( $user_query ) {
 **Why vulnerable:** AJAX handler registered via `wp_ajax_` hook dispatches to `db_string_replace()` without `current_user_can('manage_options')`. Any authenticated user can execute arbitrary string replacements across the database.
 **Detection:** `wp_ajax_` handler functions missing `current_user_can()` before `$wpdb->update`, `$wpdb->query`, `$wpdb->replace`, or `update_option`.
 
-### CVE-2024-5324: XootiX Framework — Import Settings Without Auth
-**Impact:** Subscriber+ Arbitrary Options Update, CVSS 8.8
-
-```php
-// class-xoo-admin-settings.php — NO cap check, NO nonce
-public function import_settings(){
-    $settings = $_POST['import'];
-    // Directly updates WordPress options from user input
-    // Subscriber sets default_role=administrator, users_can_register=1
-}
-```
-
-**Why vulnerable:** Shared framework code across 4+ plugins. Missing both `current_user_can()` and `wp_verify_nonce()`. Attack: call import_settings → set `default_role=administrator` + `users_can_register=1` → register as admin.
-**Detection:** Functions handling `$_POST['import']` or `$_POST['settings']` that call `update_option()` without capability checks. Framework/shared code is especially dangerous.
-
-### CVE-2022-40223: SearchWP — Nonce Leak → Settings Takeover
-**Impact:** Subscriber+ Settings Modification, CVSS 7.1
-
-```php
-// Handler checks nonce but NOT capability
-function save_settings() {
-    check_ajax_referer('save_settings_action', 'settings_nonce');
-    // Missing: if (!current_user_can('manage_options')) wp_die();
-    update_option($_POST['key'], $_POST['value']);
-}
-// Nonce leaked via wp_localize_script() on page accessible to Subscriber
-```
-
-**Why vulnerable:** Nonces are anti-CSRF tokens, NOT authorization. When a nonce is exposed via `wp_localize_script()` on frontend or admin pages with low `read` capability, any authenticated user can steal it and call the endpoint.
-**Detection:** `check_ajax_referer()` or `wp_verify_nonce()` as SOLE protection without accompanying `current_user_can()`. Cross-reference with `wp_localize_script()` calls that include nonce values.
+- **CVE-2024-5324** (XootiX Framework, CVSS 8.8): Shared framework `import_settings()` missing both cap check and nonce — subscriber sets `default_role=administrator`.
+- **CVE-2022-40223** (SearchWP, CVSS 7.1): Nonce-only protection on settings save — nonce leaked via `wp_localize_script()` to subscribers.
 
 ---
 
 ## Systematic Audit Methodology
 
-### Step 1: Enumerate ALL Endpoints
-```bash
-# AJAX handlers (both authenticated and unauthenticated)
-grep -rn "wp_ajax_" --include="*.php"
-grep -rn "wp_ajax_nopriv_" --include="*.php"
-
-# REST API routes
-grep -rn "register_rest_route" --include="*.php"
-grep -rn "permission_callback" --include="*.php"
-
-# Admin post handlers
-grep -rn "admin_post_" --include="*.php"
-grep -rn "admin_post_nopriv_" --include="*.php"
-
-# Admin init form processors
-grep -rn "admin_init.*process\|admin_init.*save\|admin_init.*handle" --include="*.php"
-```
-
-### Step 2: For EACH Endpoint, Check Auth
-```bash
-# Find the handler function, then check for capability checks
-# Look for these in the handler AND any functions it calls:
-grep -n "current_user_can\|check_admin_referer\|wp_verify_nonce\|is_user_logged_in" handler.php
-```
-
-### Step 3: Test at ALL Auth Levels
-```
-For EVERY endpoint:
-┌─────────────────┬───────────┬───────────┬────────────┬──────────┐
-│ Endpoint        │ Unauth    │ Subscriber│ Contributor │ Author   │
-├─────────────────┼───────────┼───────────┼────────────┼──────────┤
-│ wp_ajax_action1 │ Test      │ Test      │ Test       │ Test     │
-│ /wp-json/route  │ Test      │ Test      │ Test       │ Test     │
-│ admin_post_     │ Test      │ Test      │ Test       │ Test     │
-└─────────────────┴───────────┴───────────┴────────────┴──────────┘
-Document LOWEST level that succeeds for each.
-```
+1. **Enumerate endpoints:** Search for `wp_ajax_`, `wp_ajax_nopriv_`, `register_rest_route`, `permission_callback`, `admin_post_`, `admin_post_nopriv_`, and `admin_init` form processors.
+2. **Check each handler:** Trace into the callback — look for `current_user_can()`, verify it uses an appropriate capability, and confirm it runs BEFORE any sensitive operation.
+3. **Test at all auth levels:** For every endpoint, test unauth → subscriber → contributor → author. Document the LOWEST level that succeeds.
 
 ---
 
@@ -300,22 +238,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -323,34 +245,21 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="missing_authorization",
     title="Subscriber+ Arbitrary Settings Change via Missing Capability Check",
-    description="""
-## Vulnerability Summary
+    description="""## Vulnerability Summary
 AJAX endpoint allows any authenticated user to modify plugin settings.
-
 ## Data Flow
-Entry: AJAX action "update_plugin_settings" (authenticated)
-  ↓
-Auth Check: wp_verify_nonce() ONLY — NO current_user_can()
-  ↓
-Processing: update_option('plugin_settings', $_POST['value'])
-  ↓
-Impact: Subscriber modifies admin-only settings
-
+Entry: wp_ajax_update_plugin_settings → wp_verify_nonce() ONLY → update_option()
 ## Prerequisites
-None — works with default plugin settings.
-
+- **Base plugins:** [None]  **Plugin settings:** [Default settings]
+- **Required content:** [None]  **Required roles/users:** [Default WordPress roles]
+- **WordPress config:** [Standard single-site]  **Sandbox setup steps:** [None]
 ## Exploitation
-1. Login as subscriber
-2. Get nonce from page source (embedded via wp_localize_script)
-3. POST to admin-ajax.php with action=update_plugin_settings
-4. Settings modified despite being subscriber
+1. Login as subscriber → get nonce from page source → POST to admin-ajax.php
     """,
-    auth_level="subscriber",
-    cvss_score=6.5,
+    auth_level="subscriber", cvss_score=6.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
     affected_file="includes/ajax.php",
-    affected_function="handle_settings_update",
-    affected_line=145
+    affected_function="handle_settings_update", affected_line=145
 )
 ```
 
@@ -369,71 +278,4 @@ REST API __return_true on write endpoint: 7.5-9.8 Critical
 
 ---
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., endpoint returns success/data without proper auth, action executes at lower privilege than expected)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → auth check → processing → impact)
-- Authentication level required (LOWEST that works)
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_missing-auth-expert.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=endpoint returns success/data without proper auth, action executes at lower privilege than expected}}

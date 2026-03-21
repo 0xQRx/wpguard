@@ -238,24 +238,6 @@ add_action('wp_ajax_nopriv_data', 'return_sensitive_data');
 
 ## Real-World CVE Patterns
 
-### CVE-2024-6845: Starter Templates — API Key via Unauth REST Endpoint
-**Impact:** Unauthenticated API key theft, CVSS 5.8
-
-```php
-// REST route returns API key to anyone — __return_true = no auth!
-register_rest_route('myplugin/v1', 'api-key', array(
-    'methods'             => 'POST',
-    'callback'            => 'retrieve_api_key',
-    'permission_callback' => '__return_true',  // NO AUTHENTICATION
-));
-function retrieve_api_key() {
-    return ['key' => get_option('myplugin_openai_api_key')];
-}
-```
-
-**Why vulnerable:** `permission_callback => '__return_true'` means zero authentication. Any visitor can call the endpoint and receive the stored API key. Fix: either remove the endpoint entirely or add `current_user_can('manage_options')`.
-**Detection:** `register_rest_route` with `__return_true` or `function() { return true; }` as permission_callback. Check what data the callback returns — options containing `api_key`, `secret`, `token`, `password`.
-
 ### CVE-2025-11504: Starter Templates — Debug File with Auth Tokens
 **Impact:** Unauthenticated token theft via debug file, CVSS 7.5
 
@@ -272,169 +254,16 @@ function verify_token($received_token) {
 }
 ```
 
-**Why vulnerable:** Developer left debug `file_put_contents()` in production code. File is written to the plugin directory (web-accessible) with a static filename. Anyone can read `/wp-content/plugins/myplugin/dupasrala.txt` to obtain auth tokens. Fix: remove the debug line entirely.
+**Why vulnerable:** Developer left debug `file_put_contents()` in production code. File is written to the plugin directory (web-accessible) with a static filename. Anyone can read it to obtain auth tokens.
 **Detection:** `file_put_contents()` in plugin directories writing to `.txt`, `.log`, `.debug` files. Also `error_log()` with sensitive variables. Search for filenames that look like debug artifacts.
 
-### CVE-2024-22294: IP2Location — Predictable Debug Log Filename
-**Impact:** Unauthenticated log access with server paths, CVSS 5.3
-
-```php
-// VULNERABLE: hash uses only public data — site_url and admin_email are known
-$this->debug_log = 'debug_' . substr(
-    hash('sha256', get_site_url() . get_option('admin_email')),
-    0, 32
-) . '.log';
-// Attacker computes the filename and reads it directly
-```
-
-**Why vulnerable:** Both `get_site_url()` and admin email are typically public (email via author archives, REST API, or page source). Attacker computes the SHA256 hash and requests the log file directly. Fix: include a private random key in the hash that's stored in `wp_options` and never exposed.
-**Detection:** Debug/log filenames built from `hash()` of public data (site URL, admin email, plugin version). Look for `file_put_contents()` to plugin directories without randomized filenames or `.htaccess` deny rules.
+**Also study:** CVE-2024-6845 (API key via unauth REST endpoint with `__return_true` permission_callback, CVSS 5.8), CVE-2024-22294 (predictable debug log filename built from public data hash, CVSS 5.3).
 
 ---
 
 ## Attack Techniques
 
-### 1. Error-Based Information Extraction
-```
-# Force PHP errors
-?param[]=array_expected_as_string
-?id=99999999999999999999  # Integer overflow
-?file=../../../nonexistent
-
-# Force WordPress errors
-?action=invalid_action_xyz
-?post_id=-1
-?page=999999
-
-# Force plugin errors
-?format=invalid
-?callback=<script>  # May trigger error with reflection
-```
-
-### 2. Debug Endpoint Discovery
-```
-# Common debug paths
-/wp-content/debug.log
-/wp-content/plugins/plugin-name/debug.log
-/wp-content/plugins/plugin-name/logs/
-/debug.php
-/phpinfo.php
-/info.php
-/test.php
-
-# Plugin-specific
-/wp-admin/admin-ajax.php?action=plugin_debug
-/wp-admin/admin-ajax.php?action=plugin_phpinfo
-/wp-json/plugin/v1/debug
-```
-
-### 3. User Enumeration Techniques
-```
-# Author enumeration
-/?author=1
-/?author=2
-/?author=3
-
-# REST API enumeration
-/wp-json/wp/v2/users
-/wp-json/wp/v2/users?per_page=100
-
-# Login enumeration
-POST /wp-login.php with known usernames
-- Different error for valid vs invalid user
-
-# Password reset enumeration
-POST /wp-login.php?action=lostpassword
-- Check response differences
-
-# Plugin user endpoints
-/wp-json/plugin/v1/members
-/wp-admin/admin-ajax.php?action=get_users
-```
-
-### 4. Version & Configuration Disclosure
-```
-# WordPress version
-/readme.html
-/wp-includes/version.php
-Generator meta tag
-/wp-json/ (x-wp-version header)
-
-# Plugin version
-/wp-content/plugins/plugin-name/readme.txt
-/wp-content/plugins/plugin-name/changelog.txt
-Plugin file headers
-
-# PHP version
-X-Powered-By header
-phpinfo()
-Error messages
-
-# Server info
-Server header
-/server-status (Apache)
-/server-info (Apache)
-```
-
-### 5. Backup & Source File Discovery
-```
-# Common backup extensions
-plugin-name.php.bak
-plugin-name.php~
-plugin-name.php.old
-plugin-name.php.orig
-plugin-name.php.save
-#plugin-name.php#
-
-# Archive files
-backup.zip
-backup.tar.gz
-plugin-name.zip
-wp-content.zip
-
-# VCS exposure
-/.git/config
-/.git/HEAD
-/.svn/entries
-/.hg/
-
-# IDE files
-/.idea/workspace.xml
-/.vscode/settings.json
-```
-
-### 6. Log File Analysis
-```
-# WordPress logs
-/wp-content/debug.log
-
-# Plugin-specific logs
-/wp-content/plugins/plugin-name/logs/
-/wp-content/plugins/plugin-name/debug.log
-/wp-content/plugins/plugin-name/error.log
-
-# Server logs (if accessible)
-/var/log/apache2/error.log
-/var/log/nginx/error.log
-
-# Application logs
-/wp-content/uploads/plugin-name/logs/
-```
-
-### 7. API Response Analysis
-```python
-# Check all API endpoints for data leakage
-endpoints = [
-    '/wp-json/wp/v2/users',
-    '/wp-json/wp/v2/posts?_embed',
-    '/wp-json/plugin/v1/settings',
-    '/wp-json/plugin/v1/config',
-    '/wp-admin/admin-ajax.php?action=plugin_get_data',
-]
-
-# Compare authenticated vs unauthenticated responses
-# Check for sensitive fields: email, api_key, password, token, secret
-```
+Test these categories: error-based extraction (force type errors), debug endpoints (/debug.log, phpinfo), user enumeration (?author=N, /wp-json/wp/v2/users), backup files (.bak, .old, .git), API over-exposure (unauthenticated REST/AJAX returning sensitive data), log files in plugin directories.
 
 ---
 
@@ -522,82 +351,33 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
     plugin_version="1.0.0",
     active_installs=50000,
     vuln_type="info_disclosure",
-    title="Unauthenticated User Data Exposure via REST API",
-    description="""
-## Vulnerability Summary
-The plugin registers a REST endpoint that returns all user data including emails without authentication.
+    title="Unauthenticated Token Theft via Debug File",
+    description="""## Vulnerability Summary
+The plugin writes auth tokens to a web-accessible file in the plugin directory.
 
 ## Data Flow
-Entry: GET /wp-json/plugin/v1/members
-  ↓
-Handler: class-rest-api.php:45 - get_members()
-  ↓
-Query: get_users(['fields' => 'all'])
-  ↓
-Response: JSON with all user fields including email, registered date, etc.
-  ↓
-Exposure: No authentication check, no field filtering
-
-## Information Exposed
-- User emails (PII)
-- User registration dates
-- User display names
-- User IDs (enables further enumeration)
-- User roles
+Entry: Any request triggering verify_token() → file_put_contents() writes to dupasrala.txt → GET /wp-content/plugins/example-plugin/dupasrala.txt returns tokens
 
 ## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Send GET request to /wp-json/plugin/v1/members
-2. Receive JSON response with all user data
-3. Extract emails for phishing/spam
-4. Use IDs for further enumeration attacks
-
-## Code Location
-File: includes/class-rest-api.php
-Line: 45
-Function: get_members()
-
-## Missing Protection
-- No authentication check (capability_callback missing or returns true)
-- No data sanitization/field limiting
-- No rate limiting
-
-## Impact
-- Mass email harvesting
-- User enumeration for password attacks
-- GDPR violation (PII exposure)
-- Phishing attack enablement
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+- **Required content:** [None]
+- **Required roles/users:** [Default WordPress roles]
+- **WordPress config:** [Standard single-site]
+- **Sandbox setup steps:** [None — no extra setup]
     """,
     auth_level="unauth",
-    cvss_score=5.3,
-    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N",
-    affected_file="includes/class-rest-api.php",
-    affected_function="get_members",
-    affected_line=45
+    cvss_score=7.5,
+    cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    affected_file="includes/class-auth.php",
+    affected_function="verify_token",
+    affected_line=42
 )
 ```
 
@@ -629,96 +409,4 @@ PHP version disclosure: 3.0 Low
 -1.0 if authentication required
 ```
 
----
-
-## Common Information Leak Sources
-
-```
-# WordPress-specific
-WP_DEBUG output
-$wpdb->show_errors()
-wp_die() verbose messages
-REST API user endpoint
-
-# Plugin patterns
-Debug modes left enabled
-Verbose AJAX error responses
-Unprotected log files
-Settings pages without capability checks
-API endpoints without authentication
-
-# Server-level
-phpinfo() pages
-Server status pages
-Directory listings
-Error pages with stack traces
-```
-
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., response contains sensitive data, API keys, PII, debug output, or credentials)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=response contains sensitive data, API keys, PII, debug output, or credentials}}

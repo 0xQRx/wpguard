@@ -217,36 +217,7 @@ public function db_string_replace( $user_query ) {
 **Why vulnerable:** AJAX handler registered via `wp_ajax_` hook dispatches to `db_string_replace()` without `current_user_can('manage_options')`. Any authenticated user (including Subscriber) can execute arbitrary string replacements across the database — including changing their own role in `wp_usermeta`.
 **Detection:** `wp_ajax_` handler functions missing `current_user_can()` before `$wpdb->update`, `$wpdb->query`, `$wpdb->replace`, or `update_option`.
 
-### CVE-2024-5324: XootiX Framework — Import Settings → Priv Esc
-**Impact:** Subscriber+ Arbitrary Options Update, CVSS 8.8
-
-```php
-// class-xoo-admin-settings.php — NO cap check, NO nonce
-public function import_settings(){
-    $settings = $_POST['import'];
-    // Directly updates WordPress options from user input
-    // Subscriber sets default_role=administrator, users_can_register=1
-}
-```
-
-**Why vulnerable:** Shared framework code across 4+ plugins (Waitlist Woo, Side Cart, Login Customizer, OTP Login). Missing both `current_user_can()` and `wp_verify_nonce()`. Attack chain: call `import_settings` → set `default_role=administrator` + `users_can_register=1` → register new admin at `/wp-login.php?action=register`.
-**Detection:** Functions handling `$_POST['import']` or `$_POST['settings']` that call `update_option()` without capability checks. Framework/shared code is especially dangerous.
-
-### CVE-2022-40223: SearchWP Premium — Nonce Leak → Settings Takeover
-**Impact:** Subscriber+ Settings Modification, CVSS 7.1
-
-```php
-// Handler checks nonce but NOT capability
-function save_settings() {
-    check_ajax_referer('save_settings_action', 'settings_nonce');
-    // Missing: if (!current_user_can('manage_options')) wp_die();
-    update_option($_POST['key'], $_POST['value']);
-}
-// Nonce leaked via wp_localize_script() or page source accessible to Subscriber
-```
-
-**Why vulnerable:** Nonces are anti-CSRF tokens, NOT authorization. When a nonce protecting admin-only settings is embedded in page source viewable by Subscribers (via `wp_localize_script()` on frontend or admin pages with low `read` capability), any authenticated user can steal the nonce and call the endpoint.
-**Detection:** `check_ajax_referer()` or `wp_verify_nonce()` as the SOLE protection without accompanying `current_user_can()`. Cross-reference with `wp_localize_script()` calls that include nonce values.
+**Also study:** CVE-2024-5324 (XootiX Framework — shared framework import_settings() missing cap+nonce → options update → priv esc, CVSS 8.8) | CVE-2022-40223 (SearchWP Premium — nonce-only protection leaked via wp_localize_script() → settings takeover, CVSS 7.1)
 
 ---
 
@@ -268,85 +239,13 @@ grep -r "admin_post_nopriv_" --include="*.php"
 ```
 
 ### 2. Auth Level Testing Matrix
-```
-For EVERY endpoint, test at ALL levels:
-┌─────────────────┬───────────┬───────────┬───────────┬──────────┬────────┐
-│ Endpoint        │ Unauth    │ Subscriber│ Contributor│ Author  │ Admin  │
-├─────────────────┼───────────┼───────────┼───────────┼──────────┼────────┤
-│ ajax_action1    │ Test      │ Test      │ Test      │ Test     │ Test   │
-│ rest_endpoint1  │ Test      │ Test      │ Test      │ Test     │ Test   │
-│ admin_handler1  │ Test      │ Test      │ Test      │ Test     │ Test   │
-└─────────────────┴───────────┴───────────┴───────────┴──────────┴────────┘
+Test EVERY endpoint at ALL levels (unauth / subscriber / contributor / author / admin). Document the LOWEST level that succeeds for each.
 
-Document LOWEST level that works for each.
-```
-
-### 3. IDOR Testing
-```python
-# Create two users, try accessing each other's data
-user_a_id = 123
-user_b_id = 456
-
-# As user A, try to access user B's data
-response = request(
-    action="get_user_data",
-    user_id=user_b_id,  # Not our ID!
-    auth="subscriber_a"
-)
-# If we get user B's data = IDOR!
-
-# Try accessing other users' private posts
-response = request(
-    action="get_post",
-    post_id=private_post_of_user_b,
-    auth="subscriber_a"
-)
-```
-
-### 4. Nonce Hunting
-```python
-# Check page source for exposed nonces
-response = session.get('/wp-admin/admin.php?page=plugin-settings')
-nonces = re.findall(r'["\']_wpnonce["\']\s*:\s*["\']([a-f0-9]+)["\']', response.text)
-nonces += re.findall(r'_wpnonce=([a-f0-9]+)', response.text)
-
-# Try using found nonces for other actions
-for nonce in nonces:
-    response = session.post(ajax_url, data={
-        'action': 'dangerous_action',
-        '_wpnonce': nonce
-    })
-```
-
-### 5. Role Confusion Attacks
-```python
-# Test with array role input
-request(action="register", role=["administrator"])  # Array instead of string
-
-# Test with numeric role
-request(action="register", role=1)  # Administrator might be ID 1
-
-# Test capability as role
-request(action="register", role="manage_options")  # Confusion
-```
-
-### 6. Capability Escalation via Meta
-```python
-# If we can update user meta...
-request(
-    action="update_user_setting",
-    user_id=our_id,
-    meta_key="wp_capabilities",
-    meta_value={"administrator": True}
-)
-
-# Or via serialized data
-request(
-    action="update_user_setting",
-    meta_key="wp_capabilities",
-    meta_value='a:1:{s:13:"administrator";b:1;}'
-)
-```
+### 3. Additional Techniques (brief)
+- **IDOR Testing:** Create two users at same role, try accessing each other's data by swapping object IDs
+- **Nonce Hunting:** Scrape page source / wp_localize_script output for exposed nonces; try reusing across actions
+- **Role Confusion:** Submit role as array, numeric, or capability string during registration/update
+- **Capability Escalation via Meta:** If user meta is writable, target `wp_capabilities` key with `{"administrator": true}`
 
 ---
 
@@ -418,22 +317,6 @@ wpguard_sandbox_request(
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -441,53 +324,26 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="missing_authorization",  # or privilege_escalation, idor, auth_bypass
     title="Subscriber+ Arbitrary Settings Change via Missing Capability Check",
-    description="""
-## Vulnerability Summary
-AJAX endpoint allows any authenticated user to modify plugin settings that should be admin-only.
+    description="""## Vulnerability Summary
+AJAX endpoint allows any authenticated user to modify plugin settings (admin-only).
 
 ## Data Flow
-Entry: AJAX action "update_plugin_settings" (authenticated)
-  ↓
-Auth Check: is_user_logged_in() only - NO capability check
-  ↓
-Processing: Updates sensitive plugin options
-  ↓
-Impact: Subscriber can modify admin-only settings
+Entry: wp_ajax_update_plugin_settings → handle_settings_update()
+Auth: is_user_logged_in() only — NO current_user_can() check
+Impact: Subscriber modifies admin-only settings
 
 ## Code Analysis
 ```php
-// includes/ajax.php:145
-add_action('wp_ajax_update_plugin_settings', 'handle_settings_update');
-
-function handle_settings_update() {
-    // MISSING: current_user_can('manage_options')
-    if (!is_user_logged_in()) {
-        wp_die('Not authorized');
-    }
-    // ... updates settings
-}
+// includes/ajax.php:145 — MISSING: current_user_can('manage_options')
+function handle_settings_update() { ... }
 ```
 
-## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. Login as subscriber
-2. Send AJAX request to update_plugin_settings
-3. Settings modified despite being subscriber
-4. Potential full site compromise depending on settings
-
-## Impact
-- Subscriber can control plugin behavior
-- May enable further attacks via setting manipulation
-- Violates principle of least privilege
+## Prerequisites / ## Exploitation / ## Impact — (see shared template)
     """,
-    auth_level="subscriber",
-    cvss_score=6.5,
+    auth_level="subscriber", cvss_score=6.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
     affected_file="includes/ajax.php",
-    affected_function="handle_settings_update",
-    affected_line=145
+    affected_function="handle_settings_update", affected_line=145
 )
 ```
 
@@ -507,69 +363,4 @@ Authentication Bypass (login bypass): 9.8 Critical
 
 ---
 
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., authentication bypassed, session forged, login without valid credentials)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=authentication bypassed, session forged, login without valid credentials}}

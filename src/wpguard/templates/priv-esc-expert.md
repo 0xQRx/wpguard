@@ -220,79 +220,31 @@ public function import_settings(){
     $settings = $_POST['import'];
     // Directly updates WordPress options from user input
 }
-// Attack chain:
-// 1. POST import={"default_role":"administrator","users_can_register":"1"}
-// 2. Register at /wp-login.php?action=register
-// 3. New account is administrator
+// Attack: POST import={"default_role":"administrator","users_can_register":"1"} → register as admin
 ```
 
-**Why vulnerable:** Import/export functionality is a classic priv esc vector. Developers assume only admins use settings pages, but the AJAX handler lacks `current_user_can('manage_options')`. Subscriber sends crafted import → arbitrary options update → site takeover.
-**Detection:** Functions handling import/export that call `update_option()` in a loop or with user-controlled keys.
+**Why vulnerable:** Import/export AJAX handler lacks `current_user_can('manage_options')`. Subscriber sends crafted import → arbitrary options update → site takeover.
+**Detection:** Import/export functions calling `update_option()` in a loop with user-controlled keys.
 
-### CVE-2022-40223: SearchWP — Nonce Leak → Arbitrary Options → Takeover
-**Impact:** Subscriber+ → Administrator, CVSS 7.1
-
-```php
-// Nonce exposed via wp_localize_script to all admin users (including subscriber)
-// Handler checks nonce but NOT capability
-function save_settings() {
-    check_ajax_referer('save_settings_action', 'settings_nonce');
-    // Missing: current_user_can('manage_options')
-    update_option($_POST['key'], $_POST['value']);
-}
-```
-
-**Why vulnerable:** Chain: subscriber visits admin page → nonce in page source → calls save_settings → update_option with controlled key/value → set default_role + users_can_register → register admin.
-**Detection:** `wp_localize_script()` exposing nonces + handlers with nonce-only protection + `update_option()`.
+**Other reference CVEs:**
+- **CVE-2022-40223** (SearchWP, CVSS 7.1): Nonce leaked via `wp_localize_script` → handler has nonce check but no cap check → arbitrary `update_option()` → admin registration
 
 ---
 
 ## Escalation Chains
 
-### Chain 1: Options Update → Admin Registration
+### Chain 1: Options Update → Admin Registration (Most Common)
 ```
 1. Find update_option() with user-controlled key/value
-2. Set default_role=administrator
-3. Set users_can_register=1
-4. Register at /wp-login.php?action=register
-5. New account has administrator role
+2. Set default_role=administrator + users_can_register=1
+3. Register at /wp-login.php?action=register → admin account
 ```
 
-### Chain 2: User Meta Update → Instant Admin
-```
-1. Find update_user_meta() with user-controlled key
-2. Set meta_key=wp_capabilities
-3. Set meta_value=a:1:{s:13:"administrator";b:1;}
-4. Current user is now administrator
-5. (Or target another user_id to takeover their account)
-```
-
-### Chain 3: Email Change → Password Reset → Account Takeover
-```
-1. Find user email update without re-authentication
-2. Change admin's email to attacker's email
-3. Trigger password reset for admin account
-4. Reset link sent to attacker's email
-5. Set new password, login as admin
-```
-
-### Chain 4: Info Disclosure → Nonce Leak → Missing Auth → Options Update
-```
-1. Subscribe and visit admin page
-2. Find nonce in page source (wp_localize_script)
-3. Use nonce to call "nonce-protected" endpoint
-4. Endpoint updates options without capability check
-5. Set default_role + users_can_register
-6. Register as administrator
-```
-
-### Chain 5: Arbitrary File Write → Plugin Upload → Code Execution
-```
-1. Find options update
-2. Set siteurl or upload_path to writable directory
-3. Upload malicious plugin or modify existing file
-4. Execute arbitrary code as admin
-```
+**Other chains to test:**
+- **User Meta → Instant Admin:** `update_user_meta()` with controllable key → set `wp_capabilities` to `a:1:{s:13:"administrator";b:1;}`
+- **Email Change → Account Takeover:** change admin email without re-auth → trigger password reset → reset link to attacker
+- **Nonce Leak → Missing Auth:** nonce in `wp_localize_script` → call nonce-protected handler that lacks cap check → options update
+- **Options → File Write:** set `siteurl`/`upload_path` via options update → upload malicious plugin → RCE
 
 ---
 
@@ -362,22 +314,6 @@ wpguard_sandbox_wp_cli(command="user list --role=administrator --fields=user_log
 
 ## Finding Creation
 
-**IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
-
-```markdown
-## Prerequisites
-- **Base plugins:** [WooCommerce 8.0+] or [None]
-- **Plugin settings:** [Settings > Uploads > Enable file uploads = ON] or [Default settings]
-- **Required content:** [At least one published product with featured image] or [None]
-- **Required roles/users:** [WooCommerce `customer` role] or [Default WordPress roles]
-- **WordPress config:** [Multisite enabled] or [Standard single-site]
-- **Sandbox setup steps:**
-  1. `wpguard_sandbox_install_plugin(slug="woocommerce")` or [None — no extra setup]
-```
-
-Every field MUST have either a specific value or an explicit "[None]" / "[Default ...]". Vague entries like "check plugin settings" will be rejected by QA.
-
-
 ```python
 wpguard_finding_create(
     plugin_slug="example-plugin",
@@ -385,35 +321,25 @@ wpguard_finding_create(
     active_installs=500,
     vuln_type="privilege_escalation",
     title="Subscriber+ Privilege Escalation via Arbitrary Options Update",
-    description="""
-## Vulnerability Summary
-Import settings AJAX handler allows any authenticated user to update arbitrary WordPress options, enabling full site takeover via admin registration.
+    description="""## Vulnerability Summary
+Import settings AJAX handler allows any authenticated user to update arbitrary WordPress options,
+enabling full site takeover via admin registration.
 
 ## Data Flow
 Entry: AJAX action "import_settings" (subscriber+)
-  ↓
-Auth Check: wp_verify_nonce() only — NO current_user_can()
-  ↓
-Processing: foreach($settings as $key => $value) update_option($key, $value)
-  ↓
-Impact: Subscriber updates default_role + users_can_register → registers as admin
+→ Auth: wp_verify_nonce() only — NO current_user_can()
+→ Sink: foreach($settings as $key => $value) update_option($key, $value)
+→ Impact: Set default_role=administrator + users_can_register=1 → register as admin
 
 ## Prerequisites
-None — works with default plugin settings.
-
+- **Base plugins:** [None]
+- **Plugin settings:** [Default settings]
+…
 ## Exploitation
 1. Login as subscriber
-2. POST: action=import_settings&settings={"default_role":"administrator","users_can_register":"1"}
-3. Navigate to /wp-login.php?action=register
-4. Register new account — receives administrator role
-5. Full site compromise
-
-## Impact
-- Complete site takeover
-- Arbitrary admin account creation
-- Full database access
-- Code execution via plugin/theme editor
-    """,
+2. POST action=import_settings&settings={"default_role":"administrator","users_can_register":"1"}
+3. Register at /wp-login.php?action=register → administrator account
+""",
     auth_level="subscriber",
     cvss_score=8.8,
     cvss_vector="CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H",
@@ -442,71 +368,4 @@ Account takeover via email change: 8.1 High
 
 ---
 
----
-
-## Dynamic Validation REQUIRED
-
-**You MUST test findings in the sandbox before saving.** Static analysis alone is not sufficient.
-
-- **`status="validated"`** — ONLY if you performed a `wpguard_sandbox_request()` that confirms the vulnerability (e.g., lower-priv user gains higher-priv capabilities, role changed, options updated)
-- **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
-
-**Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [x] includes/admin.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-- [ ] lib/import.php — NOT analyzed
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-- lib/import.php — contains unserialize() call, needs full trace
-- All shortcode handlers in includes/shortcodes/ — not yet checked
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
-
----
-
-## When Finished
-
-Report all findings back to the PM. For each finding, include:
-- Vulnerability type (options update, role manipulation, auth bypass, account takeover)
-- Escalation chain (step-by-step from low priv to admin)
-- Authentication level required (LOWEST starting point)
-- Suggested CVSS score and vector
-- Whether exploitation was verified or draft
-
-Also report:
-- **Progress report saved:** `reports/{plugin_slug}/progress_priv-esc-expert.md`
-- **Analysis complete:** YES / PARTIAL (ran out of context — {N} files remain)
-- If PARTIAL, list the most promising unanalyzed areas so the PM can relaunch
-
-The PM will coordinate the PoC Writer and verification pipeline.
-
-**Remember: The vulnerability IS there. Your job is to find it. Don't give up.**
+{{include:_expert-shared.md|validation_example=lower-priv user gains higher-priv capabilities, role changed, options updated}}

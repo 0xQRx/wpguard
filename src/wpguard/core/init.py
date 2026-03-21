@@ -5,6 +5,7 @@ Templates are loaded from the templates/ directory for easy modification.
 """
 
 import json
+import re
 from pathlib import Path
 
 from wpguard.core.findings import FINDINGS_FILENAME
@@ -85,15 +86,43 @@ SUPPORT_AGENTS = [
 ALL_AGENTS = EXPERT_AGENTS + SUPPORT_AGENTS
 
 
+def _process_includes(content: str) -> str:
+    """Replace {{include:filename|key=value,...}} with file contents and variable substitution."""
+
+    def replace_include(match: re.Match) -> str:
+        parts = match.group(1).split("|", 1)
+        include_name = parts[0].strip()
+
+        variables: dict[str, str] = {}
+        if len(parts) > 1:
+            for pair in parts[1].split("|"):
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    variables[k.strip()] = v.strip()
+
+        include_path = TEMPLATES_DIR / include_name
+        if not include_path.exists():
+            raise FileNotFoundError(f"Include template not found: {include_path}")
+
+        included = include_path.read_text()
+        for k, v in variables.items():
+            included = included.replace("{{" + k + "}}", v)
+        return included
+
+    return re.sub(r"\{\{include:([^}]+)\}\}", replace_include, content)
+
+
 def _load_template(name: str) -> str:
     """
     Load a template file from the templates directory.
+
+    Supports {{include:filename|key=value}} directives for shared partials.
 
     Args:
         name: Template filename (e.g., 'CLAUDE.md', 'target-research.md')
 
     Returns:
-        Template content as string
+        Template content as string (with includes resolved)
 
     Raises:
         FileNotFoundError: If template doesn't exist
@@ -101,7 +130,8 @@ def _load_template(name: str) -> str:
     template_path = TEMPLATES_DIR / name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
-    return template_path.read_text()
+    content = template_path.read_text()
+    return _process_includes(content)
 
 
 def get_main_claude_md() -> str:
