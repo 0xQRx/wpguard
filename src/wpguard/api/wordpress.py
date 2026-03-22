@@ -161,6 +161,26 @@ class WordPressPluginAPI:
 
         return all_plugins
 
+    def get_plugin_changelog(self, slug: str) -> str:
+        """
+        Get changelog HTML for a plugin.
+
+        Args:
+            slug: Plugin slug
+
+        Returns:
+            Changelog HTML string, or empty string on failure
+        """
+        params = {"action": "plugin_information", "slug": slug}
+
+        try:
+            response = self.session.get(WP_API_BASE, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+            return data.get("sections", {}).get("changelog", "")
+        except (requests.RequestException, ValueError, KeyError):
+            return ""
+
     def get_plugin_versions(self, slug: str) -> list[str]:
         """
         Get available versions for a plugin.

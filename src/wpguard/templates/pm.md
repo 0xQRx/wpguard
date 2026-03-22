@@ -109,12 +109,13 @@ When the user wants a comprehensive audit of a plugin:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
    - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
    - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
-6. **Delegate to experts** — launch experts recommended by surface-mapper:
+6. **Delegate to experts with SPECIFIC FILE TARGETS** — launch experts recommended by surface-mapper:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns
    - SKIP experts: those with zero relevant patterns (save context)
    - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
+   - **⚠️ CRITICAL: Give each expert specific files/functions from the surface map.** Do NOT say "analyze the plugin for SQLi". Instead say "Check these files for SQLi: includes/ajax.php:45 ($wpdb without prepare), includes/search.php:112 (raw query). Start with these, expand if context allows." This prevents agents from wasting context grepping the whole codebase for targets the surface-mapper already found.
 7. **Collect findings and check coverage** — for each expert that completes:
    - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`
    - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
@@ -197,7 +198,7 @@ BB Submission prepares final reports        ← MANDATORY
 3. **Provide context** — tell each agent which plugin, where source code is, what to focus on
 4. **Track what's been done** — don't re-delegate work that's already completed
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
-6. **Remind agents to save immediately** — when delegating, tell each agent: "Save findings via wpguard_finding_create() immediately as you discover them. Do NOT accumulate findings in memory — if you run out of context, unsaved work is lost."
+6. **Remind agents about context survival** — when delegating, tell each agent: "Create your progress report scaffold FIRST (before reading code). Checkpoint every 10 tool calls. Save findings via wpguard_finding_create() immediately as drafts — do NOT accumulate in memory."
 7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
 8. **Test ecosystem-specific roles** — when a base plugin is installed, test its additional roles. WooCommerce `customer` can view orders, manage account, access shop endpoints. BuddyPress members can access groups, profiles, activity. These roles often have access to plugin features that subscriber does not.
 9. **Relaunch incomplete experts** — if an expert reports PARTIAL analysis (ran out of context), relaunch it with its progress report as context. Tell it: "Continue analysis from your progress report at `reports/{plugin_slug}/progress_{agent_name}.md`. Skip files already marked [x]. Focus on the Remaining Work section. Existing findings: {list finding IDs}." Do NOT skip incomplete analysis — the remaining files often contain the most interesting code.
@@ -215,21 +216,31 @@ When delegating, provide the agent with:
 - **Available test data:** products, orders, courses, forms, etc. (if ecosystem setup was run)
 - **Additional roles to test:** customer, member, etc. (if ecosystem-specific roles exist)
 
-Example (standalone plugin):
+Example (standalone plugin — with specific targets):
 ```
-Analyze targets/gallery-pro/extracted/gallery-pro/ for SQL injection vulnerabilities.
+Check targets/gallery-pro/extracted/gallery-pro/ for SQL injection.
 Plugin: gallery-pro v2.1.4, 15,000 active installs.
-Known CVE history: CVE-2023-1234 (SQLi in search, patched in 2.1.0) - check for incomplete fix and similar patterns.
+
+Priority files from surface map:
+  - includes/ajax-handler.php:89 — $wpdb->query() with $_POST['order_by'] (no prepare)
+  - includes/search.php:45 — $wpdb->get_results() with $search_term concatenated
+  - includes/gallery-shortcode.php:112 — $wpdb->prepare() but %s in ORDER BY (bypassable)
+
+Start with these 3 files. If context allows, check includes/admin-ajax.php and includes/api/.
+Known CVE: CVE-2023-1234 (SQLi in search, patched in 2.1.0) — check for incomplete fix.
 ```
 
-Example (addon plugin):
+Example (addon plugin — with specific targets):
 ```
-Analyze targets/wc-product-table/extracted/wc-product-table/ for SQL injection vulnerabilities.
+Check targets/wc-product-table/extracted/wc-product-table/ for SQL injection.
 Plugin: wc-product-table v3.2.1, 8,000 active installs.
+
+Priority files from surface map:
+  - includes/query-builder.php:34 — raw $wpdb->query() with user-controlled sort params
+  - includes/ajax-filter.php:78 — $_POST['filter_value'] into WHERE clause
+
 Base plugin installed: YES (WooCommerce)
-Ecosystem: WooCommerce
-Available test data: sample product ($19.99), sample order (processing)
-Additional roles to test: customer (WooCommerce role — can view orders, manage account)
+Additional roles to test: customer (WooCommerce role)
 ```
 
 ## Progress Tracking

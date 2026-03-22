@@ -1,3 +1,57 @@
+## ⚠️ CONTEXT SURVIVAL PROTOCOL (READ THIS FIRST)
+
+**You WILL run out of context on large plugins.** Plan for it. Every tool call costs tokens. Your unsaved work dies when context runs out.
+
+### Rule 1: Save Structure FIRST (within your first 3 tool calls)
+
+Before analyzing ANY code, create your progress report scaffold:
+
+```
+reports/{plugin_slug}/progress_{agent_name}.md
+```
+
+```markdown
+# Progress Report: {agent_name} on {plugin_slug}
+
+## Scope
+Files to analyze (from surface map or PM):
+- [ ] {file1} — {why it's relevant}
+- [ ] {file2} — {why it's relevant}
+- [ ] {file3} — {why it's relevant}
+
+## Findings Created
+(none yet)
+
+## Notes
+(none yet)
+```
+
+**This is your lifeline.** If you run out of context, the PM relaunches you from this file.
+
+### Rule 2: Checkpoint Every 10 Tool Calls
+
+After every ~10 tool calls, UPDATE your progress report:
+- Mark files as `[x]` analyzed or `[~]` partial
+- Add any promising leads to Notes
+- Add any findings created
+
+**Do NOT wait until you're "done" to save progress.** Save continuously.
+
+### Rule 3: Save Findings IMMEDIATELY
+
+The moment you identify a vulnerability — even a maybe:
+1. Call `wpguard_finding_create()` RIGHT NOW with `status="draft"` if unverified
+2. Update your progress report with the finding ID
+3. Then continue analyzing
+
+A saved draft is infinitely more valuable than a lost validated finding.
+
+### Rule 4: Work From Specific Targets
+
+The PM gives you specific files/functions to check. **Start with those.** Do NOT grep the entire plugin looking for your own targets — the surface-mapper already did that. If you finish your assigned scope and have context left, expand.
+
+---
+
 ## Finding Creation
 
 **IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.
@@ -25,40 +79,6 @@ Every field MUST have either a specific value or an explicit "[None]" / "[Defaul
 - **`status="draft"`** — If static analysis is promising but sandbox testing was inconclusive, failed, or you ran out of turns. Include what you tried and what happened.
 
 **Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
-
----
-
-## Progress Saving (CRITICAL)
-
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
-
-1. The moment you identify a vulnerability, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end to report — if you run out of context, unsaved findings are LOST
-4. The PM and poc-writer will handle PoC scripts — your job is to find vulns and save them
-
-### Progress Report (REQUIRED before finishing)
-
-Before your final response to the PM, save a progress report to `reports/{plugin_slug}/progress_{agent_name}.md` with:
-
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
-
-## Files Analyzed
-- [x] includes/ajax.php — fully analyzed
-- [ ] includes/api.php — partially analyzed (stopped at line 250)
-
-## Findings Created
-- {finding_id}: {title} (status: {draft/validated})
-
-## Remaining Work
-- includes/api.php lines 250+ — has register_rest_route calls not yet reviewed
-
-## Notes
-- {any patterns observed, areas that looked promising but need more time}
-```
-
-**Why this matters:** If you run out of context, the PM will relaunch you (or another expert) with this progress report so analysis continues from where you left off instead of restarting from scratch.
 
 ---
 

@@ -3,9 +3,11 @@ Plugin watching and change detection.
 """
 
 import json
+import re
 import sys
 import time
 from datetime import datetime, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any, Callable
 
@@ -370,6 +372,49 @@ class PluginWatcher:
             "output_dir": str(self.output_dir),
         }
 
+    @staticmethod
+    def _extract_latest_changelog(changelog_html: str) -> str:
+        """Extract the latest version's changelog entry from HTML.
+
+        Parses the first <h4>...</h4> block and its following <ul> items,
+        returning plain text.
+        """
+        if not changelog_html:
+            return ""
+        # Split on h4 headings — each is a version entry
+        parts = re.split(r"<h4>", changelog_html, maxsplit=2)
+        if len(parts) < 2:
+            return ""
+        # Take the first version block (between first and second h4)
+        block = parts[1].split("</h4>", 1)
+        version_header = re.sub(r"<[^>]+>", "", block[0]).strip() if block else ""
+        body = block[1] if len(block) > 1 else ""
+        # Extract list items
+        items = re.findall(r"<li>(.*?)</li>", body, re.DOTALL)
+        lines = [unescape(re.sub(r"<[^>]+>", "", item)).strip() for item in items]
+        if not lines:
+            return version_header
+        return f"{version_header}\n" + "\n".join(f"- {line}" for line in lines)
+
+    def _enrich_update(self, update: dict[str, Any]) -> None:
+        """Enrich an update record with changelog and SVN log.
+
+        Only fetches for plugins with >= 10k installs to avoid excessive API calls.
+        """
+        if update["active_installs"] < 10000:
+            return
+
+        # Fetch changelog from WordPress.org API
+        changelog_html = self.api.get_plugin_changelog(update["slug"])
+        update["changelog"] = self._extract_latest_changelog(changelog_html)
+
+        # Fetch recent SVN commits (last 5)
+        try:
+            entries = self.svn.get_log(update["slug"], limit=5)
+            update["svn_log"] = entries
+        except Exception:
+            update["svn_log"] = []
+
     def check_global_updates(
         self,
         min_installs: int = 1000,
@@ -379,6 +424,7 @@ class PluginWatcher:
         Query WordPress.org for recently updated plugins.
 
         Returns only NEW updates not seen in previous checks.
+        Enriches high-value updates (>= 10k installs) with changelog and SVN log.
 
         Args:
             min_installs: Minimum active installations filter
@@ -408,7 +454,7 @@ class PluginWatcher:
         for plugin in plugins:
             # Only report if this slug+version combo hasn't been seen before
             if seen.get(plugin.slug) != plugin.version:
-                new_updates.append({
+                update = {
                     "slug": plugin.slug,
                     "name": plugin.name,
                     "version": plugin.version,
@@ -416,9 +462,19 @@ class PluginWatcher:
                     "last_updated": plugin.last_updated,
                     "download_link": plugin.download_link,
                     "short_description": plugin.short_description,
-                })
+                    "changelog": "",
+                    "svn_log": [],
+                }
+                new_updates.append(update)
                 # Update seen versions
                 seen[plugin.slug] = plugin.version
+
+        # Enrich high-value updates with changelog + SVN log
+        enriched = 0
+        for update in new_updates:
+            if update["active_installs"] >= 10000:
+                self._enrich_update(update)
+                enriched += 1
 
         now = datetime.now(timezone.utc).isoformat()
         self.state["global_monitor"]["last_checked"] = now
@@ -428,6 +484,7 @@ class PluginWatcher:
             "last_checked": now,
             "new_updates": new_updates,
             "total_new": len(new_updates),
+            "enriched_count": enriched,
         }
 
         # Write recently_updated.json to output dir
@@ -437,7 +494,7 @@ class PluginWatcher:
 
         print(
             f"[*] Global monitor: {len(plugins)} plugins checked, "
-            f"{len(new_updates)} new updates",
+            f"{len(new_updates)} new updates ({enriched} enriched with changelog)",
             file=sys.stderr,
         )
 
