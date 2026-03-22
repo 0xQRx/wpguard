@@ -71,6 +71,7 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `code-injection-expert` | eval, call_user_func, dynamic dispatch, callback injection |
 | `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
+| `data-flow-expert` | Cross-feature data flow analysis — finds chains where data written by one feature is consumed unsafely by another |
 
 ### Verification Pipeline Agents (ALL MANDATORY — no finding skips any step)
 | Agent | Purpose |
@@ -112,6 +113,7 @@ When the user wants a comprehensive audit of a plugin:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns
    - SKIP experts: those with zero relevant patterns (save context)
+   - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
 7. **Collect findings and check coverage** — for each expert that completes:
    - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`

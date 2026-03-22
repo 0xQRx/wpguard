@@ -63,6 +63,7 @@ EXPERT_AGENTS = [
     "race-condition-expert",
     "csrf-expert",
     "critical-thinker",
+    "data-flow-expert",
     "lfi-rfi-expert",
     "xxe-expert",
     "deserialization-expert",

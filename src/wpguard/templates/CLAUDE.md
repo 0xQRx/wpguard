@@ -30,6 +30,7 @@ Delegated by `/pm` — not invoked directly.
 | `race-condition-expert` | TOCTOU, database races, limit bypass |
 | `csrf-expert` | CSRF, missing nonce validation |
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
+| `data-flow-expert` | Cross-feature data flows — writes in one feature consumed unsafely by another |
 | `lfi-rfi-expert` | LFI/RFI, path traversal |
 | `xxe-expert` | XXE, SVG/XML processing |
 | `deserialization-expert` | Unsafe deserialization, type juggling |
