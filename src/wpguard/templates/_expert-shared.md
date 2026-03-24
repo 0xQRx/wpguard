@@ -53,6 +53,26 @@ Read the surface map at `reports/{plugin_slug}/surface_map.md` first — it has 
 
 ---
 
+## Common Missed Patterns (from n-day CVE analysis)
+
+These patterns are consistently missed by security audits. Check for them:
+
+1. **False sanitization → SQLi**: `esc_url_raw()`, `sanitize_text_field()`, `wp_kses()` do NOT escape SQL. Data sanitized for one context flowing into SQL = injection
+2. **`$wpdb->insert()` key injection**: If array keys come from `$_POST`, column names are injectable (values are prepared, keys are NOT)
+3. **`update_option()` with user-controlled key**: In loops, imports, or form handlers = full site takeover via `default_role` + `users_can_register`
+4. **Profile hooks without cap check**: `personal_options_update` fires on own-profile save. Nonce is always available. Missing `current_user_can('promote_users')` = priv esc
+5. **`wp_set_password`/`wp_update_user` without ownership check**: If user_id comes from `$_POST` instead of `get_current_user_id()` = account takeover
+6. **`rest_pre_dispatch` hooks**: Fire BEFORE any REST route auth — effectively a global unauthenticated endpoint
+7. **`init`/`template_redirect` implicit endpoints**: Process input on every page load, often without structured auth
+8. **Standalone PHP files**: Files with `require wp-load.php` are directly accessible, bypass all WordPress auth
+9. **`basename()` as security check**: `basename('/etc/passwd') === basename('/uploads/passwd')` → true. Always a bypass
+10. **Encoded deserialization**: `unserialize(base64_decode($data))` hides the sink from simple grep patterns
+11. **`wp_remote_get()` vs `wp_safe_remote_get()`**: The unsafe variant allows `file://` protocol and internal IPs
+12. **Hard-coded JWT/HMAC fallbacks**: `defined('SECRET') ? SECRET : 'default_key'` = forgeable tokens
+13. **Short OTP without rate limiting**: `rand(1000, 9999)` = 9000 combinations, brute-forceable in minutes
+
+---
+
 ## Finding Creation
 
 **IMPORTANT: Every finding description MUST include a `## Prerequisites` section** using this exact structured format. Every field must be explicitly filled — no omissions, no vague descriptions.

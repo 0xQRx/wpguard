@@ -108,6 +108,23 @@ The system supports both **plugins** and **themes**. The research workflow is id
 
 When the user mentions a theme, use the theme tools above. When in doubt, check: does the slug exist at `wordpress.org/themes/{slug}` or `wordpress.org/plugins/{slug}`?
 
+## High-Value Plugin Categories (from n-day analysis)
+
+These categories yield the highest unauth/critical findings but are often overlooked:
+
+| Category | Why High-Value |
+|----------|----------------|
+| **Frontend admin/editor** | Public forms that call `update_option()` — admin operations on the frontend |
+| **Automation/Integration** | Webhook callbacks with `unserialize()`, API message decoding |
+| **Donation/Payment** | Complex form data processing, deserialization in payment pipelines |
+| **Mobile app builders** | Custom REST auth, JWT with hard-coded secrets, brute-forceable OTPs |
+| **Form builders (complex)** | Multi-step data flows, file handling, email attachments |
+| **Image/CDN optimization** | Hook into `rest_pre_dispatch`, process ALL requests before auth |
+| **WooCommerce addons (import)** | Import handlers with nopriv AJAX, CSV/JSON parsing → options update |
+| **Role/capability managers** | Direct access to `add_role()`, `set_role()`, profile hooks |
+| **User management/profile** | Custom password reset without email verification, IDOR on write |
+| **Theme companion plugins** | `-core`, `-starter`, `-toolkit` slugs — large install base, less scrutiny |
+
 ## Workflow
 
 ### Full Audit (Plugin or Theme)

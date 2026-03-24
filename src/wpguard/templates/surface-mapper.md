@@ -90,6 +90,9 @@ grep -rn "register_rest_route" --include="*.php" .
 # REST routes with permissive access — flag __return_true permission callbacks
 grep -rn "permission_callback" --include="*.php" . | grep "__return_true"
 
+# REST pre-dispatch hooks — fire BEFORE any REST auth, process ALL requests
+grep -rn "rest_pre_dispatch\|rest_pre_serve_request\|rest_request_before_callbacks" --include="*.php" .
+
 # Admin post handlers — split into nopriv vs auth-only
 grep -rn "admin_post_nopriv_" --include="*.php" .
 grep -rn "admin_post_" --include="*.php" . | grep -v "nopriv"
@@ -97,30 +100,50 @@ grep -rn "admin_post_" --include="*.php" . | grep -v "nopriv"
 # Shortcodes (render in frontend context, often subscriber-accessible)
 grep -rn "add_shortcode" --include="*.php" .
 
+# Implicit frontend endpoints — hooks that process input on EVERY page load
+grep -rn "add_action.*['\"]init['\"]\|add_action.*['\"]template_redirect['\"]\|add_action.*['\"]wp_loaded['\"]\|add_action.*['\"]parse_request['\"]" --include="*.php" .
+
+# Profile update hooks — priv esc vector via self-modification
+grep -rn "personal_options_update\|edit_user_profile_update\|profile_update\|user_register" --include="*.php" .
+
+# Standalone PHP files that bootstrap WordPress — directly accessible endpoints
+find . -name "*.php" -exec grep -l "require.*wp-load.php\|require.*wp-blog-header.php" {} \;
+
 # Form handlers and $_POST/$_GET/$_REQUEST usage
 grep -rn "\$_POST\|\$_GET\|\$_REQUEST" --include="*.php" . | wc -l
 
 # Server variables — often overlooked user-controlled input
 grep -rn "\$_SERVER\[.REQUEST_URI.\]\|\$_SERVER\[.HTTP_HOST.\]\|\$_SERVER\[.HTTP_REFERER.\]\|\$_SERVER\[.QUERY_STRING.\]" --include="*.php" .
+
+# Cookie-based input
+grep -rn "\$_COOKIE" --include="*.php" .
 ```
 
 ### Step 3: Dangerous Functions
 
 ```bash
 # SQL — potential SQLi
-# Count $wpdb calls, then count those using ->prepare
 grep -rn "\$wpdb->query\|\$wpdb->get_\|\$wpdb->insert\|\$wpdb->update\|\$wpdb->delete\|\$wpdb->replace" --include="*.php" .
 grep -rn "\$wpdb->prepare" --include="*.php" .
 # The difference = unprepared queries = SQLi candidates
+# ALSO: $wpdb->insert() with user-controlled KEYS = column name injection (CVE-2026-3657)
 
-# File operations — potential file upload/read/write/delete vulns
-grep -rn "file_get_contents\|fopen\|file_put_contents\|move_uploaded_file\|unlink\|readfile\|copy\|rename\|mkdir\|rmdir" --include="*.php" .
+# Critical user/option sinks — site takeover vectors
+grep -rn "update_option\|add_option\|delete_option" --include="*.php" .
+grep -rn "wp_set_password\|wp_update_user\|wp_insert_user" --include="*.php" .
+# update_option with user-controlled key = ALWAYS critical
+# wp_set_password without ownership check = account takeover
 
-# Code execution — potential code injection
+# File operations — upload/read/write/delete
+grep -rn "file_get_contents\|fopen\|file_put_contents\|move_uploaded_file\|unlink\|wp_delete_file\|readfile\|copy\|rename" --include="*.php" .
+# unlink() + wp_delete_file() = same priority as file upload (wp-config.php deletion → RCE)
+
+# Code execution — code injection
 grep -rn "eval\s*(\|assert\s*(\|call_user_func\|create_function\|preg_replace.*\/e" --include="*.php" .
 
-# Deserialization — potential object injection
+# Deserialization — object injection (including encoded variants)
 grep -rn "unserialize\|maybe_unserialize" --include="*.php" .
+grep -rn "unserialize.*base64_decode\|unserialize.*gzuncompress\|unserialize.*hex2bin\|unserialize.*json_decode" --include="*.php" .
 
 # Redirects — flag wp_redirect without wp_safe_redirect
 grep -rn "wp_redirect\|header.*Location" --include="*.php" .
@@ -129,14 +152,25 @@ grep -rn "wp_safe_redirect" --include="*.php" .
 # XML processing — potential XXE
 grep -rn "simplexml\|DOMDocument\|xml_parse\|XMLReader\|SimpleXMLElement\|libxml" --include="*.php" .
 
-# External requests — potential SSRF
+# External requests — SSRF (distinguish safe vs unsafe)
 grep -rn "wp_remote_get\|wp_remote_post\|wp_remote_request\|file_get_contents.*http\|curl_exec\|curl_init" --include="*.php" .
+grep -rn "wp_safe_remote_get\|wp_safe_remote_post" --include="*.php" .
+# wp_remote_get = UNSAFE (allows file://, internal IPs). wp_safe_remote_get = safer
 
-# False-sanitization patterns — looks safe but WRONG for context
-# esc_url_raw() does NOT sanitize for SQL — it allows ', ", and SQL chars
-# sanitize_text_field() does NOT sanitize for SQL — strips HTML but not SQL
+# JWT/Token authentication
+grep -rn "JWT::decode\|jwt_decode\|firebase.*jwt\|lcobucci.*jwt" --include="*.php" .
+grep -rn "generate_key\|generate_token\|random_int.*1000.*9999\|rand.*1000.*9999" --include="*.php" .
+
+# False-sanitization patterns — looks safe but WRONG for SQL context
 grep -rn "esc_url_raw\|sanitize_text_field\|sanitize_title\|wp_kses" --include="*.php" .
 # Cross-reference: if these appear near $wpdb without prepare(), it's a false-sanitization SQLi
+
+# Security check anti-patterns
+grep -rn "basename.*===.*basename\|basename.*==.*basename" --include="*.php" .
+# basename() comparison = path traversal bypass (basename('/etc/passwd') === basename('/uploads/passwd'))
+
+# Import/export handlers — often nopriv with dangerous sinks
+grep -rn "import\|export\|restore_default\|reset_settings" --include="*.php" . | grep -i "function\|action"
 ```
 
 ### Step 4: Auth Patterns
@@ -157,17 +191,17 @@ Compare endpoint count vs auth check count. Large gaps indicate missing authoriz
 ### Step 5: Additional Signals
 
 ```bash
-# Options API (potential options update vulns)
-grep -rn "update_option\|add_option\|delete_option" --include="*.php" .
-
 # User meta manipulation
-grep -rn "update_user_meta\|add_user_meta\|delete_user_meta\|wp_update_user\|wp_insert_user" --include="*.php" .
+grep -rn "update_user_meta\|add_user_meta\|delete_user_meta" --include="*.php" .
 
 # Hooks that modify capabilities or roles
-grep -rn "add_cap\|remove_cap\|add_role\|set_role\|wp_roles" --include="*.php" .
+grep -rn "add_cap\|remove_cap\|add_role\|set_role\|wp_roles\|\$user->add_role\|\$user->set_role" --include="*.php" .
 
 # Include/require with variables (potential LFI)
 grep -rn "include\s*(\|require\s*(\|include_once\s*(\|require_once\s*(" --include="*.php" . | grep "\$"
+
+# CSV/JSON import parsing — data injection via file uploads
+grep -rn "fgetcsv\|str_getcsv\|parse_csv\|json_decode.*\$_FILES\|json_decode.*file_get_contents" --include="*.php" .
 ```
 
 ---
@@ -190,35 +224,50 @@ ENDPOINTS:
   AJAX (nopriv):     {count}  ← HIGH PRIORITY (unauthenticated)
   AJAX (auth-only):  {count}
   REST routes:       {count}  ({n} with __return_true ← HIGH PRIORITY)
+  REST pre-dispatch hooks: {count}  ← CRITICAL (fires before REST auth)
   Admin post:        {count}
   Shortcodes:        {count}
+  init/template_redirect: {count}  ← Implicit frontend endpoints
+  Profile update hooks:   {count}  ← Priv esc vector
+  Standalone PHP (wp-load): {count} ← Direct access, bypasses all auth
 
-DANGEROUS FUNCTIONS:
+DANGEROUS SINKS:
   $wpdb without prepare:  {count}  ← SQLi candidates
+  update_option:          {count}  ← Site takeover if user-controlled key
+  wp_set_password:        {count}  ← Account takeover if no ownership check
+  wp_update_user:         {count}  ← Account takeover if user_id from POST
   File operations:        {count}  ← File vuln candidates
+  unlink/wp_delete_file:  {count}  ← wp-config.php deletion → RCE
   eval/assert/call_user:  {count}  ← Code injection candidates
   unserialize:            {count}  ← Object injection candidates
+  unserialize(base64/gz): {count}  ← Encoded deserialization
   wp_redirect (not safe): {count}  ← Open redirect candidates
   XML processing:         {count}  ← XXE candidates
-  External requests:      {count}  ← SSRF candidates
+  wp_remote_get (unsafe): {count}  ← SSRF (allows file://, internal IPs)
+  wp_safe_remote_get:     {count}  ← Safer variant
 
 AUTH GAPS:
   Endpoints without cap check:  {count}  ← Missing auth candidates
-  Nonce-only (no cap check):    {count}  ← Missing auth candidates
+  Nonce-only (no cap check):    {count}  ← Missing auth candidates (nonce ≠ authorization)
 
 INPUT SOURCES:
   $_POST/$_GET/$_REQUEST:  {count}
   $_SERVER (URI/Host):     {count}  ← Often overlooked user input
+  $_COOKIE:                {count}  ← Cookie-based tokens
 
-FALSE-SANITIZATION PATTERNS:
-  esc_url_raw near $wpdb:  {count}  ← Does NOT prevent SQLi
+SECURITY ANTI-PATTERNS:
+  esc_url_raw near $wpdb:         {count}  ← Does NOT prevent SQLi
   sanitize_text_field near $wpdb: {count}  ← Does NOT prevent SQLi
+  basename() comparison:          {count}  ← Path traversal bypass
+  JWT/token libraries:            {count}  ← Check for hard-coded secrets
+  Short OTP (rand 1000-9999):     {count}  ← Brute-forceable
 
 OTHER SIGNALS:
-  Options API calls:       {count}
   User meta manipulation:  {count}
   Role/capability changes: {count}
   Dynamic includes:        {count}  ← LFI candidates
+  Import/export handlers:  {count}  ← Often nopriv + dangerous sinks
+  CSV/JSON parsing:        {count}  ← Data injection via file uploads
 
 RECOMMENDED EXPERTS:
   MUST RUN:   {experts with non-zero HIGH PRIORITY counts}
@@ -238,19 +287,29 @@ Use these rules to determine RECOMMENDED EXPERTS:
 | Category | Expert(s) |
 |----------|-----------|
 | AJAX nopriv / REST __return_true / auth gaps | `missing-auth-expert` |
-| $wpdb without prepare | `sqli-expert` |
-| File operations | `file-rce-expert`, `lfi-rfi-expert` |
+| rest_pre_dispatch hooks | `missing-auth-expert`, `code-injection-expert` |
+| $wpdb without prepare / false-sanitization / key injection | `sqli-expert` |
+| File operations (read/write/upload) | `file-rce-expert`, `lfi-rfi-expert` |
+| unlink / wp_delete_file | `file-rce-expert` (wp-config deletion → RCE) |
 | eval / call_user_func | `code-injection-expert` |
-| unserialize / maybe_unserialize | `object-injection-expert`, `deserialization-expert` |
+| unserialize / encoded deserialization | `object-injection-expert`, `deserialization-expert` |
 | wp_redirect (not safe) | `open-redirect-expert` |
 | XML processing | `xxe-expert` |
-| External requests | `ssrf-expert` |
-| Options / user meta / roles | `priv-esc-expert` |
+| wp_remote_get (not safe variant) | `ssrf-expert` |
+| update_option with user-controlled key | `priv-esc-expert` (CRITICAL — site takeover) |
+| wp_set_password / wp_update_user | `priv-esc-expert`, `idor-expert` (account takeover) |
+| Profile update hooks | `priv-esc-expert` (self-role-assignment) |
+| Roles / capabilities / user meta | `priv-esc-expert` |
 | Shortcodes with user input | `xss-expert` |
 | Any non-trivial endpoint count | `csrf-expert`, `idor-expert` |
-| Complex multi-step flows | `logic-flaw-expert` |
+| init/template_redirect with $_POST | `missing-auth-expert`, `csrf-expert` |
+| Standalone PHP files (wp-load) | `missing-auth-expert`, `file-rce-expert` |
+| JWT/token libraries | `priv-esc-expert` (hard-coded secrets, weak tokens) |
+| Import/export handlers | `missing-auth-expert`, `priv-esc-expert` |
+| Complex multi-step / cross-feature flows | `data-flow-expert`, `logic-flaw-expert` |
+| basename() comparisons | `lfi-rfi-expert`, `file-rce-expert` |
 | Debug/status/info endpoints | `info-disclosure-expert` |
-| Database races, token reuse | `race-condition-expert` |
+| Database races, token reuse, short OTP | `race-condition-expert` |
 
 Mark an expert as **MUST RUN** if its category has HIGH PRIORITY items or a significant count. Mark as **SHOULD RUN** if counts are non-zero but low. Mark as **SKIP** if counts are zero. `critical-thinker` always runs last regardless.
 
