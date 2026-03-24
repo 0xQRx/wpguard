@@ -4,6 +4,11 @@ An agentic security research framework for WordPress plugins and themes. Built f
 
 > **This is not a scanner.** wpguard is an autonomous research system — it downloads source code, maps attack surfaces, delegates deep analysis to expert agents, verifies findings in a live sandbox, and prepares submission-ready reports.
 
+> [!CAUTION]
+> **Run wpguard in a VM or dedicated host only.** This tool grants broad permissions to autonomous AI agents — filesystem access, Docker control, shell execution, network requests, and process management. Agents operate with the full privileges of the user running Claude Code. Running on your personal machine or a shared server risks unintended file modifications, data loss, or system damage. Use a disposable VM or a dedicated research box.
+>
+> **Not suitable for running inside Docker.** wpguard itself spawns Docker containers (WordPress sandbox) and requires Docker socket access. Running inside a container creates Docker-in-Docker complexity and breaks sandbox networking. Install directly on the VM host.
+
 ## How It Works
 
 ```
@@ -400,3 +405,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 ## Disclaimer
 
 This tool is for authorized security research within the Wordfence Bug Bounty Program. All analysis is performed on downloaded source code and controlled sandbox environments. Always respect WordPress.org terms of service and individual plugin/theme licenses.
+
+**wpguard grants autonomous AI agents broad system access including filesystem writes, Docker management, shell execution, and network requests. Always run in an isolated environment (VM or dedicated host). The authors are not responsible for damage caused by running this tool on production or personal systems.**
