@@ -562,16 +562,32 @@ class WordPressSandbox:
     # Docker Compose Management Methods
     # =========================================================================
 
+    @staticmethod
+    def _get_compose_cmd() -> list[str]:
+        """Detect whether to use 'docker compose' (V2) or 'docker-compose' (V1)."""
+        # Try V2 plugin first (docker compose)
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "version"],
+                capture_output=True, timeout=10,
+            )
+            if result.returncode == 0:
+                return ["docker", "compose"]
+        except (subprocess.SubprocessError, FileNotFoundError):
+            pass
+        # Fall back to V1 standalone (docker-compose)
+        return ["docker-compose"]
+
     def _run_compose(
         self,
         command: str,
         timeout: int = 300,
     ) -> dict[str, Any]:
         """
-        Run a docker-compose command.
+        Run a docker compose command (supports both V1 and V2).
 
         Args:
-            command: docker-compose subcommand and args (e.g., "up -d")
+            command: compose subcommand and args (e.g., "up -d")
             timeout: Command timeout in seconds
 
         Returns:
@@ -588,8 +604,8 @@ class WordPressSandbox:
             }
 
         try:
-            cmd_parts = [
-                "docker-compose",
+            compose_cmd = self._get_compose_cmd()
+            cmd_parts = compose_cmd + [
                 "-f", str(compose_file),
             ] + command.split()
 
@@ -619,7 +635,7 @@ class WordPressSandbox:
             return {
                 "success": False,
                 "stdout": "",
-                "stderr": "docker-compose not found. Ensure Docker Compose is installed.",
+                "stderr": "Docker Compose not found. Install via: apt install docker-compose-plugin (V2) or pip install docker-compose (V1)",
                 "return_code": -1,
             }
         except Exception as e:

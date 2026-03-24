@@ -157,12 +157,30 @@ Track the entire WordPress ecosystem for research opportunities:
 
 ### Prerequisites
 
-- Python 3.11+
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
-- Docker (for sandbox)
-- SVN (`apt install subversion`)
+| Requirement | Purpose | Install |
+|-------------|---------|---------|
+| **Python 3.11+** | Runtime | `apt install python3` / `brew install python` |
+| **pipx** | Isolated install | `apt install pipx` / `pip install pipx` |
+| **[Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI** | Agent orchestration | `npm install -g @anthropic-ai/claude-code` |
+| **Docker + Compose** | WordPress sandbox | `apt install docker.io docker-compose-plugin` |
+| **SVN** | Plugin/theme version history | `apt install subversion` |
+| **Node.js 18+** | Playwright MCP | `apt install nodejs` / `brew install node` |
 
-### Install
+**API Keys:**
+
+| Key | Purpose | How to Get |
+|-----|---------|------------|
+| **Anthropic API key** | Claude Code agents | [console.anthropic.com](https://console.anthropic.com) |
+| **Wordfence API key** | CVE database search (`wpguard_cve_search`) | [wordfence.com/threat-intel](https://www.wordfence.com/threat-intel/) — free tier available |
+| **Discord webhook** (optional) | Finding notifications | Server Settings > Integrations > Webhooks |
+
+```bash
+# Set API keys
+export WORDFENCE_API_KEY="your-key-here"
+export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # optional
+```
+
+### Install wpguard
 
 ```bash
 # From GitHub (recommended)
@@ -174,18 +192,27 @@ cd wpguard
 pipx install -e .
 ```
 
-### Setup Claude Code Integration
+### Setup MCP Servers
+
+wpguard uses three MCP servers — wpguard itself (required), Playwright (required for PoC verification), and devrag (optional but recommended):
 
 ```bash
-# Add wpguard MCP server
+# Required: wpguard tools (plugin/theme API, sandbox, findings, scope validation)
 claude mcp add wpguard -s user -- wpguard-mcp
 
-# Add Playwright for browser-based PoC testing
+# Required: Playwright (browser automation for XSS/CSRF PoC verification)
 claude mcp add playwright -s user -- npx @playwright/mcp@latest
 
-# Verify
+# Optional but recommended: devrag (RAG over security knowledge base)
+# Build from web pentesting resources — PayloadsAllTheThings, HackTricks, OWASP, etc.
+# See: https://github.com/0xQRx/devrag
+claude mcp add devrag -s user -- /path/to/devrag --config /path/to/devrag/config.json
+
+# Verify all MCP servers
 claude mcp list
 ```
+
+**devrag** provides RAG-powered search over curated security research documents. When configured with resources like [PayloadsAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings), [HackTricks](https://book.hacktricks.wiki/), and OWASP guides, it gives agents access to bypass techniques, payload lists, and exploitation patterns during analysis. Not required, but significantly improves expert agent effectiveness.
 
 ## Quick Start
 
