@@ -5,7 +5,9 @@ Templates are loaded from the templates/ directory for easy modification.
 """
 
 import json
+import os
 import re
+import shutil
 from pathlib import Path
 
 from wpguard.core.findings import FINDINGS_FILENAME
@@ -334,12 +336,16 @@ def initialize_research_project(output_dir: str) -> dict:
             findings_path.write_text(json.dumps(initial_findings, indent=2))
 
         # Write per-project devrag config
+        rag_docs_dir = os.environ.get("WPGUARD_RAG_DOCS")
+        doc_patterns = [
+            str(root / "specs"),
+            str(root / "reports"),
+        ]
+        if rag_docs_dir and Path(rag_docs_dir).exists():
+            doc_patterns.insert(0, rag_docs_dir)
+
         devrag_config = {
-            "document_patterns": [
-                "/home/groot/Desktop/Projects/PentestResources/WebPentestRAG",
-                str(root / "specs"),
-                str(root / "reports"),
-            ],
+            "document_patterns": doc_patterns,
             "db_path": str(root / ".devrag" / "vectors.db"),
             "chunk_size": 500,
             "search_top_k": 5,
@@ -358,6 +364,7 @@ def initialize_research_project(output_dir: str) -> dict:
         (devrag_dir / "config.json").write_text(json.dumps(devrag_config, indent=2))
 
         # Write .mcp.json with all MCP servers
+        devrag_bin = shutil.which("devrag") or "devrag"
         mcp_config = {
             "mcpServers": {
                 "playwright": {
@@ -371,7 +378,7 @@ def initialize_research_project(output_dir: str) -> dict:
                 },
                 "devrag": {
                     "type": "stdio",
-                    "command": "/home/groot/Desktop/Tools/devrag/bin/devrag",
+                    "command": devrag_bin,
                     "args": ["--config", str(devrag_dir / "config.json")],
                 },
             }

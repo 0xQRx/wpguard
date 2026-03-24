@@ -178,6 +178,9 @@ Track the entire WordPress ecosystem for research opportunities:
 # Set API keys
 export WORDFENCE_API_KEY="your-key-here"
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # optional
+
+# Point to your web pentesting knowledge base for RAG-powered agent assistance
+export WPGUARD_RAG_DOCS="/path/to/WebPentestRAG"
 ```
 
 ### Install wpguard
@@ -383,8 +386,9 @@ Compresses conversation context every 2 hours to prevent context exhaustion duri
 
 | Variable | Description |
 |----------|-------------|
-| `DISCORD_WEBHOOK_URL` | Discord webhook for finding notifications |
 | `WORDFENCE_API_KEY` | Wordfence Intelligence API key (for CVE database) |
+| `WPGUARD_RAG_DOCS` | Path to web pentesting knowledge base for devrag (PayloadsAllTheThings, HackTricks, etc.) |
+| `DISCORD_WEBHOOK_URL` | Discord webhook for finding notifications |
 | `WP_SANDBOX_HOST` | Sandbox host (default: `172.17.0.1`) |
 | `WP_SANDBOX_PORT` | Sandbox port (default: `8000`) |
 | `WPGUARD_SANDBOX_DIR` | Custom sandbox Docker Compose directory |

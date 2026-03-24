@@ -71,6 +71,9 @@ WORDFENCE_API_BASE = "https://www.wordfence.com/api/intelligence/v3"
 # Discord - only env var supported
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
+# RAG knowledge base — path to web pentesting resources (PayloadsAllTheThings, HackTricks, etc.)
+WPGUARD_RAG_DOCS = os.environ.get("WPGUARD_RAG_DOCS")
+
 # Watch mode
 DEFAULT_WATCH_INTERVAL = 300  # 5 minutes (in seconds)
 RECENTLY_UPDATED_FILENAME = "recently_updated.json"
