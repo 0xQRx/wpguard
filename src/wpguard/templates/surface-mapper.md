@@ -99,6 +99,9 @@ grep -rn "add_shortcode" --include="*.php" .
 
 # Form handlers and $_POST/$_GET/$_REQUEST usage
 grep -rn "\$_POST\|\$_GET\|\$_REQUEST" --include="*.php" . | wc -l
+
+# Server variables — often overlooked user-controlled input
+grep -rn "\$_SERVER\[.REQUEST_URI.\]\|\$_SERVER\[.HTTP_HOST.\]\|\$_SERVER\[.HTTP_REFERER.\]\|\$_SERVER\[.QUERY_STRING.\]" --include="*.php" .
 ```
 
 ### Step 3: Dangerous Functions
@@ -128,6 +131,12 @@ grep -rn "simplexml\|DOMDocument\|xml_parse\|XMLReader\|SimpleXMLElement\|libxml
 
 # External requests — potential SSRF
 grep -rn "wp_remote_get\|wp_remote_post\|wp_remote_request\|file_get_contents.*http\|curl_exec\|curl_init" --include="*.php" .
+
+# False-sanitization patterns — looks safe but WRONG for context
+# esc_url_raw() does NOT sanitize for SQL — it allows ', ", and SQL chars
+# sanitize_text_field() does NOT sanitize for SQL — strips HTML but not SQL
+grep -rn "esc_url_raw\|sanitize_text_field\|sanitize_title\|wp_kses" --include="*.php" .
+# Cross-reference: if these appear near $wpdb without prepare(), it's a false-sanitization SQLi
 ```
 
 ### Step 4: Auth Patterns
@@ -197,6 +206,14 @@ AUTH GAPS:
   Endpoints without cap check:  {count}  ← Missing auth candidates
   Nonce-only (no cap check):    {count}  ← Missing auth candidates
 
+INPUT SOURCES:
+  $_POST/$_GET/$_REQUEST:  {count}
+  $_SERVER (URI/Host):     {count}  ← Often overlooked user input
+
+FALSE-SANITIZATION PATTERNS:
+  esc_url_raw near $wpdb:  {count}  ← Does NOT prevent SQLi
+  sanitize_text_field near $wpdb: {count}  ← Does NOT prevent SQLi
+
 OTHER SIGNALS:
   Options API calls:       {count}
   User meta manipulation:  {count}
@@ -252,15 +269,34 @@ When a base plugin dependency is detected, ALWAYS add these experts to the MUST 
 
 ---
 
-## Saving the Report
+## Saving the Report (CRITICAL — other agents depend on this)
 
-After completing analysis, save the report:
+**Save incrementally, not at the end.** Expert agents read your surface map to decide where to start. If you run out of context before saving, all downstream experts lose their head start.
+
+1. **After scanning each category**, append results to the report immediately
+2. Save to `reports/{plugin_slug}/surface_map.md` — create the directory if needed
+3. **Write the file after every 2-3 grep categories** — do not accumulate the whole report in memory
+4. Your final save should add the RECOMMENDED EXPERTS section
+
+Every expert agent will read this file. Include specific `file:line` locations, not just counts — that's what makes their analysis efficient.
+
+---
+
+## Completion Marker
+
+At the very end of your surface map file, add one of:
 
 ```
-reports/{plugin_slug}/surface_map.md
+STATUS: COMPLETE — all categories scanned
+```
+or
+```
+STATUS: PARTIAL — completed: {list}, remaining: {list}
 ```
 
-Create the directory if it does not exist. The PM and all expert agents will reference this file to prioritize their work.
+The PM checks this marker. If PARTIAL, the PM will relaunch you with: "Continue from `reports/{plugin_slug}/surface_map.md` — skip completed categories, scan remaining ones and append results."
+
+**When relaunched:** Read your existing surface map, identify which categories are done, scan the remaining ones, append results, and update the STATUS line and RECOMMENDED EXPERTS section.
 
 ---
 
@@ -270,4 +306,4 @@ Create the directory if it does not exist. The PM and all expert agents will ref
 - **Speed over depth.** You are a reconnaissance pass, not an audit. If a grep takes too long, move on.
 - **Do not read file contents.** Grep for patterns, count matches, note locations. That is all.
 - **Do not assess exploitability.** Whether something is actually vulnerable is for the experts to determine. You just report what exists.
-- **2-3 minutes max.** If you are spending more time than this, you are going too deep. Wrap up and report what you have.
+- **Save incrementally.** Write the surface map after every 2-3 categories. If you run out of context, partial results are still useful.

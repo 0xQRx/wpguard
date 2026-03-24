@@ -6,7 +6,77 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from wpguard.config import WP_PLUGINS_SVN
+from wpguard.config import WP_PLUGINS_SVN, WP_THEMES_SVN
+
+
+@dataclass
+class ThemeInfo:
+    """Represents WordPress theme information from the API."""
+
+    slug: str
+    name: str
+    version: str
+    active_installs: int
+    last_updated: str
+    download_link: str
+    author: str = ""
+    rating: float = 0.0
+    num_ratings: int = 0
+    requires: str = ""
+    requires_php: str = ""
+    screenshot_url: str = ""
+    short_description: str = ""
+
+    @classmethod
+    def from_api_response(cls, data: dict[str, Any]) -> "ThemeInfo":
+        """Create ThemeInfo from WordPress API response."""
+        description = data.get("description", "") or ""
+        # Strip HTML tags for short description
+        import re
+        clean = re.sub(r"<[^>]+>", "", description)
+        return cls(
+            slug=data.get("slug", ""),
+            name=data.get("name", ""),
+            version=data.get("version", ""),
+            active_installs=data.get("active_installs", 0),
+            last_updated=data.get("last_updated", "") or data.get("last_updated_time", ""),
+            download_link=data.get("download_link", ""),
+            author=data.get("author", ""),
+            rating=data.get("rating", 0.0),
+            num_ratings=data.get("num_ratings", 0),
+            requires=data.get("requires", "") or "",
+            requires_php=data.get("requires_php", "") or "",
+            screenshot_url=data.get("screenshot_url", ""),
+            short_description=clean[:200] if clean else "",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "slug": self.slug,
+            "name": self.name,
+            "version": self.version,
+            "active_installs": self.active_installs,
+            "last_updated": self.last_updated,
+            "download_link": self.download_link,
+            "author": self.author,
+            "rating": self.rating,
+            "num_ratings": self.num_ratings,
+            "requires": self.requires,
+            "requires_php": self.requires_php,
+            "screenshot_url": self.screenshot_url,
+            "short_description": self.short_description,
+        }
+
+    @property
+    def svn_url(self) -> str:
+        """Get SVN repository URL for this theme."""
+        return f"{WP_THEMES_SVN}{self.slug}/"
+
+    @property
+    def svn_trunk_url(self) -> str:
+        """Get SVN trunk URL for this theme."""
+        return f"{WP_THEMES_SVN}{self.slug}/"
 
 
 @dataclass

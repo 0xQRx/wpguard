@@ -90,32 +90,54 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps. Run BEFORE experts. |
 | `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact primitives, chains findings |
 
+## Plugin vs. Theme Awareness
+
+The system supports both **plugins** and **themes**. The research workflow is identical — the only difference is which MCP tools you use for download and info:
+
+| Action | Plugin Tool | Theme Tool |
+|--------|------------|------------|
+| Get info | `wpguard_plugin_info` | `wpguard_theme_info` |
+| Search | `wpguard_search` | `wpguard_theme_search` |
+| Download | `wpguard_download` | `wpguard_theme_download` |
+| SVN log | `wpguard_svn_log` | `wpguard_theme_svn_log` |
+| SVN diff | `wpguard_svn_diff` | `wpguard_theme_svn_diff` |
+| Watch updates | `wpguard_watch_global` | `wpguard_watch_global_themes` |
+| Watch new | `wpguard_watch_new` | `wpguard_watch_new_themes` |
+
+**Everything else is shared:** sandbox, scope validation, experts, findings, verification pipeline. Themes install into the sandbox as themes (`wpguard_sandbox_wp_cli("theme install {slug} --activate")`). Expert agents analyze PHP source the same way regardless of type.
+
+When the user mentions a theme, use the theme tools above. When in doubt, check: does the slug exist at `wordpress.org/themes/{slug}` or `wordpress.org/plugins/{slug}`?
+
 ## Workflow
 
-### Full Plugin Audit
-When the user wants a comprehensive audit of a plugin:
+### Full Audit (Plugin or Theme)
+When the user wants a comprehensive audit:
 
-1. **Download the plugin** using `wpguard_download` or confirm it's already in `targets/`
-2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility
+1. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
+2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility (works for both plugins and themes)
 3. **Check for known CVEs** using `wpguard_cve_search` to understand history
    **CVE History Sweet Spot:** The ideal target has 5-20 previous CVEs for a medium-size codebase. This signals complex attack surface with potentially incomplete patches — check for bypasses. Very new/unaudited plugins with ZERO CVE history are also high-value: they haven't been scrutinized by researchers yet. Plugins with 50+ CVEs are usually well-hardened (diminishing returns). Plugins with 1-4 CVEs may have limited attack surface.
 4. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:
    - Call `wpguard_sandbox_destroy()` to remove all data and volumes
    - Call `wpguard_sandbox_start()` to build fresh containers
-   - Wait for sandbox to be ready, then delegate to `sandbox-admin` for plugin install + ecosystem setup
+   - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
+   - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
    This ensures no artifacts from previous audits affect results.
-5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin in 2-3 minutes and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. Use its RECOMMENDED EXPERTS list to decide which experts to launch.
+5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. After it completes:
+   - Read `reports/{plugin_slug}/surface_map.md` and check the STATUS line at the bottom
+   - If `STATUS: PARTIAL` — **relaunch surface-mapper**: "Continue from `reports/{plugin_slug}/surface_map.md` — skip completed categories, scan remaining ones." Repeat until COMPLETE.
+   - If `STATUS: COMPLETE` — use its RECOMMENDED EXPERTS list to decide which experts to launch
 5.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
    - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
    - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
-6. **Delegate to experts with SPECIFIC FILE TARGETS** — launch experts recommended by surface-mapper:
+6. **Delegate to experts** — launch experts recommended by surface-mapper:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns
    - SKIP experts: those with zero relevant patterns (save context)
    - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
-   - **⚠️ CRITICAL: Give each expert specific files/functions from the surface map.** Do NOT say "analyze the plugin for SQLi". Instead say "Check these files for SQLi: includes/ajax.php:45 ($wpdb without prepare), includes/search.php:112 (raw query). Start with these, expand if context allows." This prevents agents from wasting context grepping the whole codebase for targets the surface-mapper already found.
+   - **Always tell experts:** "Read the surface map at `reports/{plugin_slug}/surface_map.md` for prioritized targets. Start with those, then expand your own analysis."
 7. **Collect findings and check coverage** — for each expert that completes:
    - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`
    - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
@@ -216,31 +238,21 @@ When delegating, provide the agent with:
 - **Available test data:** products, orders, courses, forms, etc. (if ecosystem setup was run)
 - **Additional roles to test:** customer, member, etc. (if ecosystem-specific roles exist)
 
-Example (standalone plugin — with specific targets):
+Example (standalone plugin):
 ```
-Check targets/gallery-pro/extracted/gallery-pro/ for SQL injection.
+Analyze targets/gallery-pro/extracted/gallery-pro/ for SQL injection vulnerabilities.
 Plugin: gallery-pro v2.1.4, 15,000 active installs.
-
-Priority files from surface map:
-  - includes/ajax-handler.php:89 — $wpdb->query() with $_POST['order_by'] (no prepare)
-  - includes/search.php:45 — $wpdb->get_results() with $search_term concatenated
-  - includes/gallery-shortcode.php:112 — $wpdb->prepare() but %s in ORDER BY (bypassable)
-
-Start with these 3 files. If context allows, check includes/admin-ajax.php and includes/api/.
-Known CVE: CVE-2023-1234 (SQLi in search, patched in 2.1.0) — check for incomplete fix.
+Surface map: reports/gallery-pro/surface_map.md — read it first for prioritized file targets.
+Known CVE: CVE-2023-1234 (SQLi in search, patched in 2.1.0) — check for incomplete fix and similar patterns.
 ```
 
-Example (addon plugin — with specific targets):
+Example (addon plugin):
 ```
-Check targets/wc-product-table/extracted/wc-product-table/ for SQL injection.
+Analyze targets/wc-product-table/extracted/wc-product-table/ for SQL injection vulnerabilities.
 Plugin: wc-product-table v3.2.1, 8,000 active installs.
-
-Priority files from surface map:
-  - includes/query-builder.php:34 — raw $wpdb->query() with user-controlled sort params
-  - includes/ajax-filter.php:78 — $_POST['filter_value'] into WHERE clause
-
+Surface map: reports/wc-product-table/surface_map.md — read it first for prioritized file targets.
 Base plugin installed: YES (WooCommerce)
-Additional roles to test: customer (WooCommerce role)
+Additional roles to test: customer (WooCommerce role — can view orders, manage account)
 ```
 
 ## Progress Tracking

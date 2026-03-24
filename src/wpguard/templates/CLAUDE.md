@@ -1,6 +1,6 @@
 # WordPressGuard Security Research Project
 
-Wordfence Bug Bounty Program research project. Use `/pm` to start.
+Wordfence Bug Bounty Program research project — supports both **plugins** and **themes**. Use `/pm` to start.
 
 ## Commands
 
@@ -62,8 +62,8 @@ Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assesso
 ## Directory Structure
 
 ```
-targets/{plugin_slug}/extracted/   — Plugin source code
-reports/{plugin_slug}/             — All audit artifacts for this plugin
+targets/{slug}/extracted/          — Plugin or theme source code
+reports/{slug}/                    — All audit artifacts
   PLAN.md                          — Audit plan and progress tracking
   SUMMARY.md                       — Engagement summary
   surface_map.md                   — Attack surface report

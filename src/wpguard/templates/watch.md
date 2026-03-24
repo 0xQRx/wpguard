@@ -1,14 +1,18 @@
-# /watch — Plugin Update Monitor
+# /watch — WordPress Update Monitor
 
-Scan the WordPress plugin ecosystem for recent updates, new plugins, and check your watchlist. Any code change is a potential research target — not just security patches.
+Scan the WordPress plugin AND theme ecosystems for recent updates, new additions, and check your watchlist. Any code change is a potential research target — not just security patches.
 
 ## Steps
 
-1. **Global scan** — Call `wpguard_watch_global(min_installs=1000)` to discover recently updated plugins. Plugins with >= 10k installs are enriched with changelog and SVN commit log.
+1. **Plugin global scan** — Call `wpguard_watch_global(min_installs=1000)` to discover recently updated plugins. Plugins with >= 10k installs are enriched with changelog and SVN commit log.
 
-2. **New plugins scan** — Call `wpguard_watch_new(min_installs=0)` to discover newly added plugins.
+2. **Theme global scan** — Call `wpguard_watch_global_themes(min_installs=1000)` to discover recently updated themes. Themes with >= 10k installs are enriched with changelog and SVN log.
 
-3. **Watchlist check** — Call `wpguard_watch_check()` to detect version changes in your watched plugins (with SVN diffs).
+3. **New plugins scan** — Call `wpguard_watch_new(min_installs=0)` to discover newly added plugins.
+
+4. **New themes scan** — Call `wpguard_watch_new_themes(min_installs=0)` to discover newly added themes.
+
+5. **Watchlist check** — Call `wpguard_watch_check()` to detect version changes in your watched plugins (with SVN diffs).
 
 4. **Analyze changelogs and SVN logs** — for enriched updates, review what changed:
    - Changelog entries describe the update from the developer's perspective

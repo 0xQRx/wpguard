@@ -34,9 +34,10 @@ class SVNChangeInfo:
 
 
 class SVNClient:
-    """SVN operations for WordPress plugin repository."""
+    """SVN operations for WordPress plugin/theme repository."""
 
-    def __init__(self):
+    def __init__(self, svn_base: str = WP_PLUGINS_SVN):
+        self.svn_base = svn_base
         self._check_svn_installed()
 
     def _check_svn_installed(self) -> bool:
@@ -50,8 +51,8 @@ class SVNClient:
             return False
 
     def get_latest_revision(self, slug: str) -> str | None:
-        """Get the latest SVN revision for a plugin."""
-        svn_url = f"{WP_PLUGINS_SVN}{slug}/"
+        """Get the latest SVN revision for a slug."""
+        svn_url = f"{self.svn_base}{slug}/"
         try:
             result = subprocess.run(
                 ["svn", "info", "--show-item", "revision", svn_url],
@@ -79,7 +80,7 @@ class SVNClient:
         Returns:
             List of log entry dictionaries
         """
-        svn_url = f"{WP_PLUGINS_SVN}{slug}/"
+        svn_url = f"{self.svn_base}{slug}/"
         cmd = ["svn", "log", "-l", str(limit), "--xml"]
         if start_rev:
             cmd.extend(["-r", f"{start_rev}:HEAD"])
@@ -137,7 +138,7 @@ class SVNClient:
         Returns:
             Tuple of (diff_output, changed_files, added_files, removed_files)
         """
-        svn_url = f"{WP_PLUGINS_SVN}{slug}/trunk/"
+        svn_url = f"{self.svn_base}{slug}/trunk/"
 
         # Get diff summary first
         cmd_summary = [

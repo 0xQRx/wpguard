@@ -8,6 +8,7 @@ Exposes all WordPressGuard functionality as MCP tools for use with Claude and ot
 import asyncio
 import json
 import shutil
+from datetime import datetime, timezone
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -30,6 +31,7 @@ from wpguard.core.downloader import PluginDownloader, SVNClient
 # MCP-specific default: use current directory so tools work in initialized project root
 # CLI uses DEFAULT_OUTPUT_DIR from config (./wpguard_output) for standalone usage
 DEFAULT_OUTPUT_DIR = "."
+from wpguard.api.themes import WordPressThemeAPI
 from wpguard.core.watcher import PluginWatcher
 from wpguard.core.sandbox import WordPressSandbox
 from wpguard.core.scope_validator import WorkfenceScopeValidator
@@ -300,6 +302,166 @@ async def list_tools() -> list[Tool]:
                 "required": [],
             },
         ),
+        # ── Theme Tools ──────────────────────────────────────
+        Tool(
+            name="wpguard_theme_info",
+            description="Get detailed information about a specific WordPress theme by its slug",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Theme slug (e.g., 'astra', 'flavor')",
+                    }
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_theme_search",
+            description="Search for WordPress themes in the official repository",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query",
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "default": 1,
+                    },
+                    "browse": {
+                        "type": "string",
+                        "description": "Browse category: popular, new, updated",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_theme_download",
+            description="Download a WordPress theme by slug. Downloads ZIP and optionally extracts.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Theme slug to download",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                    "extract": {
+                        "type": "boolean",
+                        "description": "Extract ZIP after download (default: true)",
+                        "default": True,
+                    },
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_theme_svn_log",
+            description="Get SVN commit history for a WordPress theme",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Theme slug",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of log entries to retrieve (default: 10)",
+                        "default": 10,
+                    },
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_theme_svn_diff",
+            description="Compare changes between SVN revisions for a theme",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Theme slug",
+                    },
+                    "old_rev": {
+                        "type": "string",
+                        "description": "Old SVN revision number",
+                    },
+                    "new_rev": {
+                        "type": "string",
+                        "description": "New SVN revision (default: HEAD)",
+                        "default": "HEAD",
+                    },
+                    "show_diff": {
+                        "type": "boolean",
+                        "description": "Include full diff output (default: false)",
+                        "default": False,
+                    },
+                },
+                "required": ["slug", "old_rev"],
+            },
+        ),
+        Tool(
+            name="wpguard_watch_global_themes",
+            description="Query WordPress.org for recently updated themes. Returns only NEW updates since last check.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "min_installs": {
+                        "type": "integer",
+                        "description": "Minimum active installations filter (default: 1000)",
+                        "default": 1000,
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "Maximum API pages to fetch, 250 themes/page (default: 2)",
+                        "default": 2,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_watch_new_themes",
+            description="Query WordPress.org for newly added themes. Returns only themes not seen in previous checks.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "min_installs": {
+                        "type": "integer",
+                        "description": "Minimum active installations filter (default: 0)",
+                        "default": 0,
+                    },
+                    "max_pages": {
+                        "type": "integer",
+                        "description": "Maximum API pages to fetch, 250 themes/page (default: 2)",
+                        "default": 2,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        # ── Plugin SVN Tools ────────────────────────────────
         Tool(
             name="wpguard_svn_log",
             description="Get SVN commit history for a WordPress plugin",
@@ -971,6 +1133,53 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
 
+    # Theme tools
+    elif name == "wpguard_theme_info":
+        return await _theme_info(arguments["slug"])
+
+    elif name == "wpguard_theme_search":
+        return await _theme_search(
+            arguments.get("query"),
+            arguments.get("page", 1),
+            arguments.get("browse"),
+        )
+
+    elif name == "wpguard_theme_download":
+        return await _theme_download(
+            arguments["slug"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+            arguments.get("extract", True),
+        )
+
+    elif name == "wpguard_theme_svn_log":
+        return await _theme_svn_log(
+            arguments["slug"],
+            arguments.get("limit", 10),
+        )
+
+    elif name == "wpguard_theme_svn_diff":
+        return await _theme_svn_diff(
+            arguments["slug"],
+            arguments["old_rev"],
+            arguments.get("new_rev", "HEAD"),
+            arguments.get("show_diff", False),
+        )
+
+    elif name == "wpguard_watch_global_themes":
+        return await _watch_global_themes(
+            arguments.get("min_installs", 1000),
+            arguments.get("max_pages", 2),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_watch_new_themes":
+        return await _watch_new_themes(
+            arguments.get("min_installs", 0),
+            arguments.get("max_pages", 2),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    # Plugin SVN tools
     elif name == "wpguard_svn_log":
         return await _svn_log(
             arguments["slug"],
@@ -1450,6 +1659,294 @@ async def _watch_new(min_installs: int, max_pages: int, output_dir: str) -> dict
     """Check for newly added WordPress plugins."""
     return await run_in_executor(_watch_new_sync, min_installs, max_pages, output_dir)
 
+
+# ── Theme handler functions ──────────────────────────────
+
+def _theme_info_sync(slug: str) -> dict[str, Any]:
+    """Get theme info (sync version)."""
+    api = WordPressThemeAPI()
+    theme = api.get_theme_info(slug)
+    if not theme:
+        return {"error": f"Theme '{slug}' not found"}
+    return theme.to_dict()
+
+
+async def _theme_info(slug: str) -> dict[str, Any]:
+    """Get theme info."""
+    return await run_in_executor(_theme_info_sync, slug)
+
+
+def _theme_search_sync(query: str | None, page: int, browse: str | None) -> dict[str, Any]:
+    """Search themes (sync version)."""
+    api = WordPressThemeAPI()
+    themes, total_pages = api.query_themes(search=query, browse=browse, page=page)
+    return {
+        "themes": [t.to_dict() for t in themes],
+        "total_pages": total_pages,
+        "page": page,
+        "count": len(themes),
+    }
+
+
+async def _theme_search(query: str | None, page: int, browse: str | None) -> dict[str, Any]:
+    """Search themes."""
+    return await run_in_executor(_theme_search_sync, query, page, browse)
+
+
+def _theme_download_sync(slug: str, output_dir: str, extract: bool) -> dict[str, Any]:
+    """Download a theme (sync version)."""
+    from wpguard.config import WP_THEMES_SVN, THEMES_SUBDIR
+
+    api = WordPressThemeAPI()
+    theme = api.get_theme_info(slug)
+    if not theme:
+        return {"error": f"Theme '{slug}' not found"}
+
+    if not theme.download_link:
+        return {"error": f"No download link for theme '{slug}'"}
+
+    themes_dir = Path(output_dir) / "targets"
+    themes_dir.mkdir(parents=True, exist_ok=True)
+
+    theme_dir = themes_dir / slug
+    theme_dir.mkdir(parents=True, exist_ok=True)
+
+    # Download ZIP
+    import requests as req
+    zip_path = theme_dir / f"{slug}.{theme.version}.zip"
+    try:
+        r = req.get(theme.download_link, stream=True, timeout=60)
+        r.raise_for_status()
+        with open(zip_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    except req.RequestException as e:
+        return {"error": f"Download failed: {e}"}
+
+    result = {
+        "slug": slug,
+        "version": theme.version,
+        "zip_path": str(zip_path),
+        "active_installs": theme.active_installs,
+    }
+
+    # Extract if requested
+    if extract:
+        import zipfile
+        extracted_dir = theme_dir / "extracted"
+        extracted_dir.mkdir(exist_ok=True)
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(extracted_dir)
+            result["extracted_path"] = str(extracted_dir)
+        except zipfile.BadZipFile as e:
+            result["extract_error"] = str(e)
+
+    return result
+
+
+async def _theme_download(slug: str, output_dir: str, extract: bool) -> dict[str, Any]:
+    """Download a theme."""
+    return await run_in_executor(_theme_download_sync, slug, output_dir, extract)
+
+
+def _theme_svn_log_sync(slug: str, limit: int) -> dict[str, Any]:
+    """Get SVN log for a theme (sync version)."""
+    from wpguard.config import WP_THEMES_SVN
+
+    if not _check_svn_available():
+        return {"error": "SVN is not installed. Install with: apt install subversion", "entries": []}
+
+    svn = SVNClient(svn_base=WP_THEMES_SVN)
+    entries = svn.get_log(slug, limit=limit)
+
+    if not entries:
+        return {"error": f"No SVN log entries found for theme '{slug}'", "entries": []}
+
+    return {
+        "slug": slug,
+        "type": "theme",
+        "entries_count": len(entries),
+        "entries": entries,
+    }
+
+
+async def _theme_svn_log(slug: str, limit: int) -> dict[str, Any]:
+    """Get SVN log for a theme."""
+    return await run_in_executor(_theme_svn_log_sync, slug, limit)
+
+
+def _theme_svn_diff_sync(slug: str, old_rev: str, new_rev: str, show_diff: bool) -> dict[str, Any]:
+    """Get SVN diff between revisions for a theme (sync version)."""
+    from wpguard.config import WP_THEMES_SVN
+
+    if not _check_svn_available():
+        return {"error": "SVN is not installed. Install with: apt install subversion"}
+
+    svn = SVNClient(svn_base=WP_THEMES_SVN)
+    change_info = svn.compare_revisions(slug, old_rev, new_rev)
+
+    result = {
+        "slug": slug,
+        "type": "theme",
+        "old_revision": change_info.old_revision,
+        "new_revision": change_info.new_revision,
+        "changed_files": change_info.changed_files,
+        "added_files": change_info.added_files,
+        "removed_files": change_info.removed_files,
+        "total_changes": change_info.total_changes,
+        "log_entries": change_info.log_entries[:10],
+    }
+
+    if show_diff:
+        result["diff"] = change_info.diff_output
+
+    return result
+
+
+async def _theme_svn_diff(slug: str, old_rev: str, new_rev: str, show_diff: bool) -> dict[str, Any]:
+    """Get SVN diff between revisions for a theme."""
+    return await run_in_executor(_theme_svn_diff_sync, slug, old_rev, new_rev, show_diff)
+
+
+def _watch_global_themes_sync(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check global WordPress theme updates (sync version)."""
+    from wpguard.config import WP_THEMES_SVN
+
+    api = WordPressThemeAPI()
+    limit = max_pages * 250
+    themes = api.fetch_all_themes(browse="updated", min_installs=min_installs, limit=limit)
+
+    # Load/init state
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    state_file = output_path / "state.json"
+    state = {}
+    if state_file.exists():
+        try:
+            state = json.loads(state_file.read_text())
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    if "global_theme_monitor" not in state:
+        state["global_theme_monitor"] = {"last_checked": None, "seen_versions": {}}
+
+    seen = state["global_theme_monitor"]["seen_versions"]
+    new_updates = []
+
+    for theme in themes:
+        if seen.get(theme.slug) != theme.version:
+            update = {
+                "slug": theme.slug,
+                "name": theme.name,
+                "version": theme.version,
+                "active_installs": theme.active_installs,
+                "last_updated": theme.last_updated,
+                "download_link": theme.download_link,
+                "short_description": theme.short_description,
+                "changelog": "",
+                "svn_log": [],
+            }
+            # Enrich themes with >= 10k installs
+            if theme.active_installs >= 10000:
+                changelog_html = api.get_theme_changelog(theme.slug)
+                if changelog_html:
+                    from wpguard.core.watcher import PluginWatcher
+                    update["changelog"] = PluginWatcher._extract_latest_changelog(changelog_html)
+                try:
+                    svn = SVNClient(svn_base=WP_THEMES_SVN)
+                    update["svn_log"] = svn.get_log(theme.slug, limit=5)
+                except Exception:
+                    pass
+
+            new_updates.append(update)
+            seen[theme.slug] = theme.version
+
+    now = datetime.now(timezone.utc).isoformat()
+    state["global_theme_monitor"]["last_checked"] = now
+    with open(state_file, "w") as f:
+        json.dump(state, f, indent=2)
+
+    result = {
+        "last_checked": now,
+        "new_updates": new_updates,
+        "total_new": len(new_updates),
+        "type": "themes",
+    }
+
+    # Write recently_updated_themes.json
+    with open(output_path / "recently_updated_themes.json", "w") as f:
+        json.dump(result, f, indent=2)
+
+    return result
+
+
+async def _watch_global_themes(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check global WordPress theme updates."""
+    return await run_in_executor(_watch_global_themes_sync, min_installs, max_pages, output_dir)
+
+
+def _watch_new_themes_sync(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check for newly added WordPress themes (sync version)."""
+    api = WordPressThemeAPI()
+    limit = max_pages * 250
+    themes = api.fetch_all_themes(browse="new", min_installs=min_installs, limit=limit)
+
+    # Load/init state
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    state_file = output_path / "state.json"
+    state = {}
+    if state_file.exists():
+        try:
+            state = json.loads(state_file.read_text())
+        except (json.JSONDecodeError, IOError):
+            pass
+
+    if "new_themes_monitor" not in state:
+        state["new_themes_monitor"] = {"last_checked": None, "seen_slugs": []}
+
+    seen = set(state["new_themes_monitor"]["seen_slugs"])
+    new_themes = []
+
+    for theme in themes:
+        if theme.slug not in seen:
+            new_themes.append({
+                "slug": theme.slug,
+                "name": theme.name,
+                "version": theme.version,
+                "active_installs": theme.active_installs,
+                "last_updated": theme.last_updated,
+                "download_link": theme.download_link,
+                "short_description": theme.short_description,
+            })
+            seen.add(theme.slug)
+
+    now = datetime.now(timezone.utc).isoformat()
+    state["new_themes_monitor"]["last_checked"] = now
+    state["new_themes_monitor"]["seen_slugs"] = sorted(seen)
+    with open(state_file, "w") as f:
+        json.dump(state, f, indent=2)
+
+    result = {
+        "last_checked": now,
+        "new_themes": new_themes,
+        "total_new": len(new_themes),
+        "type": "themes",
+    }
+
+    with open(output_path / "new_themes.json", "w") as f:
+        json.dump(result, f, indent=2)
+
+    return result
+
+
+async def _watch_new_themes(min_installs: int, max_pages: int, output_dir: str) -> dict[str, Any]:
+    """Check for newly added WordPress themes."""
+    return await run_in_executor(_watch_new_themes_sync, min_installs, max_pages, output_dir)
+
+
+# ── Plugin SVN handler functions ─────────────────────────
 
 def _svn_log_sync(slug: str, limit: int) -> dict[str, Any]:
     """Get SVN log for a plugin (sync version)."""

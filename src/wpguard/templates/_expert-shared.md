@@ -13,11 +13,12 @@ reports/{plugin_slug}/progress_{agent_name}.md
 ```markdown
 # Progress Report: {agent_name} on {plugin_slug}
 
-## Scope
-Files to analyze (from surface map or PM):
-- [ ] {file1} — {why it's relevant}
-- [ ] {file2} — {why it's relevant}
-- [ ] {file3} — {why it's relevant}
+## Priority Targets (from surface map)
+- [ ] {file1}:{line} — {pattern found}
+- [ ] {file2}:{line} — {pattern found}
+
+## Additional Files Discovered
+- [ ] {file} — {why it's interesting}
 
 ## Findings Created
 (none yet)
@@ -46,9 +47,9 @@ The moment you identify a vulnerability — even a maybe:
 
 A saved draft is infinitely more valuable than a lost validated finding.
 
-### Rule 4: Work From Specific Targets
+### Rule 4: Start From the Surface Map
 
-The PM gives you specific files/functions to check. **Start with those.** Do NOT grep the entire plugin looking for your own targets — the surface-mapper already did that. If you finish your assigned scope and have context left, expand.
+Read the surface map at `reports/{plugin_slug}/surface_map.md` first — it has prioritized file:line targets for your specialty. **Start with those high-value targets** to get findings fast. Then expand your own analysis into areas the surface mapper may have missed — grep for patterns, trace data flows, follow your instincts. The surface map is a head start, not a boundary.
 
 ---
 

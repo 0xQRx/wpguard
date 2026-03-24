@@ -5,10 +5,15 @@ Configuration constants and Discord webhook from environment.
 import os
 from pathlib import Path
 
-# API endpoints
+# API endpoints — Plugins
 WP_API_BASE = "https://api.wordpress.org/plugins/info/1.2/"
 WP_PLUGINS_SVN = "https://plugins.svn.wordpress.org/"
 WP_PLUGINS_URL = "https://wordpress.org/plugins/"
+
+# API endpoints — Themes
+WP_THEMES_API_BASE = "https://api.wordpress.org/themes/info/1.2/"
+WP_THEMES_SVN = "https://themes.svn.wordpress.org/"
+WP_THEMES_URL = "https://wordpress.org/themes/"
 
 # WordPress Sandbox Settings
 WP_SANDBOX_HOST = os.environ.get("WP_SANDBOX_HOST", "172.17.0.1")
@@ -55,6 +60,7 @@ MAX_PER_PAGE = 250
 # Default paths - all under single output directory
 DEFAULT_OUTPUT_DIR = "./wpguard_output"
 PLUGINS_SUBDIR = "plugins"
+THEMES_SUBDIR = "themes"
 REPORTS_SUBDIR = "reports"
 STATE_FILENAME = "state.json"
 

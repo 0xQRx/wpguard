@@ -8,15 +8,18 @@ WordPress plugins from the official repository.
 __version__ = "1.0.0"
 __author__ = "Security Research"
 
-from wpguard.core.models import PluginInfo, ChangeReport
+from wpguard.core.models import PluginInfo, ThemeInfo, ChangeReport
 from wpguard.api.wordpress import WordPressPluginAPI
+from wpguard.api.themes import WordPressThemeAPI
 from wpguard.core.downloader import PluginDownloader
 from wpguard.core.watcher import PluginWatcher
 
 __all__ = [
     "PluginInfo",
+    "ThemeInfo",
     "ChangeReport",
     "WordPressPluginAPI",
+    "WordPressThemeAPI",
     "PluginDownloader",
     "PluginWatcher",
     "__version__",
