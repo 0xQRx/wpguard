@@ -73,14 +73,14 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 | `data-flow-expert` | Cross-feature data flow analysis — finds chains where data written by one feature is consumed unsafely by another |
 
-### Verification Pipeline Agents (ALL MANDATORY — no finding skips any step)
-| Agent | Purpose |
-|-------|---------|
-| `poc-writer` | Writes standalone PoC scripts for new findings from expert agents |
-| `poc-runner` | Executes PoCs against sandbox, verifies expected results, detects false positives (has Playwright) |
-| `qa-triage` | Final validation of confirmed findings, scope checks, creates submission writeups |
-| `impact-assessor` | **MANDATORY** — reviews EVERY finding for real-world impact, rejects obscure impact, downgrades inflated CVSS |
-| `bb-submission` | **MANDATORY** — submission prep, clean sandbox repro, polished writeup in Wordfence format |
+### Verification Pipeline Agents (ALL MANDATORY — in this order)
+| Order | Agent | Purpose |
+|-------|-------|---------|
+| 1 | `impact-assessor` | **RUNS FIRST** — reviews raw findings, kills obscure/low impact before PoCs are written |
+| 2 | `poc-writer` | Writes standalone PoC scripts for findings that survived impact gate |
+| 3 | `poc-runner` | Executes PoCs against sandbox, verifies expected results, detects false positives (has Playwright) |
+| 4 | `qa-triage` | Final validation of confirmed findings, scope checks, creates submission writeups |
+| 5 | `bb-submission` | **MANDATORY** — submission prep, clean sandbox repro, polished writeup in Wordfence format |
 
 ### Utility Agents
 | Agent | Purpose |
@@ -130,61 +130,67 @@ These categories yield the highest unauth/critical findings but are often overlo
 ### Full Audit (Plugin or Theme)
 When the user wants a comprehensive audit:
 
-1. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
-2. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility (works for both plugins and themes)
-3. **Check for known CVEs** using `wpguard_cve_search` to understand history
+1. **Check audit history** — call `wpguard_audit_check(slug)` FIRST. If previously audited:
+   - **Same version**: Skip unless user explicitly requests a re-audit. Tell user: "This was already audited (v{version}, {iterations} iterations, {findings} findings). Use 'force audit' to re-audit."
+   - **New version**: Proceed — note the version delta and prior findings for context
+   - **Never audited**: Proceed normally
+2. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
+3. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility (works for both plugins and themes)
+4. **Check for known CVEs** using `wpguard_cve_search` to understand history
    **CVE History Sweet Spot:** The ideal target has 5-20 previous CVEs for a medium-size codebase. This signals complex attack surface with potentially incomplete patches — check for bypasses. Very new/unaudited plugins with ZERO CVE history are also high-value: they haven't been scrutinized by researchers yet. Plugins with 50+ CVEs are usually well-hardened (diminishing returns). Plugins with 1-4 CVEs may have limited attack surface.
-4. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:
+5. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:
    - Call `wpguard_sandbox_destroy()` to remove all data and volumes
    - Call `wpguard_sandbox_start()` to build fresh containers
    - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
    - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
    This ensures no artifacts from previous audits affect results.
-5. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. After it completes:
+6. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. After it completes:
    - Read `reports/{plugin_slug}/surface_map.md` and check the STATUS line at the bottom
    - If `STATUS: PARTIAL` — **relaunch surface-mapper**: "Continue from `reports/{plugin_slug}/surface_map.md` — skip completed categories, scan remaining ones." Repeat until COMPLETE.
    - If `STATUS: COMPLETE` — use its RECOMMENDED EXPERTS list to decide which experts to launch
-5.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
+6.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
    - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
    - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
-6. **Delegate to experts** — launch experts recommended by surface-mapper:
+7. **Delegate to experts** — launch experts recommended by surface-mapper:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns
    - SKIP experts: those with zero relevant patterns (save context)
    - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
    - **Always tell experts:** "Read the surface map at `reports/{plugin_slug}/surface_map.md` for prioritized targets. Start with those, then expand your own analysis."
-7. **Collect findings and check coverage** — for each expert that completes:
+8. **Collect findings and check coverage** — for each expert that completes:
    - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`
    - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
      - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
      - All findings already created (so it doesn't duplicate)
    - Only mark an expert as complete when analysis is YES or all remaining areas have been covered
-7.5. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
+8.5. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
      - Tests lower auth levels for each finding
      - Expands impact primitives (read → delete, etc.)
      - Chains findings into higher-impact combinations
      - Creates new/updated findings before verification pipeline
-8. **Write PoCs** — delegate to `poc-writer` for each finding (passes expected results)
-9. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
-10. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
-11. **⚠️ MANDATORY: Impact assessment** — delegate to `impact-assessor` for EVERY finding after QA. This is NOT optional.
+9. **⚠️ MANDATORY: Impact assessment** — delegate to `impact-assessor` for ALL findings BEFORE writing PoCs. This is NOT optional.
+      - Reviews raw expert findings for real-world impact
       - Removes low-impact or obscure-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
       - Downgrades inflated CVSS scores
       - Rejects findings with no real-world consequence — if a real attacker wouldn't care, it's not a finding
-      - Only findings that survive this gate proceed to submission
-12. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that survived impact assessment
+      - **Only findings that survive this gate get PoCs written** — this saves significant time by killing weak findings early
+10. **Write PoCs** — delegate to `poc-writer` for each finding that survived impact assessment
+11. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
+12. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
+13. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that passed QA
       - Destroys/rebuilds sandbox for clean reproduction
       - Generates polished submission report in Wordfence format
       - Verifies PoC works from scratch on clean install
-13. **Report results** to the user
+14. **Record audit** — call `wpguard_audit_record(slug, version, findings_count, validated_count)` to log this audit in the history
+15. **Report results** to the user
 
 ### Targeted Analysis
 When the user wants to check for a specific vulnerability type:
 - Delegate directly to the relevant expert agent
 - Pass along any context the user provides (specific files, functions, endpoints)
-- Still run through the FULL verification pipeline: expert → poc-writer → poc-runner → qa-triage → impact-assessor → bb-submission
+- Still run through the FULL verification pipeline: expert → impact-assessor → poc-writer → poc-runner → qa-triage → bb-submission
 
 ### Changelog-Based Research (n-day)
 When the user wants to find vulnerabilities in existing CVEs/patches:
@@ -198,18 +204,17 @@ When the user wants to find vulnerabilities in existing CVEs/patches:
 ```
 Expert finds vulnerability
     ↓
+Impact Assessor reviews raw findings        ← MANDATORY (runs FIRST)
+  (kills obscure/low impact early, saves downstream work)
+    ↓
 PoC Writer creates standalone PoC script
-  (declares EXPECTED_RESULT for machine verification)
+  (only for findings that survived impact gate)
     ↓
 PoC Runner executes PoC against sandbox
-  (compares actual vs expected, checks for false positives)
-  (uses Playwright for browser-based verification of XSS/CSRF)
+  (compares actual vs expected, catches false positives)
     ↓
 QA Triage validates confirmed findings
   (scope check, CVSS, writeup, Discord notification)
-    ↓
-Impact Assessor reviews EVERY finding       ← MANDATORY
-  (rejects obscure/low real-world impact, downgrades inflated CVSS)
     ↓
 BB Submission prepares final reports        ← MANDATORY
   (clean sandbox repro, polished writeup, Wordfence format)

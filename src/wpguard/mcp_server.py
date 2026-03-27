@@ -913,6 +913,50 @@ async def list_tools() -> list[Tool]:
                 "required": [],
             },
         ),
+        # ── Audit History Tools ───────────────────────────────
+        Tool(
+            name="wpguard_audit_record",
+            description="Record a completed audit in the history. Call after finishing an audit to prevent redundant re-audits.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "Plugin or theme slug"},
+                    "version": {"type": "string", "description": "Version audited"},
+                    "asset_type": {"type": "string", "description": "plugin or theme (default: plugin)", "default": "plugin"},
+                    "active_installs": {"type": "integer", "description": "Active installations", "default": 0},
+                    "findings_count": {"type": "integer", "description": "Total findings discovered", "default": 0},
+                    "validated_count": {"type": "integer", "description": "Validated findings", "default": 0},
+                    "status": {"type": "string", "description": "completed, partial, or skipped (default: completed)", "default": "completed"},
+                    "notes": {"type": "string", "description": "Optional notes about the audit", "default": ""},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                },
+                "required": ["slug", "version"],
+            },
+        ),
+        Tool(
+            name="wpguard_audit_check",
+            description="Check if a plugin/theme has been audited before. Returns version history, iteration count, and findings summary. Use BEFORE starting an audit to avoid redundant work.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {"type": "string", "description": "Plugin or theme slug to check"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_audit_list",
+            description="List all previously audited plugins/themes with iteration counts and findings summaries.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "asset_type": {"type": "string", "description": "Filter by plugin or theme"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                },
+                "required": [],
+            },
+        ),
         # Discord Notification Tools
         Tool(
             name="wpguard_discord_notify_finding",
@@ -1331,6 +1375,32 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_finding_stats":
         return await _finding_stats(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
+
+    # Audit History Tools
+    elif name == "wpguard_audit_record":
+        return await _audit_record(
+            arguments["slug"],
+            arguments["version"],
+            arguments.get("asset_type", "plugin"),
+            arguments.get("active_installs", 0),
+            arguments.get("findings_count", 0),
+            arguments.get("validated_count", 0),
+            arguments.get("status", "completed"),
+            arguments.get("notes", ""),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_audit_check":
+        return await _audit_check(
+            arguments["slug"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_audit_list":
+        return await _audit_list(
+            arguments.get("asset_type"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
 
     # Discord Notification Tools
     elif name == "wpguard_discord_notify_finding":
@@ -2524,6 +2594,55 @@ async def _finding_stats(output_dir: str) -> dict[str, Any]:
     """Get finding statistics."""
     return await run_in_executor(_finding_stats_sync, output_dir)
 
+
+
+# ── Audit History Implementations ─────────────────────
+
+def _audit_record_sync(
+    slug: str, version: str, asset_type: str, active_installs: int,
+    findings_count: int, validated_count: int, status: str, notes: str,
+    output_dir: str,
+) -> dict[str, Any]:
+    """Record an audit (sync version)."""
+    from wpguard.core.audit_history import AuditHistoryManager
+    manager = AuditHistoryManager(output_dir)
+    record = manager.record_audit(
+        slug=slug, version=version, asset_type=asset_type,
+        active_installs=active_installs, findings_count=findings_count,
+        validated_count=validated_count, status=status, notes=notes,
+    )
+    return {"success": True, "slug": slug, "iterations": record["iterations"]}
+
+
+async def _audit_record(*args: Any) -> dict[str, Any]:
+    """Record an audit."""
+    return await run_in_executor(_audit_record_sync, *args)
+
+
+def _audit_check_sync(slug: str, output_dir: str) -> dict[str, Any]:
+    """Check audit history for a slug (sync version)."""
+    from wpguard.core.audit_history import AuditHistoryManager
+    manager = AuditHistoryManager(output_dir)
+    return manager.check_audit(slug)
+
+
+async def _audit_check(slug: str, output_dir: str) -> dict[str, Any]:
+    """Check audit history for a slug."""
+    return await run_in_executor(_audit_check_sync, slug, output_dir)
+
+
+def _audit_list_sync(asset_type: str | None, output_dir: str) -> dict[str, Any]:
+    """List audit history (sync version)."""
+    from wpguard.core.audit_history import AuditHistoryManager
+    manager = AuditHistoryManager(output_dir)
+    audits = manager.list_audits(asset_type=asset_type)
+    stats = manager.get_stats()
+    return {"audits": audits, "stats": stats}
+
+
+async def _audit_list(asset_type: str | None, output_dir: str) -> dict[str, Any]:
+    """List audit history."""
+    return await run_in_executor(_audit_list_sync, asset_type, output_dir)
 
 
 # Discord Notification Tool Implementations

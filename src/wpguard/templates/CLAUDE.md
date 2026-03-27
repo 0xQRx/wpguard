@@ -41,14 +41,14 @@ Delegated by `/pm` — not invoked directly.
 
 ### Verification Pipeline (ALL steps mandatory — no finding skips any)
 ```
-Expert finds vuln → PoC Writer → PoC Runner → QA Triage → Impact Assessor → BB Submission
+Expert finds vuln → Impact Assessor → PoC Writer → PoC Runner → QA Triage → BB Submission
 ```
 | Agent | Role |
 |-------|------|
-| `poc-writer` | Writes PoC scripts with declared expected results |
+| `impact-assessor` | **RUNS FIRST** — reviews raw findings, kills obscure impact before PoCs are written |
+| `poc-writer` | Writes PoC scripts for findings that survived impact gate |
 | `poc-runner` | Executes PoCs, verifies results, catches false positives (has Playwright) |
 | `qa-triage` | Final validation, scope check, CVSS, writeups, Discord notifications |
-| `impact-assessor` | **MANDATORY** — reviews every finding for real-world impact, rejects obscure impact |
 | `bb-submission` | **MANDATORY** — submission prep, clean sandbox repro, Wordfence format |
 
 ### Utility

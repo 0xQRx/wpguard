@@ -10,6 +10,7 @@ import re
 import shutil
 from pathlib import Path
 
+from wpguard.core.audit_history import AUDIT_HISTORY_FILENAME
 from wpguard.core.findings import FINDINGS_FILENAME
 
 
@@ -334,6 +335,15 @@ def initialize_research_project(output_dir: str) -> dict:
                 "findings": [],
             }
             findings_path.write_text(json.dumps(initial_findings, indent=2))
+
+        # Initialize empty audit history only if it doesn't exist
+        # (preserve existing history on re-init / update)
+        audit_history_path = root / AUDIT_HISTORY_FILENAME
+        if not audit_history_path.exists():
+            audit_history_path.write_text(json.dumps({
+                "version": "1.0",
+                "audits": {},
+            }, indent=2))
 
         # Write per-project devrag config
         rag_docs_dir = os.environ.get("WPGUARD_RAG_DOCS")
