@@ -61,13 +61,14 @@ After clean sandbox reproduction succeeds, generate **two video recordings** as 
 
 ```bash
 asciinema --version   # Terminal recording
-ffmpeg -version       # Format conversion (optional)
+python3 -c "from playwright.sync_api import sync_playwright; print('OK')"  # Browser recording
+ffmpeg -version       # Format conversion
 npx svg-term-cli --version  # Cast → SVG (optional)
 ```
 
-Browser screenshots are captured via the **Playwright MCP server** (always available — no separate install needed).
+**Note:** Browser video recording uses the **Python Playwright package** (not the MCP server). The MCP Playwright is for agent browser interaction during analysis. Video recording requires `record_video_dir` which is only available via the Python API.
 
-If asciinema is missing, note it in the submission report and proceed with browser screenshots only.
+If any tool is missing, note it in the submission report and proceed with available formats only.
 
 ### Terminal Recording
 
@@ -118,55 +119,69 @@ asciinema rec reports/{slug}/{finding_id}/poc_demo.cast \
 
 ### Browser Recording
 
-Use the **Playwright MCP server** (already configured) to capture browser walkthroughs via screenshots. You have access to all `mcp__playwright__browser_*` tools.
+Create `reports/{slug}/{finding_id}/browser_poc.py` using **Python Playwright** with `record_video_dir` for actual video capture.
 
 **Required scenes** (adapt per vuln type):
-1. Navigate to login page, take screenshot — `mcp__playwright__browser_take_screenshot`
-2. Login as attacker role — `mcp__playwright__browser_fill_form`, `mcp__playwright__browser_click`
-3. Pre-exploit state — navigate to relevant page, take screenshot
-4. Execute exploit — either via browser form interaction or run terminal PoC in parallel
-5. Post-exploit proof — navigate to proof page (e.g., Settings for priv esc), take screenshot
-6. Take final screenshot showing the impact
+1. Title card overlay (5s) — vuln details, CVSS, root cause
+2. Attacker login — fill form, submit, show dashboard
+3. Pre-exploit state — show relevant page/data
+4. Exploit execution overlay — explain the HTTP request
+5. Post-exploit proof — login as admin, show Settings page (for priv esc) or show extracted data
+6. End card overlay (6s) — summary with file/function/line
 
-Save screenshots to `reports/{slug}/{finding_id}/`:
-```
-screenshot_01_login.png
-screenshot_02_attacker_dashboard.png
-screenshot_03_pre_exploit.png
-screenshot_04_exploit.png
-screenshot_05_post_exploit_proof.png
+**Playwright settings:**
+```python
+from playwright.sync_api import sync_playwright
+
+context = browser.new_context(
+    viewport={"width": 1280, "height": 720},
+    record_video_dir=VIDEO_DIR,
+    record_video_size={"width": 1280, "height": 720},
+)
+# IMPORTANT: Video is saved on context.close(), not page.close()
 ```
 
-**Overlay helper** (inject via `mcp__playwright__browser_evaluate`):
-```javascript
-() => {
-    const o = document.createElement('div');
-    o.id = 'poc-overlay';
-    o.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:monospace;';
-    o.innerHTML = '<div style="text-align:center;padding:40px;"><pre style="color:#00ff41;font-size:22px;line-height:1.6;">TITLE TEXT HERE</pre></div>';
-    document.body.appendChild(o);
-}
+**Overlay helper:**
+```python
+def add_overlay(page, text, color="rgba(0,0,0,0.85)", text_color="#00ff41", duration=3):
+    page.evaluate(f"""() => {{
+        const o = document.createElement('div');
+        o.id = 'poc-overlay';
+        o.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:{color};z-index:999999;display:flex;align-items:center;justify-content:center;font-family:monospace;';
+        o.innerHTML = '<div style="text-align:center;padding:40px;"><pre style="color:{text_color};font-size:22px;line-height:1.6;white-space:pre-wrap;">' + {repr(text)} + '</pre></div>';
+        document.body.appendChild(o);
+    }}""")
+    time.sleep(duration)
+    page.evaluate("() => { const e = document.getElementById('poc-overlay'); if(e) e.remove(); }")
+```
+
+Run the script to generate the video, then copy it:
+```bash
+python3 reports/{slug}/{fid}/browser_poc.py
+# Video is saved to videos/ dir — copy to known path
+cp reports/{slug}/{fid}/videos/*.webm reports/{slug}/{fid}/poc_browser.webm
 ```
 
 ### Format Conversion
 
 ```bash
-# Terminal cast → svg (optional, for embedding in writeups)
+# Browser webm → gif
+ffmpeg -y -i reports/{slug}/{fid}/poc_browser.webm \
+  -vf "fps=10,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+  reports/{slug}/{fid}/poc_browser.gif
+
+# Terminal cast → svg (optional)
 npx svg-term-cli \
   --in reports/{slug}/{fid}/poc_demo.cast \
   --out reports/{slug}/{fid}/poc_terminal.svg \
   --window --width 110 --height 35 --padding 10
-
-# Terminal cast → gif (optional)
-# Requires agg: cargo install agg
-agg reports/{slug}/{fid}/poc_demo.cast reports/{slug}/{fid}/poc_terminal.gif
 ```
 
 ### Verify Outputs
 
 ```bash
-ls -lh reports/{slug}/{fid}/poc_demo.cast reports/{slug}/{fid}/screenshot_*.png 2>/dev/null
-# Expected: poc_demo.cast (~10-50KB), screenshots (~50-200KB each)
+ls -lh reports/{slug}/{fid}/poc_*.{cast,svg,webm,gif} 2>/dev/null
+# Expected: poc_demo.cast (~10-50KB), poc_browser.webm (~2-5MB), poc_browser.gif (~2-8MB)
 ```
 
 ### Vuln-Type Recording Guidance
@@ -295,11 +310,10 @@ reports/{plugin_slug}/{finding_id}/
 ├── writeup.md              # Vulnerability writeup
 ├── submission.md           # Wordfence submission report
 ├── demo_script.sh          # Terminal demo wrapper
+├── browser_poc.py          # Playwright browser video script
 ├── poc_demo.cast           # Raw asciinema recording
 ├── poc_terminal.svg        # Animated SVG (if svg-term available)
-├── screenshot_01_login.png         # Browser evidence (Playwright MCP)
-├── screenshot_02_pre_exploit.png
-├── screenshot_03_exploit.png
-├── screenshot_04_proof.png
-└── ...
+├── poc_browser.webm        # Browser video (full quality)
+├── poc_browser.gif         # Browser GIF (for submission)
+└── videos/                 # Playwright raw video output
 ```
