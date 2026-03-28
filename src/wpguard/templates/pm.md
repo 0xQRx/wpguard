@@ -182,6 +182,11 @@ When the user wants a comprehensive audit:
 13. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that passed QA
       - Destroys/rebuilds sandbox for clean reproduction
       - Generates polished submission report in Wordfence format
+      - Records terminal PoC video (asciinema) and browser walkthrough (Playwright)
+      - Converts recordings to GIF for submission
+      - Verifies PoC works from scratch on clean install
+      - Destroys/rebuilds sandbox for clean reproduction
+      - Generates polished submission report in Wordfence format
       - Verifies PoC works from scratch on clean install
 14. **Record audit** — call `wpguard_audit_record(slug, version, findings_count, validated_count)` to log this audit in the history
 15. **Report results** to the user

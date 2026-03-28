@@ -169,7 +169,11 @@ Track the entire WordPress ecosystem for research opportunities:
 | **[Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI** | Agent orchestration | `npm install -g @anthropic-ai/claude-code` |
 | **Docker + Compose** | WordPress sandbox | `apt install docker.io docker-compose-plugin` |
 | **SVN** | Plugin/theme version history | `apt install subversion` |
-| **Node.js 18+** | Playwright MCP | `apt install nodejs` / `brew install node` |
+| **Node.js 18+** | Playwright MCP, svg-term-cli | `apt install nodejs` / `brew install node` |
+| **asciinema** | Terminal PoC video recording | `pipx install asciinema` |
+| **Playwright** (Python) | Browser PoC video recording | `pipx install playwright && playwright install chromium` |
+| **ffmpeg** | Video format conversion (webm/cast → gif) | `apt install ffmpeg` |
+| **svg-term-cli** (optional) | Convert terminal recordings to animated SVG | `npx svg-term-cli` |
 
 **API Keys:**
 
