@@ -91,11 +91,11 @@ sleep 1.5
 # Environment check
 echo -e "\033[1;33m[SETUP]\033[0m Verifying clean sandbox..."
 run_cmd "curl -s -o /dev/null -w 'HTTP Status: %{http_code}\n' {BASE_URL}/"
-run_cmd "docker exec wp_app wp --allow-root plugin list --status=active --format=table 2>/dev/null"
+run_cmd "docker exec --user www-data wp_app wp plugin list --status=active --format=table 2>/dev/null"
 
 # Attacker identity
 echo -e "\033[1;33m[SETUP]\033[0m Attacker: {USERNAME} ({ROLE})"
-run_cmd "docker exec wp_app wp --allow-root user get {USERNAME} --fields=ID,user_login,roles --format=table 2>/dev/null"
+run_cmd "docker exec --user www-data wp_app wp user get {USERNAME} --fields=ID,user_login,roles --format=table 2>/dev/null"
 
 # Exploit
 echo -e "\033[1;31m[EXPLOIT]\033[0m Launching exploit..."

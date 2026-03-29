@@ -113,7 +113,7 @@ class WordPressSandbox:
         """
         try:
             # Build the full command
-            cmd_parts = ["docker", "exec", self.container, "wp", "--allow-root"]
+            cmd_parts = ["docker", "exec", "--user", "www-data", self.container, "wp"]
             cmd_parts.extend(shlex.split(command))
 
             result = subprocess.run(
