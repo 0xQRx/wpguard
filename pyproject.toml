@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wpguard"
-version = "1.0.0"
-description = "WordPress Plugin Security Research Tool - Download, monitor, and analyze WordPress plugins for defensive security research"
+dynamic = ["version"]
+description = "Agentic security research framework for WordPress plugins and themes"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.9"
@@ -34,9 +34,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/USERNAME/WordPressGuard"
-Repository = "https://github.com/USERNAME/WordPressGuard"
-Issues = "https://github.com/USERNAME/WordPressGuard/issues"
+Homepage = "https://github.com/0xQRx/wpguard"
+Repository = "https://github.com/0xQRx/wpguard"
+Issues = "https://github.com/0xQRx/wpguard/issues"
 
 [project.scripts]
 wpguard = "wpguard.cli:main"
@@ -49,6 +49,9 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "wpguard.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
