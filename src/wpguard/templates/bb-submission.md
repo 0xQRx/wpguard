@@ -31,6 +31,12 @@ Before generating the submission, verify ALL of these:
 - [ ] Destroy sandbox (`wpguard_sandbox_destroy`)
 - [ ] Rebuild sandbox (`wpguard_sandbox_start`)
 - [ ] Install ONLY the target plugin (+ dependencies if addon)
+- [ ] **Capture test environment** — run these commands and record the output:
+  ```
+  wpguard_sandbox_wp_cli("core version")          → WordPress version
+  wpguard_sandbox_wp_cli("eval 'echo PHP_VERSION;'")  → PHP version
+  wpguard_sandbox_wp_cli("db query 'SELECT VERSION();' --skip-column-names")  → MySQL version
+  ```
 - [ ] Run the PoC from scratch — it MUST succeed on a clean install
 - [ ] If it fails on clean sandbox → **STOP and report back to PM**
 
@@ -224,6 +230,11 @@ The {Plugin Name} plugin ({active_installs} active installs) is vulnerable to {v
 3. {Step N — final impact achieved}
 
 **Precondition:** {What must be true for exploitation — default settings, specific plugin config, published content, etc. State "Default configuration" if no special setup is needed.}
+
+**Tested on:**
+- WordPress {wp_version}
+- PHP {php_version}
+- MySQL {mysql_version}
 
 **CVSS:** {score} (CVSS:3.1/{vector string})
 ```
