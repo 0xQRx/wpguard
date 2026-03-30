@@ -144,9 +144,14 @@ When the user wants a comprehensive audit:
    - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
    - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
    This ensures no artifacts from previous audits affect results.
-6. **Map attack surface** — delegate to `surface-mapper` FIRST. It greps the plugin and returns a report with endpoint counts, dangerous function locations, auth gaps, and **dependency detection**. After it completes:
+6. **Map attack surface** — delegate to `surface-mapper` FIRST. For large plugins (50+ PHP files or 20k+ lines), **split into multiple surface-mapper instances** with assigned directories:
+   - Instance 1: "Scan `includes/` and `admin/`"
+   - Instance 2: "Scan `api/`, `rest/`, and `ajax/`"
+   - Instance 3: "Scan remaining directories"
+   - Each instance appends to the same `reports/{plugin_slug}/surface_map.md`
+   For smaller plugins, a single surface-mapper is fine. After all complete:
    - Read `reports/{plugin_slug}/surface_map.md` and check the STATUS line at the bottom
-   - If `STATUS: PARTIAL` — **relaunch surface-mapper**: "Continue from `reports/{plugin_slug}/surface_map.md` — skip completed categories, scan remaining ones." Repeat until COMPLETE.
+   - If `STATUS: PARTIAL` — **relaunch surface-mapper** for remaining categories
    - If `STATUS: COMPLETE` — use its RECOMMENDED EXPERTS list to decide which experts to launch
 6.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
@@ -159,8 +164,14 @@ When the user wants a comprehensive audit:
    - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
    - **Always tell experts:** "Read the surface map at `reports/{plugin_slug}/surface_map.md` for prioritized targets. Start with those, then expand your own analysis."
+   - **⚠️ LARGE PLUGINS: Split work across multiple instances of the SAME expert.** Do NOT limit yourself to 1 instance per expert type — a single agent running out of context means lost coverage. For large plugins:
+     - Divide the surface map targets by file/directory and assign subsets to parallel expert instances
+     - Example: sqli-expert #1 gets `includes/ajax.php`, `includes/api.php`; sqli-expert #2 gets `includes/query.php`, `includes/search.php`
+     - Each instance saves to the same progress report format: `progress_sqli-expert_1.md`, `progress_sqli-expert_2.md`
+     - This applies to ALL agent types — surface-mapper, experts, data-flow-expert, even poc-writer if there are many findings
+     - **Rule of thumb:** if the surface map shows 10+ targets for one expert, split into 2-3 instances. If 20+, split into 3-4.
 8. **Collect findings and check coverage** — for each expert that completes:
-   - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md`
+   - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md` (or `progress_{agent_name}_1.md`, etc.)
    - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
      - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
      - All findings already created (so it doesn't duplicate)
