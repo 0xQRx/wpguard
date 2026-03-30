@@ -1,4 +1,4 @@
-FROM wordpress:latest
+FROM wordpress:php8.5-apache
 
 # Install utilities and WP-CLI
 RUN apt-get update && apt-get install -y less vim default-mysql-client && rm -rf /var/lib/apt/lists/*
