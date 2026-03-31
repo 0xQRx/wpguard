@@ -11,6 +11,7 @@ Wordfence Bug Bounty Program research project — supports both **plugins** and 
 - `/findings` - List all findings with status and severity
 - `/nday` - N-day research shortcut — PoCs for known/patched CVEs
 - `/watch` - Plugin update monitor — global ecosystem scan + watchlist changes
+- `/diff` - Security-focused version diff — analyze code changes between versions
 
 ## Agents
 

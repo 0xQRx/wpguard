@@ -157,6 +157,7 @@ When the user wants a comprehensive audit:
    - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
    - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
    - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
+   - **Cross-plugin interaction analysis:** When both base plugin and addon are installed, instruct experts to look for: shared option keys with different sanitization, REST endpoint namespace collisions, hook/filter conflicts, data stored by one plugin consumed unsafely by the other. The `data-flow-expert` is especially valuable here — cross-plugin data flows are where trust boundaries break down.
 7. **Delegate to experts** — launch experts recommended by surface-mapper:
    - MUST RUN experts: those with high-count dangerous patterns
    - SHOULD RUN experts: those with some relevant patterns

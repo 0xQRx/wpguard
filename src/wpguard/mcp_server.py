@@ -673,6 +673,93 @@ async def list_tools() -> list[Tool]:
                 "required": ["action"],
             },
         ),
+        Tool(
+            name="wpguard_sandbox_list_endpoints",
+            description="List all registered WordPress REST API endpoints in the sandbox. Useful for discovering plugin attack surface.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "namespace": {
+                        "type": "string",
+                        "description": "Filter by REST namespace (e.g., 'wp/v2', 'wc/v3')",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_map_nonces",
+            description="Crawl WordPress admin pages at each auth level (unauth, subscriber, contributor, author) and extract all nonces. Returns nonce values with action names and which pages they're found on.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "extra_pages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Additional page paths to crawl (e.g., ['/wp-admin/admin.php?page=plugin-settings'])",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_regression_check",
+            description="Re-run existing PoC scripts from previous audits against the current sandbox. Detects incomplete patches — if a PoC still works after a plugin update, the fix was incomplete.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Plugin or theme slug to regression test",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": ["slug"],
+            },
+        ),
+        Tool(
+            name="wpguard_target_score",
+            description="Score a plugin/theme by research priority. Considers active installs, CVE history, time since last audit, and whether current version was already audited. Higher score = higher priority.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "slug": {
+                        "type": "string",
+                        "description": "Single plugin/theme slug to score",
+                    },
+                    "slugs": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Multiple slugs to score and rank",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_finding_check_duplicate",
+            description="Check for potential duplicate findings before creating a new one. Returns similar findings by file, function, and vuln type.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {"type": "string", "description": "Plugin slug"},
+                    "affected_file": {"type": "string", "description": "Affected file path"},
+                    "affected_function": {"type": "string", "description": "Affected function name"},
+                    "vuln_type": {"type": "string", "description": "Vulnerability type"},
+                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                },
+                "required": ["plugin_slug", "affected_file"],
+            },
+        ),
         # Sandbox Management Tools
         Tool(
             name="wpguard_sandbox_start",
@@ -1281,6 +1368,34 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _sandbox_get_nonce(
             arguments["action"],
             arguments.get("auth"),
+        )
+
+    elif name == "wpguard_sandbox_list_endpoints":
+        return await _sandbox_list_endpoints(arguments.get("namespace"))
+
+    elif name == "wpguard_sandbox_map_nonces":
+        return await _sandbox_map_nonces(arguments.get("extra_pages"))
+
+    elif name == "wpguard_regression_check":
+        return await _regression_check(
+            arguments["slug"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_target_score":
+        return await _target_score(
+            arguments.get("slug"),
+            arguments.get("slugs"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_finding_check_duplicate":
+        return await _finding_check_duplicate(
+            arguments["plugin_slug"],
+            arguments["affected_file"],
+            arguments.get("affected_function", ""),
+            arguments.get("vuln_type", ""),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
 
     # Sandbox Management Tools
@@ -2643,6 +2758,101 @@ def _audit_list_sync(asset_type: str | None, output_dir: str) -> dict[str, Any]:
 async def _audit_list(asset_type: str | None, output_dir: str) -> dict[str, Any]:
     """List audit history."""
     return await run_in_executor(_audit_list_sync, asset_type, output_dir)
+
+
+# ── Sandbox Discovery Implementations ─────────────────
+
+def _sandbox_list_endpoints_sync(namespace: str | None) -> dict[str, Any]:
+    """List REST endpoints (sync version)."""
+    sandbox = _get_sandbox()
+    endpoints = sandbox.list_rest_endpoints(namespace=namespace)
+    return {
+        "endpoints": endpoints,
+        "count": len(endpoints),
+        "namespace_filter": namespace,
+    }
+
+
+async def _sandbox_list_endpoints(namespace: str | None) -> dict[str, Any]:
+    return await run_in_executor(_sandbox_list_endpoints_sync, namespace)
+
+
+def _sandbox_map_nonces_sync(extra_pages: list[str] | None) -> dict[str, Any]:
+    """Map nonces across auth levels (sync version)."""
+    sandbox = _get_sandbox()
+    nonces = sandbox.map_nonces(extra_pages=extra_pages)
+    return {
+        "nonces": nonces,
+        "count": len(nonces),
+        "auth_levels_scanned": ["unauthenticated", "subscriber", "contributor", "author"],
+    }
+
+
+async def _sandbox_map_nonces(extra_pages: list[str] | None) -> dict[str, Any]:
+    return await run_in_executor(_sandbox_map_nonces_sync, extra_pages)
+
+
+# ── Regression Testing Implementations ────────────────
+
+def _regression_check_sync(slug: str, output_dir: str) -> dict[str, Any]:
+    """Run regression check (sync version)."""
+    from wpguard.core.regression import RegressionChecker
+    sandbox = _get_sandbox()
+    checker = RegressionChecker(output_dir)
+    return checker.check(slug, sandbox)
+
+
+async def _regression_check(slug: str, output_dir: str) -> dict[str, Any]:
+    return await run_in_executor(_regression_check_sync, slug, output_dir)
+
+
+# ── Target Scoring Implementations ────────────────────
+
+def _target_score_sync(slug: str | None, slugs: list[str] | None, output_dir: str) -> dict[str, Any]:
+    """Score targets (sync version)."""
+    from wpguard.core.scoring import TargetScorer
+    scorer = TargetScorer(output_dir)
+    if slugs:
+        return {"rankings": scorer.rank(slugs)}
+    elif slug:
+        return scorer.score(slug)
+    else:
+        return {"error": "Provide either 'slug' or 'slugs' parameter"}
+
+
+async def _target_score(slug: str | None, slugs: list[str] | None, output_dir: str) -> dict[str, Any]:
+    return await run_in_executor(_target_score_sync, slug, slugs, output_dir)
+
+
+# ── Findings Dedup Implementation ─────────────────────
+
+def _finding_check_duplicate_sync(
+    plugin_slug: str, affected_file: str, affected_function: str,
+    vuln_type: str, output_dir: str,
+) -> dict[str, Any]:
+    """Check for duplicate findings (sync version)."""
+    manager = FindingsManager(output_dir)
+    matches = manager.check_duplicate(
+        plugin_slug=plugin_slug,
+        affected_file=affected_file,
+        affected_function=affected_function,
+        vuln_type=vuln_type,
+    )
+    return {
+        "potential_duplicates": matches,
+        "count": len(matches),
+        "has_exact_match": any(m["similarity"] == "exact" for m in matches),
+    }
+
+
+async def _finding_check_duplicate(
+    plugin_slug: str, affected_file: str, affected_function: str,
+    vuln_type: str, output_dir: str,
+) -> dict[str, Any]:
+    return await run_in_executor(
+        _finding_check_duplicate_sync, plugin_slug, affected_file,
+        affected_function, vuln_type, output_dir,
+    )
 
 
 # Discord Notification Tool Implementations

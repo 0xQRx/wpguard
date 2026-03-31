@@ -240,6 +240,55 @@ class FindingsManager:
 
         return results
 
+    def check_duplicate(
+        self,
+        plugin_slug: str,
+        affected_file: str,
+        affected_function: str = "",
+        vuln_type: str = "",
+    ) -> list[dict[str, Any]]:
+        """
+        Check for potential duplicate findings.
+
+        Returns list of potential matches with similarity level.
+        """
+        matches = []
+        for finding in self._findings.values():
+            if finding.plugin_slug != plugin_slug:
+                continue
+
+            similarity = None
+            matched_on = []
+
+            if finding.affected_file == affected_file:
+                matched_on.append("affected_file")
+                if affected_function and finding.affected_function == affected_function:
+                    matched_on.append("affected_function")
+                    similarity = "exact"
+                elif vuln_type and finding.vuln_type == vuln_type:
+                    matched_on.append("vuln_type")
+                    similarity = "high"
+                else:
+                    similarity = "medium"
+            elif vuln_type and finding.vuln_type == vuln_type:
+                matched_on.append("vuln_type")
+                similarity = "low"
+
+            if similarity:
+                matches.append({
+                    "finding_id": finding.id,
+                    "title": finding.title,
+                    "affected_file": finding.affected_file,
+                    "affected_function": finding.affected_function,
+                    "vuln_type": finding.vuln_type,
+                    "status": finding.status,
+                    "similarity": similarity,
+                    "matched_on": matched_on,
+                })
+
+        matches.sort(key=lambda m: {"exact": 0, "high": 1, "medium": 2, "low": 3}[m["similarity"]])
+        return matches
+
     def get_stats(self) -> dict[str, Any]:
         """
         Get statistics about findings.

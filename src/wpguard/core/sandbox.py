@@ -288,6 +288,147 @@ class WordPressSandbox:
                 return []
         return []
 
+    def list_rest_endpoints(self, namespace: str | None = None) -> list[dict[str, Any]]:
+        """Get list of registered REST API endpoints from the sandbox."""
+        # Use wp eval to query the REST server directly (wp rest command may not be installed)
+        # Use double quotes in PHP to avoid shlex.split() issues with nested quotes
+        php = (
+            '$s=rest_get_server();$r=$s->get_routes();$o=[];'
+            'foreach($r as $k=>$v){$m=[];'
+            'foreach($v as $h){if(isset($h["methods"]))$m=array_merge($m,array_keys($h["methods"]));}'
+            '$o[]=["route"=>$k,"methods"=>array_values(array_unique($m))];}echo json_encode($o);'
+        )
+        # Call docker exec directly to avoid shlex mangling PHP syntax
+        try:
+            result = subprocess.run(
+                ["docker", "exec", "--user", "www-data", self.container, "wp", "eval", php],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                endpoints = json.loads(result.stdout.strip())
+                if namespace:
+                    endpoints = [e for e in endpoints if e.get("route", "").startswith(f"/{namespace}")]
+                return endpoints
+        except (subprocess.SubprocessError, json.JSONDecodeError):
+            pass
+        return []
+        if result["success"] and result["stdout"]:
+            try:
+                endpoints = json.loads(result["stdout"])
+                if namespace:
+                    endpoints = [e for e in endpoints if e.get("route", "").startswith(f"/{namespace}")]
+                return endpoints
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def map_nonces(self, extra_pages: list[str] | None = None) -> list[dict[str, Any]]:
+        """
+        Crawl WordPress pages at each auth level and extract nonces.
+
+        Returns list of {action, nonce, page_url, auth_level} dicts.
+        """
+        pages = [
+            "/wp-admin/",
+            "/wp-admin/post-new.php",
+            "/wp-admin/profile.php",
+            "/wp-admin/options-general.php",
+            "/wp-admin/admin.php",
+        ]
+        if extra_pages:
+            pages.extend(extra_pages)
+
+        auth_levels = [None, "subscriber", "contributor", "author"]
+        nonce_patterns = [
+            # Inline JS nonce assignments
+            re.compile(r'["\']_wpnonce["\']\s*[,:]\s*["\']([a-f0-9]{10})["\']'),
+            re.compile(r'["\']nonce["\']\s*[,:]\s*["\']([a-f0-9]{10})["\']'),
+            # Hidden form fields
+            re.compile(r'name=["\']_wpnonce["\'][^>]*value=["\']([a-f0-9]{10})["\']'),
+            re.compile(r'value=["\']([a-f0-9]{10})["\'][^>]*name=["\']_wpnonce["\']'),
+            # wp_create_nonce action names in JS
+            re.compile(r'wp_create_nonce\(["\']([^"\']+)["\']\)'),
+        ]
+        # Pattern to extract nonce action names from inline JS variable names
+        action_pattern = re.compile(
+            r'["\'](\w+(?:_nonce|Nonce|_security))["\']'
+            r'\s*[,:]\s*["\']([a-f0-9]{10})["\']'
+        )
+
+        results = []
+        seen = set()
+
+        for auth in auth_levels:
+            auth_label = auth or "unauthenticated"
+            session = self._get_session(auth) if auth else requests.Session()
+
+            for page in pages:
+                url = urljoin(self.base_url, page)
+                try:
+                    response = session.get(url, timeout=10, allow_redirects=True)
+                    if response.status_code != 200:
+                        continue
+                    html = response.text
+
+                    # Extract nonce values
+                    for pattern in nonce_patterns:
+                        for match in pattern.finditer(html):
+                            nonce = match.group(1)
+                            key = (nonce, auth_label, page)
+                            if key not in seen:
+                                seen.add(key)
+                                results.append({
+                                    "nonce": nonce,
+                                    "action": "unknown",
+                                    "page_url": page,
+                                    "auth_level": auth_label,
+                                })
+
+                    # Extract named nonce variables (action: nonce pairs)
+                    for match in action_pattern.finditer(html):
+                        action_name = match.group(1)
+                        nonce = match.group(2)
+                        key = (nonce, auth_label, page)
+                        if key not in seen:
+                            seen.add(key)
+                            results.append({
+                                "nonce": nonce,
+                                "action": action_name,
+                                "page_url": page,
+                                "auth_level": auth_label,
+                            })
+                        else:
+                            # Update action name for already-found nonce
+                            for r in results:
+                                if r["nonce"] == nonce and r["page_url"] == page and r["auth_level"] == auth_label:
+                                    if r["action"] == "unknown":
+                                        r["action"] = action_name
+
+                except requests.RequestException:
+                    continue
+
+        return results
+
+    def run_poc_script(self, poc_path: str, timeout: int = 120) -> dict[str, Any]:
+        """Run a PoC Python script and capture its output."""
+        try:
+            result = subprocess.run(
+                ["python3", poc_path],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            return {
+                "success": result.returncode == 0,
+                "stdout": result.stdout.strip(),
+                "stderr": result.stderr.strip(),
+                "return_code": result.returncode,
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "stdout": "", "stderr": f"Timed out after {timeout}s", "return_code": -1}
+        except FileNotFoundError:
+            return {"success": False, "stdout": "", "stderr": f"Script not found: {poc_path}", "return_code": -1}
+
     # =========================================================================
     # HTTP Methods (for PoC execution)
     # =========================================================================

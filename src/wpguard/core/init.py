@@ -34,6 +34,7 @@ WPGUARD_SLASH_COMMANDS = [
     "SlashCommand(/findings)",
     "SlashCommand(/nday)",
     "SlashCommand(/watch)",
+    "SlashCommand(/diff)",
 ]
 
 
@@ -311,6 +312,9 @@ def initialize_research_project(output_dir: str) -> dict:
         (root / ".claude" / "commands" / "watch.md").write_text(
             _load_template("watch.md")
         )
+        (root / ".claude" / "commands" / "diff.md").write_text(
+            _load_template("diff.md")
+        )
 
         # Write settings.local.json with MCP tool permissions
         settings_local = {
@@ -422,6 +426,7 @@ def initialize_research_project(output_dir: str) -> dict:
                     "/findings",
                     "/nday",
                     "/watch",
+                    "/diff",
                 ],
                 "agents": [f"{name}" for name in ALL_AGENTS],
                 "directories": [

@@ -151,11 +151,14 @@ Track the entire WordPress ecosystem for research opportunities:
 | **Theme SVN** | `wpguard_theme_svn_log`, `wpguard_theme_svn_diff` | Theme commit history and diffs |
 | **Watch (Plugins)** | `wpguard_watch_add`, `wpguard_watch_check`, `wpguard_watch_global`, `wpguard_watch_new` | Plugin monitoring and global updates |
 | **Watch (Themes)** | `wpguard_watch_global_themes`, `wpguard_watch_new_themes` | Theme monitoring and global updates |
-| **Sandbox** | `wpguard_sandbox_start`, `wpguard_sandbox_request`, `wpguard_sandbox_wp_cli`, `wpguard_sandbox_get_nonce` | Docker WordPress instance management |
+| **Sandbox** | `wpguard_sandbox_start`, `wpguard_sandbox_request`, `wpguard_sandbox_wp_cli`, `wpguard_sandbox_get_nonce`, `wpguard_sandbox_list_endpoints`, `wpguard_sandbox_map_nonces` | Docker WordPress instance, REST discovery, nonce mapping |
 | **Scope** | `wpguard_scope_check_plugin`, `wpguard_scope_check_finding`, `wpguard_scope_get_vulns` | Wordfence bounty eligibility |
 | **Findings** | `wpguard_finding_create`, `wpguard_finding_update`, `wpguard_finding_list`, `wpguard_finding_stats` | Vulnerability tracking and management |
 | **CVE Database** | `wpguard_cve_search`, `wpguard_cve_get`, `wpguard_cve_stats` | Wordfence vulnerability database |
 | **Discord** | `wpguard_discord_notify_finding`, `wpguard_discord_notify_summary` | Real-time notifications |
+| **Scoring** | `wpguard_target_score` | Priority scoring for target selection (installs, CVEs, audit history) |
+| **Regression** | `wpguard_regression_check` | Re-run previous PoCs to detect incomplete patches |
+| **Dedup** | `wpguard_finding_check_duplicate` | Check for duplicate findings before creation |
 | **Project** | `wpguard_init_research` | Initialize research project with all agents and commands |
 
 ## Installation
@@ -258,6 +261,7 @@ The PM orchestrator handles everything — download, scope check, sandbox setup,
 | `/status` | Dashboard of current audit progress |
 | `/findings` | List all findings with status and severity |
 | `/nday` | N-day research — PoCs for known/patched CVEs |
+| `/diff` | Security-focused version diff — flag dangerous code changes |
 
 ### CLI Commands
 
