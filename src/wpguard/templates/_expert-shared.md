@@ -41,11 +41,16 @@ After every ~10 tool calls, UPDATE your progress report:
 ### Rule 3: Save Findings IMMEDIATELY
 
 The moment you identify a vulnerability — even a maybe:
-1. Call `wpguard_finding_create()` RIGHT NOW with `status="draft"` if unverified
-2. Update your progress report with the finding ID
-3. Then continue analyzing
+1. **Check for duplicates first**: Call `wpguard_finding_check_duplicate(plugin_slug, affected_file, affected_function)` — if an exact match exists, skip
+2. Call `wpguard_finding_create()` RIGHT NOW with `status="draft"` if unverified
+3. Update your progress report with the finding ID
+4. Then continue analyzing
 
 A saved draft is infinitely more valuable than a lost validated finding.
+
+### Rule 5: Use Nonce Mapper for Auth Testing
+
+When you need nonces for testing endpoints, call `wpguard_sandbox_map_nonces()` — it crawls all admin pages at every auth level and returns all available nonces. Much faster than manually hunting through page source. Add plugin-specific pages via `extra_pages` parameter.
 
 ### Rule 4: Start From the Surface Map
 

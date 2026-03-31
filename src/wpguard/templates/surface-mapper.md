@@ -84,11 +84,14 @@ grep -rn "defined.*PMPRO\|pmpro_" --include="*.php" . | head -3
 grep -rn "wp_ajax_nopriv_" --include="*.php" .
 grep -rn "wp_ajax_" --include="*.php" . | grep -v "nopriv"
 
-# REST API routes
+# REST API routes (source code grep)
 grep -rn "register_rest_route" --include="*.php" .
 
 # REST routes with permissive access — flag __return_true permission callbacks
 grep -rn "permission_callback" --include="*.php" . | grep "__return_true"
+
+# ALSO: Call wpguard_sandbox_list_endpoints() for LIVE registered REST routes from the running sandbox
+# This catches routes registered by dependencies and dynamically-registered routes that grep misses
 
 # REST pre-dispatch hooks — fire BEFORE any REST auth, process ALL requests
 grep -rn "rest_pre_dispatch\|rest_pre_serve_request\|rest_request_before_callbacks" --include="*.php" .

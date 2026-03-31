@@ -132,7 +132,7 @@ When the user wants a comprehensive audit:
 
 1. **Check audit history** — call `wpguard_audit_check(slug)` FIRST. If previously audited:
    - **Same version**: Skip unless user explicitly requests a re-audit. Tell user: "This was already audited (v{version}, {iterations} iterations, {findings} findings). Use 'force audit' to re-audit."
-   - **New version**: Proceed — note the version delta and prior findings for context
+   - **New version**: Run `wpguard_regression_check(slug)` to re-test previous PoCs against the new version. If any still pass = incomplete patch = high-value finding. Then run `/diff` to analyze what changed before launching a full audit.
    - **Never audited**: Proceed normally
 2. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
 3. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility (works for both plugins and themes)
@@ -208,6 +208,13 @@ When the user wants to check for a specific vulnerability type:
 - Delegate directly to the relevant expert agent
 - Pass along any context the user provides (specific files, functions, endpoints)
 - Still run through the FULL verification pipeline: expert → impact-assessor → poc-writer → poc-runner → qa-triage → bb-submission
+
+### Picking the Next Target (Autonomous Mode)
+When the queue is empty or you need to choose the next target:
+- Call `wpguard_target_score(slugs=[...])` with candidate slugs to rank them by priority
+- Score considers: active installs, CVE history (5-20 is sweet spot), days since last audit, whether current version was already audited
+- Check `recently_updated.json` for recently updated plugins — prioritize these (fresh code changes = fresh attack surface)
+- Use `/diff` on high-scoring updated plugins to preview what changed before committing to a full audit
 
 ### Changelog-Based Research (n-day)
 When the user wants to find vulnerabilities in existing CVEs/patches:

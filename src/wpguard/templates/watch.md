@@ -69,3 +69,5 @@ Scan the WordPress plugin AND theme ecosystems for recent updates, new additions
 - Use `wpguard_watch_add` to add specific plugins for SVN-level change tracking.
 - Results are saved to `recently_updated.json` and `new_plugins.json` in the project directory.
 - Use `/loop 30m /watch` to continuously monitor for updates.
+- For high-interest updates, run `/diff {slug}` to analyze security-relevant code changes before launching a full audit.
+- Use `wpguard_target_score(slugs=[...])` to rank updated plugins by research priority.
