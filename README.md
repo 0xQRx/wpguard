@@ -349,26 +349,56 @@ research-project/
 
 Combine `/loop` with slash commands for fully autonomous operation. These run inside Claude Code.
 
-### Continuous Research Loop (Fully Autonomous)
+### Autonomous Research Loop — High Threat Tier Only
 
 ```
-/loop 15m /pm Check active research → if running check on progress, ensure
-plan is being followed, if stalled re-trigger, if complete archive+mark DONE
-→ Pick next target by highest historical vuln count (list empty?
-Auto-Discover+rank+pick) → Initialize a plan for a plugin. Launch full audit
-(each phase needs confirmed output before next unlocks).
+/loop 15m /pm — Autonomous Security Research Loop (HIGH THREAT TIER ONLY)
 
-RULES: no parallel audits, no skipped/abbreviated phases, no DONE without
-confirmation that full plan was covered. If watch returns recently updated
-plugins (recently_updated.json), prioritize those into queue with main focus
-on latest changes.
+## Priority Order
 
-Focus on High Threat Tier vulnerabilities:
-- 25+ installs
-- Unauth, Customer, Subscriber roles
-- RCE, File Upload/Read/Delete, Options Update, Auth Bypass to admin, Priv Esc to admin
+1. **Check active research** — Read `reports/*/PLAN.md` for any in-progress audit. If found:
+   - Check progress: are all phases being completed? Is the plan being followed?
+   - If stalled (no progress since last check): re-trigger the stalled phase
+   - If complete (all phases done, verification pipeline finished): archive results,
+     record audit via `wpguard_audit_record`, commit, mark DONE, then continue to step 2
+   - If running normally: let it continue, do NOT start a new audit. Exit.
 
-Best strategy: plugins with frontend user interaction and 5-15 CVEs, never idle.
+2. **Scan for updates** — Run `/watch` to check `recently_updated.json` for recently
+   updated plugins. Prioritize any updates into the target queue — focus on latest code
+   changes (new features = new attack surface, vague changelogs = potential stealth
+   security fixes, rapid successive releases = panic patching).
+
+3. **Pick next target** — Select the highest-priority unaudited plugin:
+   - First: recently updated plugins from step 2 (run `wpguard_target_score` to rank)
+   - Second: plugins with 5-10 CVEs, 50K+ installs, frontend user interaction
+   - Third: auto-discover via `wpguard_search` + `wpguard_target_score` if queue is empty
+   - Check `wpguard_audit_check(slug)` — skip already-audited-at-same-version
+   - Best targets: major version rewrites, same-day security patches, recent CVE bypasses
+
+4. **Launch full audit** — Initialize plan, run ALL phases sequentially:
+   - Download → Scope check → CVE search → Destroy/rebuild sandbox → Surface map →
+     Install deps → Launch experts → Collect findings → Escalate → Impact assess →
+     PoC write → PoC run → QA triage → BB submission → Record audit
+   - Each phase must have confirmed output before the next unlocks
+   - No parallel audits, no skipped/abbreviated phases, no DONE without full plan coverage
+   - Compact conversation if context is getting large, then resume
+
+## STRICT RULES
+
+- CVSS < 7.5 = REJECT IMMEDIATELY — do not write PoCs, do not run verification
+- Only these vulnerability types matter:
+  - RCE (Remote Code Execution)
+  - File Upload / Read / Delete
+  - Options Update (leading to admin takeover)
+  - Auth Bypass to admin
+  - Privilege Escalation to admin
+- All other vulnerability types: SKIP — no XSS, no CSRF, no IDOR, no info disclosure,
+  no SSRF unless it chains to RCE/file ops
+- 50K+ installs minimum (unless recently updated with suspicious changelog)
+- Attack roles: Unauthenticated, Customer, Subscriber ONLY — Editor/Admin are OOS
+- Contributor/Author OK only for RCE, File Upload/Delete, Options Update (per Wordfence scope)
+- If 0 findings after full audit: record audit, move to next target immediately
+- Never re-audit same version of a plugin
 ```
 
 This creates a self-driving research loop that:
@@ -377,6 +407,7 @@ This creates a self-driving research loop that:
 - Picks the next highest-value target when done
 - Auto-discovers new targets when the queue is empty
 - Prioritizes recently updated plugins from `/watch` output
+- Focuses exclusively on high-threat-tier vulnerabilities (CVSS 7.5+)
 - Never sits idle
 
 ### Ecosystem Monitor
