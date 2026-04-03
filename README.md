@@ -207,6 +207,23 @@ cd wpguard
 pipx install -e .
 ```
 
+### Install All Dependencies (Linux)
+
+> **Note:** This tool targets Linux (Debian/Ubuntu). macOS and Windows are not supported.
+
+```bash
+# Check what's missing and install everything
+wpguard install-deps
+
+# Dry run — see what would be installed
+wpguard install-deps --dry-run
+
+# Also configure Claude Code MCP servers
+wpguard install-deps --setup-mcp
+```
+
+This installs: Docker + Compose, SVN, ffmpeg, Node.js (via nvm), asciinema, Playwright + Chromium, and Claude Code CLI.
+
 ### Setup MCP Servers
 
 wpguard uses three MCP servers — wpguard itself (required), Playwright (required for PoC verification), and devrag (optional but recommended):
