@@ -747,12 +747,6 @@ def cmd_watch_start(args: argparse.Namespace) -> int:
         return 0
 
 
-def cmd_install_deps(args: argparse.Namespace) -> int:
-    """Install missing dependencies."""
-    from wpguard.core.deps import install_deps
-    return install_deps(dry_run=args.dry_run, setup_mcp=args.setup_mcp)
-
-
 def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser."""
     parser = argparse.ArgumentParser(
@@ -872,22 +866,6 @@ Examples:
         help="Directory to initialize (e.g., 'autoresearch' or '/tmp/my-research')",
     )
     init_parser.set_defaults(func=cmd_init)
-
-    # Install dependencies command
-    deps_parser = subparsers.add_parser(
-        "install-deps",
-        help="Install all required system dependencies (Linux only)",
-        description="Check and install Docker, SVN, ffmpeg, Node.js, asciinema, Playwright, and Claude Code CLI. Optionally configure MCP servers.",
-    )
-    deps_parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Show what would be installed without installing",
-    )
-    deps_parser.add_argument(
-        "--setup-mcp", action="store_true",
-        help="Also configure Claude Code MCP servers (wpguard, Playwright, devrag)",
-    )
-    deps_parser.set_defaults(func=cmd_install_deps)
 
     # SVN subcommands
     svn_parser = subparsers.add_parser("svn", help="SVN operations for change tracking")
