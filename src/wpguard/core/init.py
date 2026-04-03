@@ -82,6 +82,7 @@ SUPPORT_AGENTS = [
     "poc-creator",
     "poc-writer",
     "poc-runner",
+    "poc-recorder",
     "sandbox-admin",
     "surface-mapper",
     "impact-assessor",

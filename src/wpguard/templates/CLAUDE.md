@@ -55,6 +55,7 @@ Expert finds vuln → Impact Assessor → PoC Writer → PoC Runner → QA Triag
 ### Utility
 | Agent | Role |
 |-------|------|
+| `poc-recorder` | Records terminal (asciinema) and browser (Playwright) PoC videos on demand |
 | `poc-creator` | n-day research — changelog/CVE analysis, PoCs for patched vulns |
 | `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |

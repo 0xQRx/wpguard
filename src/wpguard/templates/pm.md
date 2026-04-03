@@ -85,6 +85,7 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 ### Utility Agents
 | Agent | Purpose |
 |-------|---------|
+| `poc-recorder` | Records terminal (asciinema) and browser (Playwright) PoC videos — delegated by bb-submission |
 | `poc-creator` | Analyzes changelogs for existing CVEs, creates PoCs for patched vulns |
 | `sandbox-admin` | Manages sandbox environment — installs plugins, resets users, cleans DB (invocable by any agent) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps. Run BEFORE experts. |
