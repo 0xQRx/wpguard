@@ -33,6 +33,7 @@ PM Orchestrator
  |     qa-triage     --> scope check, CVSS, writeup, Discord notification
  |     impact-assessor --> rejects obscure impact, downgrades inflated CVSS
  |     bb-submission --> clean sandbox repro, Wordfence submission format
+ |     poc-recorder  --> terminal + browser video evidence
  |
  +--> Discord: "3 validated findings for flavor-starter"
 ```
@@ -298,6 +299,7 @@ wpguard svn diff akismet 3000000 3001000 --show-diff
 10. QA validation   qa-triage (scope, CVSS, writeup)
 11. Impact review   impact-assessor (mandatory — rejects obscure impact)
 12. Submission      bb-submission (clean repro, Wordfence format)
+13. Video evidence  poc-recorder (terminal + browser recordings)
 ```
 
 ### Context Survival Protocol
