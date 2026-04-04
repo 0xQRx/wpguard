@@ -288,6 +288,71 @@ class WordPressSandbox:
                 return []
         return []
 
+    def get_emails(self, search: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        """
+        Get captured emails from Mailpit.
+
+        Args:
+            search: Optional search query (matches to, from, subject, body)
+            limit: Maximum emails to return
+
+        Returns:
+            List of email dicts with id, from, to, subject, snippet, created_at
+        """
+        mailpit_url = f"http://{self.host}:8025/api/v1/messages"
+        params: dict[str, Any] = {"limit": limit}
+        if search:
+            params["search"] = search
+        try:
+            response = requests.get(mailpit_url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            emails = []
+            for msg in data.get("messages", []):
+                emails.append({
+                    "id": msg.get("ID", ""),
+                    "from": msg.get("From", {}).get("Address", ""),
+                    "to": [a.get("Address", "") for a in msg.get("To", [])],
+                    "subject": msg.get("Subject", ""),
+                    "snippet": msg.get("Snippet", ""),
+                    "created_at": msg.get("Created", ""),
+                    "attachments": msg.get("Attachments", 0),
+                })
+            return emails
+        except requests.RequestException:
+            return []
+
+    def get_email_body(self, message_id: str) -> dict[str, Any]:
+        """Get full email body by message ID."""
+        mailpit_url = f"http://{self.host}:8025/api/v1/message/{message_id}"
+        try:
+            response = requests.get(mailpit_url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            return {
+                "id": data.get("ID", ""),
+                "from": data.get("From", {}).get("Address", ""),
+                "to": [a.get("Address", "") for a in data.get("To", [])],
+                "subject": data.get("Subject", ""),
+                "text": data.get("Text", ""),
+                "html": data.get("HTML", "")[:5000],  # Truncate large HTML
+                "attachments": [
+                    {"filename": a.get("FileName", ""), "size": a.get("Size", 0), "content_type": a.get("ContentType", "")}
+                    for a in data.get("Attachments", [])
+                ],
+            }
+        except requests.RequestException as e:
+            return {"error": str(e)}
+
+    def delete_emails(self) -> bool:
+        """Delete all captured emails from Mailpit."""
+        mailpit_url = f"http://{self.host}:8025/api/v1/messages"
+        try:
+            response = requests.delete(mailpit_url, timeout=10)
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
     def list_rest_endpoints(self, namespace: str | None = None) -> list[dict[str, Any]]:
         """Get list of registered REST API endpoints from the sandbox."""
         # Use wp eval to query the REST server directly (wp rest command may not be installed)

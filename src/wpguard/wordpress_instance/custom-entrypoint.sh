@@ -99,6 +99,25 @@ require_once ABSPATH . 'wp-settings.php';
 WPCONFIG
     chown www-data:www-data /var/www/html/wp-config.php
 
+    # Configure WordPress to send all mail through Mailpit SMTP
+    echo "[WP-Setup] Configuring Mailpit SMTP..."
+    mkdir -p /var/www/html/wp-content/mu-plugins
+    cat > /var/www/html/wp-content/mu-plugins/wpguard-mailpit.php << 'MAILPLUGIN'
+<?php
+/**
+ * WPGuard: Route all WordPress mail through Mailpit for capture.
+ * This is a must-use plugin — it loads automatically.
+ */
+add_action('phpmailer_init', function($phpmailer) {
+    $phpmailer->isSMTP();
+    $phpmailer->Host = 'mailpit';
+    $phpmailer->Port = 1025;
+    $phpmailer->SMTPAuth = false;
+    $phpmailer->SMTPAutoTLS = false;
+});
+MAILPLUGIN
+    chown www-data:www-data /var/www/html/wp-content/mu-plugins/wpguard-mailpit.php
+
     echo "[WP-Setup] =========================================="
     echo "[WP-Setup] WordPress setup complete!"
     echo "[WP-Setup] Site URL: $SITE_URL"

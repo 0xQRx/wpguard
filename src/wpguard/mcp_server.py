@@ -674,6 +674,38 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_sandbox_get_emails",
+            description="Get captured emails from the Mailpit mail server. All WordPress wp_mail() output is routed here. Useful for testing password resets, form notifications, email-based exfiltration.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "search": {"type": "string", "description": "Search query (matches to, from, subject, body)"},
+                    "limit": {"type": "integer", "description": "Max emails to return (default: 50)", "default": 50},
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_get_email_body",
+            description="Get the full body of a captured email by its message ID. Returns text, HTML, and attachments.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "message_id": {"type": "string", "description": "Email message ID from wpguard_sandbox_get_emails"},
+                },
+                "required": ["message_id"],
+            },
+        ),
+        Tool(
+            name="wpguard_sandbox_delete_emails",
+            description="Delete all captured emails from Mailpit. Use before testing to start with a clean inbox.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
             name="wpguard_sandbox_list_endpoints",
             description="List all registered WordPress REST API endpoints in the sandbox. Useful for discovering plugin attack surface.",
             inputSchema={
@@ -1397,6 +1429,15 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["action"],
             arguments.get("auth"),
         )
+
+    elif name == "wpguard_sandbox_get_emails":
+        return await _sandbox_get_emails(arguments.get("search"), arguments.get("limit", 50))
+
+    elif name == "wpguard_sandbox_get_email_body":
+        return await _sandbox_get_email_body(arguments["message_id"])
+
+    elif name == "wpguard_sandbox_delete_emails":
+        return await _sandbox_delete_emails()
 
     elif name == "wpguard_sandbox_list_endpoints":
         return await _sandbox_list_endpoints(arguments.get("namespace"))
@@ -2794,6 +2835,37 @@ def _audit_list_sync(asset_type: str | None, output_dir: str) -> dict[str, Any]:
 async def _audit_list(asset_type: str | None, output_dir: str) -> dict[str, Any]:
     """List audit history."""
     return await run_in_executor(_audit_list_sync, asset_type, output_dir)
+
+
+# ── Sandbox Email (Mailpit) Implementations ───────────
+
+def _sandbox_get_emails_sync(search: str | None, limit: int) -> dict[str, Any]:
+    sandbox = _get_sandbox()
+    emails = sandbox.get_emails(search=search, limit=limit)
+    return {"emails": emails, "count": len(emails)}
+
+
+async def _sandbox_get_emails(search: str | None, limit: int) -> dict[str, Any]:
+    return await run_in_executor(_sandbox_get_emails_sync, search, limit)
+
+
+def _sandbox_get_email_body_sync(message_id: str) -> dict[str, Any]:
+    sandbox = _get_sandbox()
+    return sandbox.get_email_body(message_id)
+
+
+async def _sandbox_get_email_body(message_id: str) -> dict[str, Any]:
+    return await run_in_executor(_sandbox_get_email_body_sync, message_id)
+
+
+def _sandbox_delete_emails_sync() -> dict[str, Any]:
+    sandbox = _get_sandbox()
+    success = sandbox.delete_emails()
+    return {"success": success}
+
+
+async def _sandbox_delete_emails() -> dict[str, Any]:
+    return await run_in_executor(_sandbox_delete_emails_sync)
 
 
 # ── Sandbox Discovery Implementations ─────────────────
