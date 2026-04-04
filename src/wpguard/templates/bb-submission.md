@@ -99,7 +99,11 @@ The {Plugin Name} plugin ({active_installs} active installs) is vulnerable to {v
 - MySQL {mysql_version}
 
 **CVSS:** {score} (CVSS:3.1/{vector string})
+
+**Estimated Bounty:** {bounty_range} (via `wpguard_bounty_estimate`)
 ```
+
+When generating the submission, call `wpguard_bounty_estimate(vuln_type, install_count, auth_level)` and include the range. This is for internal tracking — do not include in the actual Wordfence submission.
 
 ## Writing Guidelines
 

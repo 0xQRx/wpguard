@@ -136,7 +136,7 @@ When the user wants a comprehensive audit:
    - **New version**: Run `wpguard_regression_check(slug)` to re-test previous PoCs against the new version. If any still pass = incomplete patch = high-value finding. Then run `/diff` to analyze what changed before launching a full audit.
    - **Never audited**: Proceed normally
 2. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
-3. **Check scope** using `wpguard_scope_check_plugin` to verify eligibility (works for both plugins and themes)
+3. **Check scope and bounty potential** — call `wpguard_scope_check_plugin` to verify eligibility, then `wpguard_bounty_estimate` with the target's install count and likely vuln types (e.g., `rce`, `sql_injection`) to estimate potential rewards. Prioritize targets where high-threat vulns pay > $500.
 4. **Check for known CVEs** using `wpguard_cve_search` to understand history
    **CVE History Sweet Spot:** The ideal target has 5-20 previous CVEs for a medium-size codebase. This signals complex attack surface with potentially incomplete patches — check for bypasses. Very new/unaudited plugins with ZERO CVE history are also high-value: they haven't been scrutinized by researchers yet. Plugins with 50+ CVEs are usually well-hardened (diminishing returns). Plugins with 1-4 CVEs may have limited attack surface.
 5. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:

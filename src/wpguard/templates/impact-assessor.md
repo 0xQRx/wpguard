@@ -34,7 +34,13 @@ Review all findings with status `validated` or `draft`.
 
 ### Step 2: Assess Each Finding
 
-For each finding, evaluate:
+For each finding, first estimate the bounty:
+
+```python
+wpguard_bounty_estimate(vuln_type="{finding.vuln_type}", install_count={active_installs}, auth_level="{finding.auth_level}")
+```
+
+If the finding is **out of scope** or the max bounty is **< $10**, REMOVE it immediately — it's not worth the pipeline time. Otherwise evaluate:
 
 1. **Is the impact consequential?**
    - Data theft, privilege escalation, RCE, account takeover, file manipulation = YES
