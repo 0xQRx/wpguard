@@ -746,6 +746,34 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_bounty_estimate",
+            description="Estimate Wordfence bug bounty reward for a vulnerability. Uses live calculator config from Wordfence. Returns bounty range, scope status, and breakdown.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vuln_type": {
+                        "type": "string",
+                        "description": "Vulnerability type key: rce, arbitrary_file_upload, arbitrary_file_read, arbitrary_file_deletion, arbitrary_options_update, authorization_bypass_admin, privilege_escalation_admin, sql_injection, stored_xss, reflected_xss, csrf, missing_authorization, ssrf, php_object_injection, insecure_direct_object_reference, file_inclusion, directory_traversal, privilege_escalation_non_admin, authorization_bypass_non_admin, information_disclosure, basic_information_disclosure, arbitrary_shortcode_execution, backdoor, ip_spoofing",
+                    },
+                    "install_count": {
+                        "type": "integer",
+                        "description": "Active installations",
+                    },
+                    "auth_level": {
+                        "type": "string",
+                        "description": "Auth level: none (unauth), low (subscriber), mid (contributor/author), high (admin/editor)",
+                        "default": "none",
+                    },
+                    "researcher_tier": {
+                        "type": "integer",
+                        "description": "0=Standard, 1=1337, 2=Resourceful (default: 0)",
+                        "default": 0,
+                    },
+                },
+                "required": ["vuln_type", "install_count"],
+            },
+        ),
+        Tool(
             name="wpguard_finding_check_duplicate",
             description="Check for potential duplicate findings before creating a new one. Returns similar findings by file, function, and vuln type.",
             inputSchema={
@@ -1387,6 +1415,14 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("slug"),
             arguments.get("slugs"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_bounty_estimate":
+        return await _bounty_estimate(
+            arguments["vuln_type"],
+            arguments["install_count"],
+            arguments.get("auth_level", "none"),
+            arguments.get("researcher_tier", 0),
         )
 
     elif name == "wpguard_finding_check_duplicate":
@@ -2822,6 +2858,19 @@ def _target_score_sync(slug: str | None, slugs: list[str] | None, output_dir: st
 
 async def _target_score(slug: str | None, slugs: list[str] | None, output_dir: str) -> dict[str, Any]:
     return await run_in_executor(_target_score_sync, slug, slugs, output_dir)
+
+
+# ── Bounty Estimator Implementation ───────────────────
+
+def _bounty_estimate_sync(vuln_type: str, install_count: int, auth_level: str, researcher_tier: int) -> dict[str, Any]:
+    """Estimate bounty (sync version)."""
+    from wpguard.core.bounty import BountyEstimator
+    estimator = BountyEstimator()
+    return estimator.estimate(vuln_type, install_count, auth_level, researcher_tier)
+
+
+async def _bounty_estimate(vuln_type: str, install_count: int, auth_level: str, researcher_tier: int) -> dict[str, Any]:
+    return await run_in_executor(_bounty_estimate_sync, vuln_type, install_count, auth_level, researcher_tier)
 
 
 # ── Findings Dedup Implementation ─────────────────────
