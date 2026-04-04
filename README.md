@@ -263,6 +263,7 @@ The PM orchestrator handles everything — download, scope check, sandbox setup,
 | `/findings` | List all findings with status and severity |
 | `/nday` | N-day research — PoCs for known/patched CVEs |
 | `/diff` | Security-focused version diff — flag dangerous code changes |
+| `/patrol` | Lightweight audit watchdog for cron loops — checks progress, re-triggers stalls |
 
 ### CLI Commands
 
@@ -351,66 +352,35 @@ research-project/
 
 Combine `/loop` with slash commands for fully autonomous operation. These run inside Claude Code.
 
-### Autonomous Research Loop — High Threat Tier Only
+### Autonomous Research — Two-Part Setup
+
+**Step 1: Launch the audit with `/pm` (run once, with your strategy):**
 
 ```
-/loop 15m /pm — Autonomous Security Research Loop (HIGH THREAT TIER ONLY)
-
-## Priority Order
-
-1. **Check active research** — Read `reports/*/PLAN.md` for any in-progress audit. If found:
-   - Check progress: are all phases being completed? Is the plan being followed?
-   - If stalled (no progress since last check): re-trigger the stalled phase
-   - If complete (all phases done, verification pipeline finished): archive results,
-     record audit via `wpguard_audit_record`, commit, mark DONE, then continue to step 2
-   - If running normally: let it continue, do NOT start a new audit. Exit.
-
-2. **Scan for updates** — Run `/watch` to check `recently_updated.json` for recently
-   updated plugins. Prioritize any updates into the target queue — focus on latest code
-   changes (new features = new attack surface, vague changelogs = potential stealth
-   security fixes, rapid successive releases = panic patching).
-
-3. **Pick next target** — Select the highest-priority unaudited plugin:
-   - First: recently updated plugins from step 2 (run `wpguard_target_score` to rank)
-   - Second: plugins with 5-10 CVEs, 50K+ installs, frontend user interaction
-   - Third: auto-discover via `wpguard_search` + `wpguard_target_score` if queue is empty
-   - Check `wpguard_audit_check(slug)` — skip already-audited-at-same-version
-   - Best targets: major version rewrites, same-day security patches, recent CVE bypasses
-
-4. **Launch full audit** — Initialize plan, run ALL phases sequentially:
-   - Download → Scope check → CVE search → Destroy/rebuild sandbox → Surface map →
-     Install deps → Launch experts → Collect findings → Escalate → Impact assess →
-     PoC write → PoC run → QA triage → BB submission → Record audit
-   - Each phase must have confirmed output before the next unlocks
-   - No parallel audits, no skipped/abbreviated phases, no DONE without full plan coverage
-   - Compact conversation if context is getting large, then resume
-
-## STRICT RULES
-
-- CVSS < 7.5 = REJECT IMMEDIATELY — do not write PoCs, do not run verification
-- Only these vulnerability types matter:
-  - RCE (Remote Code Execution)
-  - File Upload / Read / Delete
-  - Options Update (leading to admin takeover)
-  - Auth Bypass to admin
-  - Privilege Escalation to admin
-- All other vulnerability types: SKIP — no XSS, no CSRF, no IDOR, no info disclosure,
-  no SSRF unless it chains to RCE/file ops
+/pm — HIGH THREAT TIER research. Focus:
+- RCE, File Upload/Read/Delete, Options Update, Auth Bypass, Priv Esc to admin
+- CVSS < 7.5 = REJECT — do not write PoCs, do not waste pipeline
 - 50K+ installs minimum (unless recently updated with suspicious changelog)
-- Attack roles: Unauthenticated, Customer, Subscriber ONLY — Editor/Admin are OOS
-- Contributor/Author OK only for RCE, File Upload/Delete, Options Update (per Wordfence scope)
-- If 0 findings after full audit: record audit, move to next target immediately
-- Never re-audit same version of a plugin
+- Unauth, Customer, Subscriber roles. Contributor/Author OK for RCE/File/Options only
+- Pick target: run wpguard_target_score, prefer plugins with 5-15 CVEs + frontend interaction
+- Run ALL phases, no skipping, each phase confirmed before next
 ```
 
-This creates a self-driving research loop that:
-- Checks progress every 15 minutes
-- Detects stalled audits and re-triggers them
-- Picks the next highest-value target when done
-- Auto-discovers new targets when the queue is empty
-- Prioritizes recently updated plugins from `/watch` output
-- Focuses exclusively on high-threat-tier vulnerabilities (CVSS 7.5+)
-- Never sits idle
+This starts the first audit. PM creates the plan, launches experts, runs the full pipeline.
+
+**Step 2: Set `/patrol` on a cron to keep things moving:**
+
+```
+/loop 15m /patrol
+```
+
+`/patrol` is a lightweight watchdog (~50 lines vs PM's ~300). Every 15 minutes it:
+- **Running normally** → one-line status, exits (< 500 tokens)
+- **Stalled** → re-triggers the stuck agent directly (doesn't reload PM)
+- **Complete** → records audit, scores targets, calls `/pm` to start next audit
+- **No audit** → picks next target, calls `/pm`
+
+90% of cron cycles cost 1/10th of what `/pm` would cost. PM only loads when a new audit needs to start.
 
 ### Ecosystem Monitor
 
