@@ -195,11 +195,7 @@ When the user wants a comprehensive audit:
 13. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that passed QA
       - Destroys/rebuilds sandbox for clean reproduction
       - Generates polished submission report in Wordfence format
-      - Records terminal PoC video (asciinema) and browser walkthrough (Playwright)
-      - Converts recordings to GIF for submission
-      - Verifies PoC works from scratch on clean install
-      - Destroys/rebuilds sandbox for clean reproduction
-      - Generates polished submission report in Wordfence format
+      - Delegates to `poc-recorder` for terminal + browser video evidence
       - Verifies PoC works from scratch on clean install
 14. **Record audit** — call `wpguard_audit_record(slug, version, findings_count, validated_count)` to log this audit in the history
 15. **Report results** to the user
@@ -271,6 +267,17 @@ BB Submission prepares final reports        ← MANDATORY
 7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
 8. **Test ecosystem-specific roles** — when a base plugin is installed, test its additional roles. WooCommerce `customer` can view orders, manage account, access shop endpoints. BuddyPress members can access groups, profiles, activity. These roles often have access to plugin features that subscriber does not.
 9. **Relaunch incomplete experts** — if an expert reports PARTIAL analysis (ran out of context), relaunch it with its progress report as context. Tell it: "Continue analysis from your progress report at `reports/{plugin_slug}/progress_{agent_name}.md`. Skip files already marked [x]. Focus on the Remaining Work section. Existing findings: {list finding IDs}." Do NOT skip incomplete analysis — the remaining files often contain the most interesting code.
+
+## Token Efficiency
+
+You are the most expensive agent — every token you spend on verbose output is a token not spent on actual research. Follow these rules:
+
+1. **Be terse in your own output** — status updates should be 1-2 sentences, not paragraphs. "sqli-expert complete: 2 findings (draft), full coverage." is enough.
+2. **Don't repeat what agents reported** — reference their progress reports and findings by ID. Don't copy-paste their output into your responses.
+3. **Use the plan file as your memory** — update `reports/{slug}/PLAN.md` after each phase. Read it at the start of each turn to remember where you are. Don't hold state in conversation context.
+4. **Compact aggressively** — if context is getting large during a long audit, use `/compact` before continuing. The plan file and findings database persist across compaction.
+5. **Store observations in claude-mem** — after completing an audit, store any non-obvious patterns or lessons learned in claude-mem for future audits. This avoids rediscovering the same insights.
+6. **Keep delegation prompts focused** — don't include the full vuln type catalog when delegating. Just: slug, version, installs, surface map path, specific files to check.
 
 ## Agent Delegation Format
 

@@ -1,121 +1,90 @@
 # Research Plan — {plugin_slug}
 
 ## Target Info
-- **Plugin:** {plugin_slug}
+- **Plugin/Theme:** {slug}
 - **Version:** {version}
 - **Active Installs:** {active_installs}
-- **Source:** targets/{plugin_slug}/extracted/
+- **Type:** plugin / theme
+- **Source:** targets/{slug}/extracted/
+- **Bounty Potential:** {bounty_range} (via `wpguard_bounty_estimate`)
 - **Started:** {date}
 
 ## Pre-Research
-- [ ] Plugin downloaded and extracted to targets/
+- [ ] Audit history checked (`wpguard_audit_check`)
+- [ ] Downloaded and extracted to targets/
 - [ ] Scope check passed (`wpguard_scope_check_plugin`)
+- [ ] Bounty estimated (`wpguard_bounty_estimate`)
 - [ ] CVE history reviewed (`wpguard_cve_search`)
-- [ ] Sandbox destroyed and rebuilt (`wpguard_sandbox_destroy` → `wpguard_sandbox_start`)
+- [ ] Regression check (if updated version): (`wpguard_regression_check`)
+- [ ] Sandbox destroyed and rebuilt
 - [ ] Sandbox prepared (`sandbox-admin` — plugin installed, users reset)
-- [ ] Attack surface mapped (`surface-mapper`) → see `reports/{plugin_slug}/surface_map.md`
+- [ ] Attack surface mapped (`surface-mapper`) → `reports/{slug}/surface_map.md`
 
 ### Dependencies
-- [ ] Dependency detection (surface-mapper)
 - [ ] Base plugin(s) installed: {slugs or N/A}
 - [ ] Ecosystem setup: {completed / premium-static-only / N/A}
 - [ ] Additional test users: {customer, member, etc. or N/A}
-- [ ] Test data seeded: {products, orders, courses, forms, etc. or N/A}
+- [ ] Cross-plugin interaction analysis: {yes / N/A}
 
 ### Surface Map Summary
 ```
-DEPENDENCIES: (fill from surface-mapper output)
-ENDPOINTS: (fill from surface-mapper output)
-DANGEROUS FUNCTIONS: (fill from surface-mapper output)
-RECOMMENDED EXPERTS: (fill from surface-mapper output)
+(Fill from surface-mapper output)
+ENDPOINTS: ...
+DANGEROUS SINKS: ...
+RECOMMENDED EXPERTS: ...
+STATUS: COMPLETE / PARTIAL
 ```
 
 ## Expert Analysis
-- [ ] `file-rce-expert` — File upload/read/write/delete, RCE
-- [ ] `sqli-expert` — SQL injection
-- [ ] `xss-expert` — Stored/Reflected/DOM XSS
-- [ ] `missing-auth-expert` — Missing capability checks on endpoints
-- [ ] `idor-expert` — IDOR, object-level access control
-- [ ] `priv-esc-expert` — Privilege escalation, options update, auth bypass
-- [ ] `object-injection-expert` — PHP object injection
-- [ ] `ssrf-expert` — SSRF
-- [ ] `race-condition-expert` — Race conditions
-- [ ] `csrf-expert` — CSRF
-- [ ] `lfi-rfi-expert` — LFI/RFI
-- [ ] `xxe-expert` — XXE
-- [ ] `deserialization-expert` — Deserialization
-- [ ] `logic-flaw-expert` — Business logic
-- [ ] `info-disclosure-expert` — Info disclosure
-- [ ] `code-injection-expert` — eval, call_user_func, dynamic dispatch
-- [ ] `open-redirect-expert` — wp_redirect, header Location, JS redirects
-- [ ] `critical-thinker` — Cross-domain chains, second-order bugs, subtle logic flaws
 
-### Expert Results
+Only run experts recommended by surface-mapper. For large plugins, split into multiple instances per expert.
+
 | Expert | Findings | Coverage | Status |
 |--------|----------|----------|--------|
-| file-rce-expert | — | — | pending |
-| sqli-expert | — | — | pending |
-| xss-expert | — | — | pending |
-| missing-auth-expert | — | — | pending |
-| idor-expert | — | — | pending |
-| priv-esc-expert | — | — | pending |
-| object-injection-expert | — | — | pending |
-| ssrf-expert | — | — | pending |
-| race-condition-expert | — | — | pending |
-| csrf-expert | — | — | pending |
-| lfi-rfi-expert | — | — | pending |
-| xxe-expert | — | — | pending |
-| deserialization-expert | — | — | pending |
-| logic-flaw-expert | — | — | pending |
-| info-disclosure-expert | — | — | pending |
-| code-injection-expert | — | — | pending |
-| open-redirect-expert | — | — | pending |
-| critical-thinker | — | — | pending |
+| (fill per surface-mapper recommendation) | — | — | pending |
 
-Coverage: COMPLETE / PARTIAL (relaunched) / SKIPPED
-Check `reports/{plugin_slug}/progress_{agent_name}.md` for details on partial coverage.
+Check `reports/{slug}/progress_{agent_name}.md` for coverage details.
 
-## Escalation
+## Post-Expert
+
+- [ ] `data-flow-expert` — Cross-feature data flow chains
+- [ ] `critical-thinker` — Cross-domain chains, second-order bugs (runs LAST)
 - [ ] `vuln-escalator` — Auth level escalation, impact expansion, chain building
-  - New findings created: {count}
-  - Findings updated: {count}
 
 ## Verification Pipeline
 
-### QA Sandbox Rebuild (MANDATORY)
-- [ ] Sandbox destroyed and rebuilt for QA verification (`wpguard_sandbox_destroy` → `wpguard_sandbox_start`)
-- [ ] Target plugin reinstalled in clean sandbox
+### 9. Impact Assessment (MANDATORY — runs FIRST)
+- [ ] `impact-assessor` — bounty estimate + real-world impact check
+  - Findings removed: {count}
+  - Findings downgraded: {count}
+  - Findings surviving: {count}
 
-### Finding: {finding_title}
-- [ ] `poc-writer` — PoC script created
-  - PoC path: reports/{plugin_slug}/{finding_id}/poc.py
-  - Expected result: {description}
-  - Sanity test: pass/fail
-- [ ] `poc-runner` — PoC verified against sandbox
-  - Verdict: CONFIRMED / FALSE POSITIVE / INCONCLUSIVE
-  - Browser verification: YES/NO/N/A
-  - False positive checks passed: YES/NO
-- [ ] `qa-triage` — Final validation
-  - Scope check: pass/fail
-  - CVSS: {score}
-  - Auth level verified (tested bottom-up): {level}
-  - Writeup: reports/{plugin_slug}/{finding_id}/writeup.md
-  - Discord notified: YES/NO
-- [ ] `bb-submission` — Submission report prepared
-  - Clean sandbox repro: pass/fail
-  - Submission path: reports/{plugin_slug}/{finding_id}/submission.md
-  - Status: READY / NEEDS REVIEW / BLOCKED
+### 10-12. PoC Verification
+Per finding that survived impact assessment:
+
+#### Finding: {finding_id} — {title}
+- [ ] `poc-writer` — PoC created: `reports/{slug}/{finding_id}/poc.py`
+- [ ] `poc-runner` — Verdict: CONFIRMED / FALSE POSITIVE
+- [ ] `qa-triage` — Scope: pass/fail | CVSS: {score} | Auth: {level}
+
+### 13. Submission Prep (MANDATORY)
+- [ ] `bb-submission` — Clean repro, submission report, bounty estimate
+- [ ] `poc-recorder` — Terminal + browser video evidence
+
+### 14. Record Audit
+- [ ] `wpguard_audit_record(slug, version, findings_count, validated_count)`
 
 ## Summary
-- [ ] All experts completed
+- [ ] All experts completed (or split instances covered full scope)
 - [ ] All findings through verification pipeline
-- [ ] All confirmed findings have submission reports in reports/
-- [ ] Engagement summary created (reports/{plugin_slug}/SUMMARY.md)
+- [ ] Submission reports ready
+- [ ] Engagement summary: `reports/{slug}/SUMMARY.md`
 - [ ] Discord summary sent
-- [ ] Sandbox cleaned up
 
 ## Stats
 - Total findings from experts: 0
-- Confirmed after PoC verification: 0
+- Removed by impact assessor: 0
+- Confirmed after PoC: 0
 - False positives caught: 0
-- Final validated for submission: 0
+- Final for submission: 0
+- Estimated total bounty: $0
