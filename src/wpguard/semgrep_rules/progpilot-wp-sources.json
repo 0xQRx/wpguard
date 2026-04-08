@@ -1,0 +1,11 @@
+{
+    "sources": [
+        {"name": "_POST", "type": "array", "is_array": true, "language": "php"},
+        {"name": "_GET", "type": "array", "is_array": true, "language": "php"},
+        {"name": "_REQUEST", "type": "array", "is_array": true, "language": "php"},
+        {"name": "_SERVER", "type": "array", "is_array": true, "language": "php"},
+        {"name": "_FILES", "type": "array", "is_array": true, "language": "php"},
+        {"name": "_COOKIE", "type": "array", "is_array": true, "language": "php"},
+        {"name": "file_get_contents", "type": "function", "language": "php"}
+    ]
+}

@@ -1,0 +1,32 @@
+{
+    "sinks": [
+        {"name": "query", "instanceof": "wpdb", "language": "php", "attack": "sql_injection", "cwe": "CWE_89", "parameters": [{"id": 1, "conditions": "QUOTES"}]},
+        {"name": "get_results", "instanceof": "wpdb", "language": "php", "attack": "sql_injection", "cwe": "CWE_89", "parameters": [{"id": 1, "conditions": "QUOTES"}]},
+        {"name": "get_var", "instanceof": "wpdb", "language": "php", "attack": "sql_injection", "cwe": "CWE_89", "parameters": [{"id": 1, "conditions": "QUOTES"}]},
+        {"name": "get_row", "instanceof": "wpdb", "language": "php", "attack": "sql_injection", "cwe": "CWE_89", "parameters": [{"id": 1, "conditions": "QUOTES"}]},
+        {"name": "get_col", "instanceof": "wpdb", "language": "php", "attack": "sql_injection", "cwe": "CWE_89", "parameters": [{"id": 1, "conditions": "QUOTES"}]},
+        {"name": "unlink", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "file_put_contents", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "fwrite", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "include", "language": "php", "attack": "file_inclusion", "cwe": "CWE_98"},
+        {"name": "require", "language": "php", "attack": "file_inclusion", "cwe": "CWE_98"},
+        {"name": "include_once", "language": "php", "attack": "file_inclusion", "cwe": "CWE_98"},
+        {"name": "require_once", "language": "php", "attack": "file_inclusion", "cwe": "CWE_98"},
+        {"name": "wp_redirect", "language": "php", "attack": "open_redirect", "cwe": "CWE_601"},
+        {"name": "header", "language": "php", "attack": "header_injection", "cwe": "CWE_113"},
+        {"name": "echo", "language": "php", "attack": "xss", "cwe": "CWE_79"},
+        {"name": "wp_mail", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_200"},
+        {"name": "update_option", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_269"},
+        {"name": "wp_update_user", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_269"},
+        {"name": "wp_set_password", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_269"},
+        {"name": "wp_insert_user", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_269"},
+        {"name": "update_user_meta", "language": "php", "attack": "security_misconfiguration", "cwe": "CWE_269"},
+        {"name": "eval", "language": "php", "attack": "code_injection", "cwe": "CWE_94"},
+        {"name": "call_user_func", "language": "php", "attack": "code_injection", "cwe": "CWE_94"},
+        {"name": "unserialize", "language": "php", "attack": "object_injection", "cwe": "CWE_502"},
+        {"name": "readfile", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "rename", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "copy", "language": "php", "attack": "file_inclusion", "cwe": "CWE_22"},
+        {"name": "move_uploaded_file", "language": "php", "attack": "file_inclusion", "cwe": "CWE_434"}
+    ]
+}

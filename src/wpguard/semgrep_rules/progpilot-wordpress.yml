@@ -1,107 +1,23 @@
-sources:
-  - name: _POST
-    type: array
-    is_array: true
-  - name: _GET
-    type: array
-    is_array: true
-  - name: _REQUEST
-    type: array
-    is_array: true
-  - name: _SERVER
-    type: array
-    is_array: true
-  - name: _FILES
-    type: array
-    is_array: true
-  - name: _COOKIE
-    type: array
-    is_array: true
-  - name: file_get_contents
-    type: function
+# Progpilot configuration for WordPress security analysis
+# Format: https://github.com/designsecurity/progpilot
 
-sinks:
-  - name: query
-    type: method
-    instanceof: wpdb
-  - name: get_results
-    type: method
-    instanceof: wpdb
-  - name: get_var
-    type: method
-    instanceof: wpdb
-  - name: get_row
-    type: method
-    instanceof: wpdb
-  - name: get_col
-    type: method
-    instanceof: wpdb
-  - name: unlink
-    type: function
-  - name: file_put_contents
-    type: function
-  - name: fwrite
-    type: function
-  - name: include
-    type: function
-  - name: require
-    type: function
-  - name: include_once
-    type: function
-  - name: require_once
-    type: function
-  - name: wp_redirect
-    type: function
-  - name: header
-    type: function
-  - name: echo
-    type: function
-  - name: wp_mail
-    type: function
-  - name: update_option
-    type: function
-  - name: wp_update_user
-    type: function
-  - name: wp_set_password
-    type: function
-  - name: wp_insert_user
-    type: function
-  - name: update_user_meta
-    type: function
-  - name: eval
-    type: function
-  - name: call_user_func
-    type: function
-  - name: unserialize
-    type: function
-  - name: readfile
-    type: function
-  - name: rename
-    type: function
-  - name: copy
-    type: function
-  - name: move_uploaded_file
-    type: function
+inputs:
+  sources:
+    keep_defaults: true
+    config_files:
+      - /tmp/progpilot-wp-sources.json
+  sinks:
+    keep_defaults: true
+    config_files:
+      - /tmp/progpilot-wp-sinks.json
+  sanitizers:
+    keep_defaults: true
+    config_files:
+      - /tmp/progpilot-wp-sanitizers.json
 
-sanitizers:
-  - name: absint
-    type: function
-  - name: intval
-    type: function
-  - name: esc_html
-    type: function
-  - name: esc_attr
-    type: function
-  - name: esc_sql
-    type: function
-  - name: esc_url
-    type: function
-  - name: wp_kses
-    type: function
-  - name: wp_kses_post
-    type: function
-  - name: prepare
-    type: method
-    instanceof: wpdb
-  - name: wp_parse_id_list
-    type: function
+outputs:
+  tainted_flow: true
+
+options:
+  analyze_includes: false
+  pretty_print: true

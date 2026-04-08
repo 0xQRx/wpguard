@@ -3103,7 +3103,7 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
             capture_output=True, timeout=10,
         )
 
-    # Copy WordPress-specific config if available
+    # Copy WordPress-specific config and JSON data files
     from wpguard.semgrep_rules import RULES_DIR
     pp_config = RULES_DIR / "progpilot-wordpress.yml"
     container_config = "/tmp/progpilot-wordpress.yml"
@@ -3112,6 +3112,14 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
             ["docker", "cp", str(pp_config), f"{WP_CONTAINER_NAME}:{container_config}"],
             capture_output=True, timeout=10,
         )
+        # Copy JSON config files referenced by the YAML (sources, sinks, sanitizers)
+        for json_file in ["progpilot-wp-sources.json", "progpilot-wp-sinks.json", "progpilot-wp-sanitizers.json"]:
+            json_path = RULES_DIR / json_file
+            if json_path.exists():
+                subprocess.run(
+                    ["docker", "cp", str(json_path), f"{WP_CONTAINER_NAME}:/tmp/{json_file}"],
+                    capture_output=True, timeout=10,
+                )
 
     # Run progpilot with WordPress config
     pp_cmd = ["docker", "exec", WP_CONTAINER_NAME, "php", "/usr/local/bin/progpilot"]
@@ -3145,27 +3153,48 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
         findings = []
 
     # Map progpilot's actual JSON structure correctly
-    # Fields are flat: vuln_name, source_name, source_file, source_line,
-    # sink_name, sink_file, sink_line, tainted_flow[]
+    # source_name/source_file/source_line/source_column are ARRAYS (multiple taint sources per finding)
+    # sink_name/sink_file/sink_line/sink_column are scalars
+    # tainted_flow is only present when outputs.tainted_flow=true in config
+    # tainted_flow is array of arrays, each inner array has steps with flow_name/flow_line/flow_file/flow_column
     results = []
     for f in findings[:100]:
-        src_file = f.get("source_file", "").replace(container_scan_dir + "/", "")
-        sink_file = f.get("sink_file", "").replace(container_scan_dir + "/", "")
-        # Build readable taint flow from tainted_flow array
+        # source fields are arrays — take first element
+        src_names = f.get("source_name", [])
+        src_files = f.get("source_file", [])
+        src_lines = f.get("source_line", [])
+        src_name = src_names[0] if src_names else ""
+        src_file = src_files[0] if src_files else ""
+        src_line = src_lines[0] if src_lines else 0
+        if isinstance(src_file, str):
+            src_file = src_file.replace(container_scan_dir + "/", "")
+
+        # sink fields are scalars
+        sink_file = f.get("sink_file", "")
+        if isinstance(sink_file, str):
+            sink_file = sink_file.replace(container_scan_dir + "/", "")
+
+        # Build readable taint flow from tainted_flow array (nested: array of arrays of steps)
         flow_steps = []
-        for step in f.get("tainted_flow", []):
-            step_file = step.get("file", "").replace(container_scan_dir + "/", "")
-            flow_steps.append(f"{step.get('name', '')} ({step_file}:{step.get('line', '')})")
+        for flow_chain in f.get("tainted_flow", []):
+            if not isinstance(flow_chain, list):
+                continue
+            for step in flow_chain:
+                step_file = step.get("flow_file", "")
+                if isinstance(step_file, str):
+                    step_file = step_file.replace(container_scan_dir + "/", "")
+                flow_steps.append(f"{step.get('flow_name', '')} ({step_file}:{step.get('flow_line', '')})")
 
         results.append({
             "vuln_type": f.get("vuln_name", "unknown"),
-            "source": f.get("source_name", ""),
+            "vuln_cwe": f.get("vuln_cwe", ""),
+            "source": src_name,
             "source_file": src_file,
-            "source_line": f.get("source_line", 0),
+            "source_line": src_line,
             "sink": f.get("sink_name", ""),
             "sink_file": sink_file,
             "sink_line": f.get("sink_line", 0),
-            "taint_flow": " → ".join(flow_steps) if flow_steps else f"{f.get('source_name','')} → {f.get('sink_name','')}",
+            "taint_flow": " → ".join(flow_steps) if flow_steps else f"{src_name} → {f.get('sink_name', '')}",
         })
 
     # Summary
