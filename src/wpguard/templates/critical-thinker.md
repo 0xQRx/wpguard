@@ -118,6 +118,33 @@ Patches that fix one vector but leave another:
 - Fixed AJAX endpoint but not REST API equivalent
 - Escaped output in one template but not the email template
 
+**Cryptographic error handling chains (HIGH VALUE — CVSS 9.8):**
+```php
+// openssl_private_decrypt() fails → returns false
+// false passed to next function as empty string → predictable behavior
+$result = openssl_private_decrypt($data, $decrypted, $key);
+// If $result is false, $decrypted may be uninitialized or false
+// Passing false to json_decode, serialize, or string functions = unexpected behavior
+
+// phpseclib treats null/false key as zero-byte key → predictable encryption
+// Key generation fallback: defined('KEY') ? KEY : 'default' → forgeable
+
+// Check for: @openssl_* (suppressed errors), try/catch swallowing crypto failures
+// Trace: what happens when decryption/verification FAILS?
+// Does false propagate to file path construction? Auth decision? Token comparison?
+```
+
+**Silent exception paths in crypto:**
+```php
+try { $result = openssl_verify($data, $sig, $key); }
+catch (Exception $e) { return false; }
+// false == 0 == null in loose comparison → verification "passes"
+
+// hash_equals vs == on HMAC: timing-safe comparison REQUIRED
+// hash('sha256', time()) for tokens: only 86,400 values/day, brute-forceable
+// random_int() with small output space: random_int(1000,9999) = 9000 values
+```
+
 **Off-by-one in access control:**
 ```php
 // Checking user_id != 0 but forgetting guest default

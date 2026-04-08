@@ -180,6 +180,39 @@ public function db_string_replace( $user_query ) {
 
 ---
 
+## Class Inheritance Auth Bypass (HIGH PRIORITY)
+
+When a plugin uses class inheritance (common in frameworks, page builders, form builders):
+
+```
+1. List ALL methods in the PARENT class that have auth checks
+2. List ALL methods in the CHILD class
+3. For EVERY child method that OVERRIDES a parent method:
+   - Does the child call parent::method() to inherit auth?
+   - Does the child implement its own auth check?
+   - Does the child skip auth entirely?
+4. For EVERY method in the child that DOESN'T exist in parent:
+   - What auth does it use? (Often NONE — new methods added without framework)
+5. Generate coverage map: method → auth status → tested at subscriber?
+```
+
+**This caught CVE-2026-3098 (Smart Slider 3):** child class `actionExportAll` overrode parent without inheriting auth check.
+
+## REST vs AJAX Auth Divergence
+
+Plugins often have BOTH AJAX and REST endpoints for the same functionality:
+- AJAX handler may have `current_user_can()` check
+- REST endpoint may have `permission_callback => '__return_true'`
+- **Always check both paths** — CVE-2025-10488 (Directorist) was fixed on AJAX but REST path was left open
+
+## Export/Download Endpoint Auth
+
+Export/backup/download endpoints deserve explicit testing:
+- [ ] Test ALL export functions at subscriber level
+- [ ] Check if export functions inherit parent class auth or override it
+- [ ] Export functions registered as AJAX/REST without separate cap checks
+- [ ] Export output may contain sensitive data even if the export function itself seems benign
+
 ## Bypass Checklist (MANDATORY)
 
 Before marking any endpoint as "properly protected":
@@ -194,8 +227,10 @@ Before marking any endpoint as "properly protected":
 [ ] Checked is_admin() isn't used for authorization
 [ ] Tested at subscriber level (lowest authenticated role)
 [ ] Tested unauthenticated
-[ ] Checked for alternative paths to the same internal function
+[ ] Checked for alternative paths to the same internal function (REST vs AJAX)
 [ ] Verified admin_init hooks don't process forms without auth
+[ ] Checked class inheritance — child overrides dropping parent auth
+[ ] Tested export/backup/download endpoints specifically
 ```
 
 ---

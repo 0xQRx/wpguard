@@ -172,13 +172,20 @@ When the user wants a comprehensive audit:
      - Each instance saves to the same progress report format: `progress_sqli-expert_1.md`, `progress_sqli-expert_2.md`
      - This applies to ALL agent types — surface-mapper, experts, data-flow-expert, even poc-writer if there are many findings
      - **Rule of thumb:** if the surface map shows 10+ targets for one expert, split into 2-3 instances. If 20+, split into 3-4.
-8. **Collect findings and check coverage** — for each expert that completes:
+8. **Collect findings and verify coverage** — for each expert that completes:
    - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md` (or `progress_{agent_name}_1.md`, etc.)
    - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
      - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
      - All findings already created (so it doesn't duplicate)
    - Only mark an expert as complete when analysis is YES or all remaining areas have been covered
-8.5. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
+   - **Record what was checked, not just what was found:** Update the plan with: "sqli-expert analyzed 12/15 files from surface map, 0 findings — these files are CLEAN, not unanalyzed." A 0-finding expert still contributes coverage data.
+8.5. **Post-expert coverage check** — before escalation, verify:
+   - Cross-reference surface map targets against expert progress reports
+   - Are there any HIGH PRIORITY targets from the surface map that NO expert analyzed?
+   - Are there export/backup/download functions that file-rce-expert didn't check?
+   - Are there class hierarchies that missing-auth-expert didn't audit?
+   - If gaps exist, relaunch the relevant expert for uncovered targets only
+9. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
      - Tests lower auth levels for each finding
      - Expands impact primitives (read → delete, etc.)
      - Chains findings into higher-impact combinations

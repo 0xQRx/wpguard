@@ -136,6 +136,35 @@ $wp_filesystem->delete()
 array_map('unlink', glob($pattern))
 ```
 
+### File Move/Rename/Copy Sinks (EQUAL PRIORITY to upload)
+```php
+rename($old, $new)           // Path traversal in destination
+copy($source, $dest)         // Arbitrary file copy
+$wp_filesystem->move()       // WordPress move
+$wp_filesystem->copy()       // WordPress copy
+```
+
+### Export/Backup/Download Functions (HIGH PRIORITY file read vectors)
+```php
+// These inherently read files — often with weaker auth than CRUD operations
+// Grep for: export, Export, backup, Backup, download, actionExport,
+//           exportAll, export_data, create_backup, generate_export
+// For EACH found:
+// 1. What files/paths can be included in the export?
+// 2. Can user input reach the file path construction?
+// 3. Is ../ filtered?
+// 4. What auth level is required vs enforced?
+```
+
+### ZIP/Archive Operations (zip slip)
+```php
+ZipArchive::extractTo($dest)   // Entry names with ../ = zip slip
+$zip->addFile($path)           // Arbitrary file inclusion in ZIP
+PclZip                         // Same risks
+// Check: are ZIP entry filenames validated with basename()?
+// Check: does extraction path allow traversal outside target dir?
+```
+
 ### Path Construction (CRITICAL)
 ```php
 // User input in paths - ALWAYS vulnerable until proven otherwise

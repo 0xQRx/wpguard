@@ -172,8 +172,20 @@ grep -rn "esc_url_raw\|sanitize_text_field\|sanitize_title\|wp_kses" --include="
 grep -rn "basename.*===.*basename\|basename.*==.*basename" --include="*.php" .
 # basename() comparison = path traversal bypass (basename('/etc/passwd') === basename('/uploads/passwd'))
 
-# Import/export handlers — often nopriv with dangerous sinks
+# Import/export/backup/download handlers — HIGH PRIORITY file read vectors
 grep -rn "import\|export\|restore_default\|reset_settings" --include="*.php" . | grep -i "function\|action"
+grep -rn "exportAll\|export_data\|export_settings\|create_backup\|download_file\|generate_export\|actionExport" --include="*.php" .
+
+# ZIP/archive operations — zip slip, path traversal in extraction
+grep -rn "ZipArchive\|PclZip\|extractTo\|zip_open\|gzopen" --include="*.php" .
+
+# Crypto functions — error handling chains, key generation, token validation
+grep -rn "openssl_\|sodium_\|mcrypt_\|phpseclib\|Crypt_RSA\|JWT::decode\|jwt_decode" --include="*.php" .
+grep -rn "hash_equals\|hash_hmac\|random_bytes\|openssl_random_pseudo_bytes" --include="*.php" .
+
+# Type coercion danger — loose comparisons on security-critical values
+grep -rn "in_array.*\$\|array_search.*\$" --include="*.php" . | grep -v "strict\|true"
+# in_array/array_search without strict=true on auth/whitelist = type juggling bypass
 ```
 
 ### Step 4: Auth Patterns
@@ -265,6 +277,15 @@ SECURITY ANTI-PATTERNS:
   JWT/token libraries:            {count}  ← Check for hard-coded secrets
   Short OTP (rand 1000-9999):     {count}  ← Brute-forceable
 
+EXPORT/BACKUP/DOWNLOAD:
+  Export/backup functions:  {count}  ← File read vectors (HIGH PRIORITY)
+  ZIP/archive operations:   {count}  ← Zip slip, path traversal
+
+CRYPTO & TOKENS:
+  openssl/sodium/mcrypt:    {count}  ← Error handling chains
+  JWT/HMAC:                 {count}  ← Key validation, algorithm confusion
+  Loose comparisons (in_array/array_search without strict): {count}  ← Type juggling
+
 OTHER SIGNALS:
   User meta manipulation:  {count}
   Role/capability changes: {count}
@@ -310,6 +331,10 @@ Use these rules to determine RECOMMENDED EXPERTS:
 | JWT/token libraries | `priv-esc-expert` (hard-coded secrets, weak tokens) |
 | Import/export handlers | `missing-auth-expert`, `priv-esc-expert` |
 | Complex multi-step / cross-feature flows | `data-flow-expert`, `logic-flaw-expert` |
+| Export/backup/download functions | `file-rce-expert` (file read), `missing-auth-expert` (auth gaps) |
+| ZIP/archive operations | `file-rce-expert` (zip slip, path traversal) |
+| openssl/sodium/crypto functions | `critical-thinker` (error handling chains) |
+| Loose comparisons (in_array without strict) | All experts (type juggling bypass) |
 | basename() comparisons | `lfi-rfi-expert`, `file-rce-expert` |
 | Debug/status/info endpoints | `info-disclosure-expert` |
 | Database races, token reuse, short OTP | `race-condition-expert` |

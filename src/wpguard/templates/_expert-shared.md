@@ -75,6 +75,32 @@ These patterns are consistently missed by security audits. Check for them:
 11. **`wp_remote_get()` vs `wp_safe_remote_get()`**: The unsafe variant allows `file://` protocol and internal IPs
 12. **Hard-coded JWT/HMAC fallbacks**: `defined('SECRET') ? SECRET : 'default_key'` = forgeable tokens
 13. **Short OTP without rate limiting**: `rand(1000, 9999)` = 9000 combinations, brute-forceable in minutes
+14. **Export/backup/download functions as file read**: These inherently read files and often have weaker auth than CRUD. Always check path traversal.
+15. **ZIP extraction without filename sanitization**: `ZipArchive::extractTo()` with `../` in entry names = zip slip
+
+## PHP Type Coercion Traps (check these in EVERY auth/validation flow)
+
+```
+empty('0') === true          — breaks nonce checks, zero-value validation
+in_array($val, $list)        — without strict=true, 0 == "admin" is true
+array_search($val, $list)    — without strict=true, returns 0 (truthy index)
+strcmp([], 'string')          — returns null, null == 0 is true → auth bypass
+intval('0e12345') === 0      — magic hash prefix comparison
+json_decode('invalid')        — returns null → null propagation through auth
+isset() wrapping nonce check — omitting the field entirely bypasses the check
+'0' == false === true        — loose comparison on tokens/passwords
+```
+
+## Error Handling as Vulnerability Class
+
+Functions that return `false`/`null` on failure are dangerous when callers don't check:
+- `openssl_private_decrypt()` fails → returns `false` → passed to next function as empty string
+- `get_userdata($email)` → wrong type → returns `false` → fallback to current_user
+- `realpath()` on non-existent path → returns `false` → PHP 8 strpos(false, '/') breaks containment
+- `file_get_contents()` fails → false → used in comparison → bypasses checks
+- Any function with `@` error suppression + boolean return = silent failure path
+
+**Rule: trace what happens when a function FAILS, not just when it succeeds.**
 
 ---
 
