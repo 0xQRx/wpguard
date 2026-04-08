@@ -177,6 +177,7 @@ Track the entire WordPress ecosystem for research opportunities:
 | **asciinema** | Terminal PoC video recording | `pipx install asciinema` |
 | **Playwright** (Python) | Browser PoC video recording with `record_video_dir` | `pip install playwright && playwright install chromium` |
 | **ffmpeg** | Video format conversion (webm/cast → gif) | `apt install ffmpeg` |
+| **semgrep** | Automated vulnerability pattern pre-scan | `pipx install semgrep` |
 | **svg-term-cli** (optional) | Convert terminal recordings to animated SVG | `npx svg-term-cli` |
 
 **API Keys:**
