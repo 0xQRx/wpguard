@@ -16,7 +16,7 @@ rules:
     severity: WARNING
     metadata:
       category: missing-auth
-      cvss_estimate: 6.5
+      cvss_estimate: "6.5"
       references:
         - "CVE-2025-15157 (Starfish Reviews)"
         - "CVE-2025-13342 (Frontend Admin)"
@@ -29,7 +29,7 @@ rules:
     severity: WARNING
     metadata:
       category: missing-auth
-      cvss_estimate: 5.0
+      cvss_estimate: "5.0"
 
   - id: wp-verify-nonce-no-capability
     patterns:
@@ -42,7 +42,7 @@ rules:
     severity: WARNING
     metadata:
       category: missing-auth
-      cvss_estimate: 6.5
+      cvss_estimate: "6.5"
 
   # ============================================================
   # SQL Injection (~15% of real findings)
@@ -56,7 +56,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 8.0
+      cvss_estimate: "8.0"
 
   - id: wpdb-get-results-string-concat
     pattern: |
@@ -66,7 +66,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 8.0
+      cvss_estimate: "8.0"
 
   - id: wpdb-get-var-string-concat
     pattern: |
@@ -76,7 +76,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 8.0
+      cvss_estimate: "8.0"
 
   - id: wpdb-get-row-string-concat
     pattern: |
@@ -86,7 +86,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 8.0
+      cvss_estimate: "8.0"
 
   - id: trim-prepare-quote-strip
     pattern: |
@@ -96,7 +96,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 9.0
+      cvss_estimate: "9.0"
       references:
         - "Confirmed finding pattern in multiple audits"
 
@@ -108,7 +108,7 @@ rules:
     severity: ERROR
     metadata:
       category: sqli
-      cvss_estimate: 8.0
+      cvss_estimate: "8.0"
 
   # ============================================================
   # File Operations (~10% of real findings)
@@ -125,7 +125,7 @@ rules:
     severity: ERROR
     metadata:
       category: file-ops
-      cvss_estimate: 8.5
+      cvss_estimate: "8.5"
       references:
         - "CVE-2025-14675 (Meta Box)"
 
@@ -142,7 +142,7 @@ rules:
     severity: ERROR
     metadata:
       category: file-ops
-      cvss_estimate: 9.0
+      cvss_estimate: "9.0"
 
   - id: readfile-variable
     pattern: |
@@ -152,7 +152,7 @@ rules:
     severity: WARNING
     metadata:
       category: file-ops
-      cvss_estimate: 7.0
+      cvss_estimate: "7.0"
 
   - id: ziparchive-extractto-no-validation
     patterns:
@@ -165,7 +165,7 @@ rules:
     severity: WARNING
     metadata:
       category: file-ops
-      cvss_estimate: 7.5
+      cvss_estimate: "7.5"
 
   # ============================================================
   # Privilege Escalation / Auth Bypass
@@ -179,7 +179,7 @@ rules:
     severity: ERROR
     metadata:
       category: priv-esc
-      cvss_estimate: 9.8
+      cvss_estimate: "9.8"
       references:
         - "CVE-2025-15364 (Download Manager)"
 
@@ -191,7 +191,7 @@ rules:
     severity: ERROR
     metadata:
       category: priv-esc
-      cvss_estimate: 9.8
+      cvss_estimate: "9.8"
       references:
         - "CVE-2024-8791 (Charitable)"
 
@@ -203,7 +203,7 @@ rules:
     severity: ERROR
     metadata:
       category: priv-esc
-      cvss_estimate: 9.8
+      cvss_estimate: "9.8"
       references:
         - "CVE-2025-15157 (Starfish Reviews)"
         - "CVE-2025-13342 (Frontend Admin)"
@@ -216,7 +216,7 @@ rules:
     severity: WARNING
     metadata:
       category: priv-esc
-      cvss_estimate: 7.0
+      cvss_estimate: "7.0"
       references:
         - "CVE-2024-12432 (WPC Shop as Customer)"
 
@@ -235,46 +235,63 @@ rules:
     severity: WARNING
     metadata:
       category: idor
-      cvss_estimate: 6.5
+      cvss_estimate: "6.5"
 
   # ============================================================
   # Crypto / Token Weakness
   # ============================================================
 
-  - id: rand-small-range-security
+  - id: rand-for-otp
     pattern: |
-      rand($LOW, $HIGH)
-    message: "rand() for security token — weak PRNG with potentially small output space"
+      rand(1000, 9999)
+    message: "4-digit OTP via rand() — 9000 values, brute-forceable without rate limiting"
     languages: [php]
     severity: WARNING
     metadata:
       category: crypto
-      cvss_estimate: 6.0
+      cvss_estimate: "6.0"
       references:
         - "CVE-2024-9302 (App Builder)"
 
-  - id: loose-comparison-security-token
-    patterns:
-      - pattern: |
-          $TOKEN == $STORED
-      - pattern-not: |
-          $TOKEN === $STORED
-    message: "Loose comparison on token — type juggling bypass possible"
-    languages: [php]
-    severity: WARNING
-    metadata:
-      category: crypto
-      cvss_estimate: 5.0
-
-  - id: empty-nonce-check
+  - id: mt-rand-for-token
     pattern: |
-      if (empty($NONCE)) { ... }
-    message: "empty() on nonce — empty('0') === true in PHP, bypasses validation for '0' values"
+      mt_rand(...)
+    message: "mt_rand() for security — predictable PRNG, use random_int() instead"
     languages: [php]
     severity: WARNING
     metadata:
       category: crypto
-      cvss_estimate: 5.0
+      cvss_estimate: "5.0"
+
+  - id: loose-hash-comparison
+    pattern: |
+      hash(...) == $VAR
+    message: "Loose comparison on hash output — magic hash bypass possible (0e prefix)"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: "5.0"
+
+  - id: empty-nonce-field-check
+    pattern: |
+      if (empty($_POST['_wpnonce'])) { ... }
+    message: "empty() on nonce field — empty('0') === true in PHP"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: "5.0"
+
+  - id: isset-nonce-bypass
+    pattern: |
+      if (isset($_POST['_wpnonce'])) { ... }
+    message: "isset() wrapping nonce check — omitting the field entirely bypasses the block"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: "5.0"
 
   # ============================================================
   # Incomplete Fix Detection
@@ -287,4 +304,4 @@ rules:
     severity: WARNING
     metadata:
       category: incomplete-fix
-      cvss_estimate: 6.5
+      cvss_estimate: "6.5"
