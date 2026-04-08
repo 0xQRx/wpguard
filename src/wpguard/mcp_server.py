@@ -787,6 +787,7 @@ async def list_tools() -> list[Tool]:
                     "target_dir": {"type": "string", "description": "Path to source code directory"},
                     "category": {"type": "string", "description": "Filter by category", "enum": ["missing-auth", "sqli", "file-ops", "priv-esc", "idor", "crypto", "incomplete-fix"]},
                     "severity": {"type": "string", "description": "Minimum severity", "enum": ["INFO", "WARNING", "ERROR"], "default": "WARNING"},
+                    "output_dir": {"type": "string", "description": "Save results to dir (JSON + markdown)"},
                 },
                 "required": ["target_dir"],
             },
@@ -799,6 +800,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "target_dir": {"type": "string", "description": "Path to source code on host"},
                     "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 300},
+                    "output_dir": {"type": "string", "description": "Save results to dir (JSON + markdown)"},
                 },
                 "required": ["target_dir"],
             },
@@ -1491,12 +1493,14 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["target_dir"],
             arguments.get("category"),
             arguments.get("severity", "WARNING"),
+            arguments.get("output_dir"),
         )
 
     elif name == "wpguard_progpilot_scan":
         return await _progpilot_scan(
             arguments["target_dir"],
-            arguments.get("timeout", 120),
+            arguments.get("timeout", 300),
+            arguments.get("output_dir"),
         )
 
     elif name == "wpguard_bounty_estimate":
@@ -2975,7 +2979,7 @@ async def _target_score(slug: str | None, slugs: list[str] | None, output_dir: s
 
 # ── Semgrep Scan Implementation ───────────────────────
 
-def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> dict[str, Any]:
+def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str, output_dir: str | None = None) -> dict[str, Any]:
     """Run semgrep WordPress security scan (sync version)."""
     from wpguard.semgrep_rules import RULES_FILE
 
@@ -3050,21 +3054,46 @@ def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> 
             "code_snippet": snippet.strip()[:300],
         })
 
-    return {
+    result_data = {
         "total_findings": len(results),
         "findings": findings,
         "summary": {"by_category": by_category, "by_severity": by_severity},
         "errors": [e.get("message", "") for e in data.get("errors", [])][:5],
     }
 
+    # Save to disk if output_dir provided
+    if output_dir:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        # JSON
+        with open(out / "semgrep_scan.json", "w") as f:
+            json.dump(result_data, f, indent=2)
+        # Markdown summary for expert consumption
+        md = ["# Semgrep Scan Results\n"]
+        for sev in ["ERROR", "WARNING", "INFO"]:
+            sev_findings = [f for f in findings if f["severity"] == sev]
+            if sev_findings:
+                md.append(f"\n## {sev} ({len(sev_findings)})\n")
+                md.append("| # | File | Line | Category | Rule | Message | Code |")
+                md.append("|---|------|------|----------|------|---------|------|")
+                for i, f in enumerate(sev_findings, 1):
+                    code = f["code_snippet"].replace("\n", " ")[:80]
+                    md.append(f"| {i} | {f['file']} | {f['line']} | {f['category']} | {f['rule_id']} | {f['message'][:60]} | `{code}` |")
+        md.append(f"\n## Recommended Experts\nBased on categories: {', '.join(f'{k} ({v})' for k,v in by_category.items())}")
+        with open(out / "semgrep_scan.md", "w") as f:
+            f.write("\n".join(md))
+        result_data["saved_to"] = str(out)
 
-async def _semgrep_scan(target_dir: str, category: str | None, severity: str) -> dict[str, Any]:
-    return await run_in_executor(_semgrep_scan_sync, target_dir, category, severity)
+    return result_data
+
+
+async def _semgrep_scan(target_dir: str, category: str | None, severity: str, output_dir: str | None = None) -> dict[str, Any]:
+    return await run_in_executor(_semgrep_scan_sync, target_dir, category, severity, output_dir)
 
 
 # ── Progpilot Scan Implementation ─────────────────────
 
-def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
+def _progpilot_scan_sync(target_dir: str, timeout: int, output_dir: str | None = None) -> dict[str, Any]:
     """Run progpilot taint analysis inside the sandbox container (sync version)."""
     from wpguard.config import WP_CONTAINER_NAME
 
@@ -3202,15 +3231,37 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
     for r in results:
         by_type[r["vuln_type"]] = by_type.get(r["vuln_type"], 0) + 1
 
-    return {
+    result_data = {
         "total_findings": len(results),
         "findings": results,
         "summary": by_type,
     }
 
+    # Save to disk if output_dir provided
+    if output_dir:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        with open(out / "progpilot_scan.json", "w") as f:
+            json.dump(result_data, f, indent=2)
+        # Markdown summary
+        md = ["# Progpilot Taint Analysis Results\n"]
+        if results:
+            md.append("| # | Source → Sink | File:Line | Type | Flow |")
+            md.append("|---|-------------|-----------|------|------|")
+            for i, r in enumerate(results, 1):
+                md.append(f"| {i} | {r['source']} → {r['sink']} | {r['sink_file']}:{r['sink_line']} | {r['vuln_type']} | {r['taint_flow'][:80]} |")
+        else:
+            md.append("No taint flows detected.")
+        md.append(f"\n## Summary\n{', '.join(f'{k} ({v})' for k,v in by_type.items())}")
+        with open(out / "progpilot_scan.md", "w") as f:
+            f.write("\n".join(md))
+        result_data["saved_to"] = str(out)
 
-async def _progpilot_scan(target_dir: str, timeout: int) -> dict[str, Any]:
-    return await run_in_executor(_progpilot_scan_sync, target_dir, timeout)
+    return result_data
+
+
+async def _progpilot_scan(target_dir: str, timeout: int, output_dir: str | None = None) -> dict[str, Any]:
+    return await run_in_executor(_progpilot_scan_sync, target_dir, timeout, output_dir)
 
 
 # ── Bounty Estimator Implementation ───────────────────
