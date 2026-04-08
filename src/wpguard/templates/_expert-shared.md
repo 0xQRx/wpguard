@@ -2,6 +2,17 @@
 
 **You WILL run out of context on large plugins.** Plan for it. Every tool call costs tokens. Your unsaved work dies when context runs out.
 
+### Rule 0: BE TERSE — Your Output Eats Your Context
+
+**Your own output counts against the context window.** Every verbose paragraph you write is context you can't use for code analysis.
+
+- **DO NOT** narrate what you're about to do — just do it
+- **DO NOT** repeat code you just read back in your response — reference file:line
+- **DO NOT** write multi-paragraph analysis between tool calls — save it for the progress report
+- **DO** use one-line notes: "ajax.php:142 — $wpdb->query without prepare, POST['id'] concatenated. Tracing source."
+- **DO** batch your observations and write them to the progress report, not to conversation
+- **Target: < 50 words between tool calls.** If you're writing more, you're wasting context.
+
 ### Rule 1: Save Structure FIRST (within your first 3 tool calls)
 
 Before analyzing ANY code, create your progress report scaffold:
