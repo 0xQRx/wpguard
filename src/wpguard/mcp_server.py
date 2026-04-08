@@ -74,13 +74,13 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="wpguard_plugin_info",
-            description="Get detailed information about a specific WordPress plugin by its slug",
+            description="Get detailed plugin information by slug",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin slug (e.g., 'akismet', 'wordfence')",
+                        "description": "Plugin slug",
                     }
                 },
                 "required": ["slug"],
@@ -88,22 +88,22 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_search",
-            description="Search for WordPress plugins in the official repository",
+            description="Search WordPress plugin repository",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Search query (e.g., 'security', 'seo', 'backup')",
+                        "description": "Search query",
                     },
                     "page": {
                         "type": "integer",
-                        "description": "Page number (default: 1)",
+                        "description": "Page number",
                         "default": 1,
                     },
                     "per_page": {
                         "type": "integer",
-                        "description": "Results per page, max 250 (default: 20)",
+                        "description": "Results per page, max 250",
                         "default": 20,
                     },
                 },
@@ -112,27 +112,27 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_download",
-            description="Download a WordPress plugin (ZIP and optionally SVN)",
+            description="Download a WordPress plugin ZIP, optionally with SVN checkout",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin slug to download",
+                        "description": "Plugin slug",
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                     "extract": {
                         "type": "boolean",
-                        "description": "Extract ZIP after download (default: true)",
+                        "description": "Extract ZIP after download",
                         "default": True,
                     },
                     "svn": {
                         "type": "boolean",
-                        "description": "Also checkout from SVN (default: false)",
+                        "description": "Also checkout from SVN",
                         "default": False,
                     },
                 },
@@ -141,17 +141,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_bulk_download",
-            description="Download multiple plugins with filtering by active installations",
+            description="Bulk download plugins with install count filtering",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "search": {
                         "type": "string",
-                        "description": "Search term to filter plugins",
+                        "description": "Search term",
                     },
                     "min_installs": {
                         "type": "integer",
-                        "description": "Minimum active installations (default: 0)",
+                        "description": "Minimum active installations",
                         "default": 0,
                     },
                     "max_installs": {
@@ -160,22 +160,22 @@ async def list_tools() -> list[Tool]:
                     },
                     "count": {
                         "type": "integer",
-                        "description": "Number of plugins to download (default: 10)",
+                        "description": "Number of plugins to download",
                         "default": 10,
                     },
                     "browse": {
                         "type": "string",
-                        "description": "Browse category: 'popular', 'new', or 'updated'",
+                        "description": "Browse category",
                         "enum": ["popular", "new", "updated"],
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                     "extract": {
                         "type": "boolean",
-                        "description": "Extract ZIP files (default: true)",
+                        "description": "Extract ZIP files",
                         "default": True,
                     },
                 },
@@ -184,18 +184,18 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_add",
-            description="Add plugins to the watchlist for update monitoring",
+            description="Add plugins to the update watchlist",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slugs": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of plugin slugs to watch",
+                        "description": "Plugin slugs to watch",
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -211,11 +211,11 @@ async def list_tools() -> list[Tool]:
                     "slugs": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "List of plugin slugs to remove from watchlist",
+                        "description": "Plugin slugs to remove",
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -224,13 +224,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_list",
-            description="List all plugins currently being watched",
+            description="List all watched plugins",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -239,13 +239,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_check",
-            description="Check watched plugins for updates (single check, no continuous loop)",
+            description="Check watched plugins for updates (single check)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -254,23 +254,23 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_global",
-            description="Query WordPress.org for recently updated plugins. Returns only NEW updates since last check. Writes recently_updated.json to output dir.",
+            description="Recently updated plugins (new since last check)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "min_installs": {
                         "type": "integer",
-                        "description": "Minimum active installations filter (default: 1000)",
+                        "description": "Minimum active installations filter",
                         "default": 1000,
                     },
                     "max_pages": {
                         "type": "integer",
-                        "description": "Maximum API pages to fetch, 250 plugins/page (default: 2)",
+                        "description": "API pages to fetch, 250 plugins/page",
                         "default": 2,
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -279,23 +279,23 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_new",
-            description="Query WordPress.org for newly added plugins. Returns only plugins not seen in previous checks. Writes new_plugins.json to output dir.",
+            description="Newly added plugins (not seen in previous checks)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "min_installs": {
                         "type": "integer",
-                        "description": "Minimum active installations filter (default: 0)",
+                        "description": "Minimum active installations filter",
                         "default": 0,
                     },
                     "max_pages": {
                         "type": "integer",
-                        "description": "Maximum API pages to fetch, 250 plugins/page (default: 2)",
+                        "description": "API pages to fetch, 250 plugins/page",
                         "default": 2,
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -305,13 +305,13 @@ async def list_tools() -> list[Tool]:
         # ── Theme Tools ──────────────────────────────────────
         Tool(
             name="wpguard_theme_info",
-            description="Get detailed information about a specific WordPress theme by its slug",
+            description="Get detailed theme information by slug",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Theme slug (e.g., 'astra', 'flavor')",
+                        "description": "Theme slug",
                     }
                 },
                 "required": ["slug"],
@@ -319,7 +319,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_theme_search",
-            description="Search for WordPress themes in the official repository",
+            description="Search WordPress theme repository",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -329,12 +329,12 @@ async def list_tools() -> list[Tool]:
                     },
                     "page": {
                         "type": "integer",
-                        "description": "Page number (default: 1)",
+                        "description": "Page number",
                         "default": 1,
                     },
                     "browse": {
                         "type": "string",
-                        "description": "Browse category: popular, new, updated",
+                        "description": "Category: popular, new, updated",
                     },
                 },
                 "required": [],
@@ -342,22 +342,22 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_theme_download",
-            description="Download a WordPress theme by slug. Downloads ZIP and optionally extracts.",
+            description="Download a WordPress theme ZIP",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Theme slug to download",
+                        "description": "Theme slug",
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                     "extract": {
                         "type": "boolean",
-                        "description": "Extract ZIP after download (default: true)",
+                        "description": "Extract ZIP after download",
                         "default": True,
                     },
                 },
@@ -366,7 +366,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_theme_svn_log",
-            description="Get SVN commit history for a WordPress theme",
+            description="Get SVN commit history for a theme",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -376,7 +376,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Number of log entries to retrieve (default: 10)",
+                        "description": "Max log entries",
                         "default": 10,
                     },
                 },
@@ -385,7 +385,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_theme_svn_diff",
-            description="Compare changes between SVN revisions for a theme",
+            description="Diff between SVN revisions for a theme",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -395,16 +395,16 @@ async def list_tools() -> list[Tool]:
                     },
                     "old_rev": {
                         "type": "string",
-                        "description": "Old SVN revision number",
+                        "description": "Old revision number",
                     },
                     "new_rev": {
                         "type": "string",
-                        "description": "New SVN revision (default: HEAD)",
+                        "description": "New revision (default: HEAD)",
                         "default": "HEAD",
                     },
                     "show_diff": {
                         "type": "boolean",
-                        "description": "Include full diff output (default: false)",
+                        "description": "Include full diff output",
                         "default": False,
                     },
                 },
@@ -413,23 +413,23 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_global_themes",
-            description="Query WordPress.org for recently updated themes. Returns only NEW updates since last check.",
+            description="Recently updated themes (new since last check)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "min_installs": {
                         "type": "integer",
-                        "description": "Minimum active installations filter (default: 1000)",
+                        "description": "Minimum active installations filter",
                         "default": 1000,
                     },
                     "max_pages": {
                         "type": "integer",
-                        "description": "Maximum API pages to fetch, 250 themes/page (default: 2)",
+                        "description": "API pages to fetch, 250 themes/page",
                         "default": 2,
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -438,23 +438,23 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_watch_new_themes",
-            description="Query WordPress.org for newly added themes. Returns only themes not seen in previous checks.",
+            description="Newly added themes (not seen in previous checks)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "min_installs": {
                         "type": "integer",
-                        "description": "Minimum active installations filter (default: 0)",
+                        "description": "Minimum active installations filter",
                         "default": 0,
                     },
                     "max_pages": {
                         "type": "integer",
-                        "description": "Maximum API pages to fetch, 250 themes/page (default: 2)",
+                        "description": "API pages to fetch, 250 themes/page",
                         "default": 2,
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -464,7 +464,7 @@ async def list_tools() -> list[Tool]:
         # ── Plugin SVN Tools ────────────────────────────────
         Tool(
             name="wpguard_svn_log",
-            description="Get SVN commit history for a WordPress plugin",
+            description="Get SVN commit history for a plugin",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -474,7 +474,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Number of log entries to retrieve (default: 10)",
+                        "description": "Max log entries",
                         "default": 10,
                     },
                 },
@@ -483,7 +483,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_svn_diff",
-            description="Compare changes between SVN revisions for a plugin",
+            description="Diff between SVN revisions for a plugin",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -497,12 +497,12 @@ async def list_tools() -> list[Tool]:
                     },
                     "new_rev": {
                         "type": "string",
-                        "description": "New revision number (default: HEAD)",
+                        "description": "New revision (default: HEAD)",
                         "default": "HEAD",
                     },
                     "show_diff": {
                         "type": "boolean",
-                        "description": "Include full diff output (default: false)",
+                        "description": "Include full diff output",
                         "default": False,
                     },
                 },
@@ -511,7 +511,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_svn_revision",
-            description="Get the latest SVN revision number for a plugin",
+            description="Get latest SVN revision number for a plugin",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -525,7 +525,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_plugin_versions",
-            description="Get all available versions for a WordPress plugin",
+            description="List all available versions for a plugin",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -539,13 +539,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_state_info",
-            description="Get current state information (watched plugins count, last check, etc.)",
+            description="Get current watcher state (counts, last check timestamps)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -555,7 +555,7 @@ async def list_tools() -> list[Tool]:
         # WordPress Sandbox Tools
         Tool(
             name="wpguard_sandbox_status",
-            description="Check WordPress sandbox connectivity (HTTP, Docker container, WP-CLI)",
+            description="Check sandbox connectivity (HTTP, Docker, WP-CLI)",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -564,26 +564,26 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_install_plugin",
-            description="Install a plugin in the WordPress sandbox for PoC testing",
+            description="Install and activate a plugin in the sandbox",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin slug from WordPress.org",
+                        "description": "Plugin slug",
                     },
                     "version": {
                         "type": "string",
-                        "description": "Specific version to install (optional, defaults to latest)",
+                        "description": "Specific version (default: latest)",
                     },
                     "activate": {
                         "type": "boolean",
-                        "description": "Activate the plugin after installation (default: true)",
+                        "description": "Activate after install",
                         "default": True,
                     },
                     "from_zip": {
                         "type": "string",
-                        "description": "Install from local ZIP file path instead of slug",
+                        "description": "Local ZIP path instead of slug",
                     },
                 },
                 "required": ["slug"],
@@ -591,13 +591,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_uninstall_plugin",
-            description="Uninstall a plugin from the WordPress sandbox",
+            description="Uninstall a plugin from the sandbox",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin slug to uninstall",
+                        "description": "Plugin slug",
                     },
                 },
                 "required": ["slug"],
@@ -605,26 +605,26 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_request",
-            description="Execute an HTTP request against the WordPress sandbox (for PoC testing)",
+            description="Execute an HTTP request against the sandbox",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "method": {
                         "type": "string",
-                        "description": "HTTP method (GET, POST, PUT, DELETE)",
+                        "description": "HTTP method",
                         "enum": ["GET", "POST", "PUT", "DELETE"],
                     },
                     "path": {
                         "type": "string",
-                        "description": "URL path (e.g., '/wp-admin/admin-ajax.php')",
+                        "description": "URL path",
                     },
                     "data": {
                         "type": "object",
-                        "description": "Request data (POST body or query params)",
+                        "description": "POST body or query params",
                     },
                     "auth": {
                         "type": "string",
-                        "description": "Role to authenticate as (subscriber, contributor, author, admin) or null for unauthenticated",
+                        "description": "Role to authenticate as, or null for unauth",
                         "enum": ["subscriber", "contributor", "author", "admin"],
                     },
                     "headers": {
@@ -637,17 +637,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_wp_cli",
-            description="Execute a WP-CLI command in the WordPress sandbox container",
+            description="Execute a WP-CLI command in the sandbox",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "WP-CLI command without 'wp' prefix (e.g., 'plugin list', 'user list')",
+                        "description": "WP-CLI command without 'wp' prefix",
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "Command timeout in seconds (default: 60)",
+                        "description": "Timeout in seconds",
                         "default": 60,
                     },
                 },
@@ -656,7 +656,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_get_nonce",
-            description="Get a WordPress nonce for an action (needed for protected AJAX calls)",
+            description="Generate a WordPress nonce for a given action",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -666,7 +666,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "auth": {
                         "type": "string",
-                        "description": "Role to authenticate as for nonce generation",
+                        "description": "Role to authenticate as",
                         "enum": ["subscriber", "contributor", "author", "admin"],
                     },
                 },
@@ -675,30 +675,30 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_get_emails",
-            description="Get captured emails from the Mailpit mail server. All WordPress wp_mail() output is routed here. Useful for testing password resets, form notifications, email-based exfiltration.",
+            description="Get captured emails from Mailpit (all wp_mail output)",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "search": {"type": "string", "description": "Search query (matches to, from, subject, body)"},
-                    "limit": {"type": "integer", "description": "Max emails to return (default: 50)", "default": 50},
+                    "search": {"type": "string", "description": "Search to/from/subject/body"},
+                    "limit": {"type": "integer", "description": "Max emails to return", "default": 50},
                 },
                 "required": [],
             },
         ),
         Tool(
             name="wpguard_sandbox_get_email_body",
-            description="Get the full body of a captured email by its message ID. Returns text, HTML, and attachments.",
+            description="Get full email body by message ID",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "message_id": {"type": "string", "description": "Email message ID from wpguard_sandbox_get_emails"},
+                    "message_id": {"type": "string", "description": "Message ID from wpguard_sandbox_get_emails"},
                 },
                 "required": ["message_id"],
             },
         ),
         Tool(
             name="wpguard_sandbox_delete_emails",
-            description="Delete all captured emails from Mailpit. Use before testing to start with a clean inbox.",
+            description="Delete all captured emails from Mailpit",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -707,13 +707,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_list_endpoints",
-            description="List all registered WordPress REST API endpoints in the sandbox. Useful for discovering plugin attack surface.",
+            description="List registered REST API endpoints in the sandbox",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "namespace": {
                         "type": "string",
-                        "description": "Filter by REST namespace (e.g., 'wp/v2', 'wc/v3')",
+                        "description": "Filter by REST namespace",
                     },
                 },
                 "required": [],
@@ -721,14 +721,14 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_map_nonces",
-            description="Crawl WordPress admin pages at each auth level (unauth, subscriber, contributor, author) and extract all nonces. Returns nonce values with action names and which pages they're found on.",
+            description="Crawl admin pages at each auth level, extract all nonces",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "extra_pages": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Additional page paths to crawl (e.g., ['/wp-admin/admin.php?page=plugin-settings'])",
+                        "description": "Additional page paths to crawl",
                     },
                 },
                 "required": [],
@@ -736,17 +736,17 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_regression_check",
-            description="Re-run existing PoC scripts from previous audits against the current sandbox. Detects incomplete patches — if a PoC still works after a plugin update, the fix was incomplete.",
+            description="Re-run existing PoC scripts to detect incomplete patches",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin or theme slug to regression test",
+                        "description": "Plugin or theme slug",
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -755,13 +755,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_target_score",
-            description="Score a plugin/theme by research priority. Considers active installs, CVE history, time since last audit, and whether current version was already audited. Higher score = higher priority.",
+            description="Score plugin/theme research priority (installs, CVEs, audit history)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Single plugin/theme slug to score",
+                        "description": "Single slug to score",
                     },
                     "slugs": {
                         "type": "array",
@@ -770,7 +770,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "output_dir": {
                         "type": "string",
-                        "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
+                        "description": "Output dir",
                         "default": DEFAULT_OUTPUT_DIR,
                     },
                 },
@@ -779,38 +779,39 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_semgrep_scan",
-            description="Run semgrep WordPress security rules against plugin/theme source code. Returns ranked JSON results by severity. Requires semgrep installed.",
+            description="Run semgrep WordPress security rules against source code",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "target_dir": {"type": "string", "description": "Path to source code directory (e.g., targets/plugin-slug/extracted/plugin-slug/)"},
-                    "category": {"type": "string", "description": "Filter by category: missing-auth, sqli, file-ops, priv-esc, idor, crypto, incomplete-fix"},
-                    "severity": {"type": "string", "description": "Minimum severity: INFO, WARNING, ERROR (default: WARNING)", "default": "WARNING"},
+                    "target_dir": {"type": "string", "description": "Path to source code directory"},
+                    "category": {"type": "string", "description": "Filter: missing-auth, sqli, file-ops, priv-esc, idor, crypto, incomplete-fix"},
+                    "severity": {"type": "string", "description": "Minimum severity: INFO, WARNING, ERROR", "default": "WARNING"},
                 },
                 "required": ["target_dir"],
             },
         ),
         Tool(
             name="wpguard_progpilot_scan",
-            description="Run progpilot PHP taint analysis against plugin/theme source code inside the sandbox container. Traces data flow from user input ($_GET, $_POST) to dangerous sinks (SQL, file ops, eval). Complements semgrep pattern matching.",
+            description="Run progpilot PHP taint analysis in sandbox container",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "target_dir": {"type": "string", "description": "Path to source code on HOST (e.g., targets/plugin-slug/extracted/plugin-slug/)"},
-                    "timeout": {"type": "integer", "description": "Scan timeout in seconds (default: 120)", "default": 120},
+                    "target_dir": {"type": "string", "description": "Path to source code on host"},
+                    "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 120},
                 },
                 "required": ["target_dir"],
             },
         ),
         Tool(
             name="wpguard_bounty_estimate",
-            description="Estimate Wordfence bug bounty reward for a vulnerability. Uses live calculator config from Wordfence. Returns bounty range, scope status, and breakdown.",
+            description="Estimate Wordfence bug bounty reward for a vulnerability",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "vuln_type": {
                         "type": "string",
-                        "description": "Vulnerability type key: rce, arbitrary_file_upload, arbitrary_file_read, arbitrary_file_deletion, arbitrary_options_update, authorization_bypass_admin, privilege_escalation_admin, sql_injection, stored_xss, reflected_xss, csrf, missing_authorization, ssrf, php_object_injection, insecure_direct_object_reference, file_inclusion, directory_traversal, privilege_escalation_non_admin, authorization_bypass_non_admin, information_disclosure, basic_information_disclosure, arbitrary_shortcode_execution, backdoor, ip_spoofing",
+                        "description": "Vulnerability type",
+                        "enum": ["rce", "arbitrary_file_upload", "arbitrary_file_read", "arbitrary_file_deletion", "arbitrary_options_update", "authorization_bypass_admin", "privilege_escalation_admin", "sql_injection", "stored_xss", "reflected_xss", "csrf", "missing_authorization", "ssrf", "php_object_injection", "insecure_direct_object_reference", "file_inclusion", "privilege_escalation_non_admin", "authorization_bypass_non_admin", "information_disclosure", "backdoor"],
                     },
                     "install_count": {
                         "type": "integer",
@@ -818,12 +819,12 @@ async def list_tools() -> list[Tool]:
                     },
                     "auth_level": {
                         "type": "string",
-                        "description": "Auth level: none (unauth), low (subscriber), mid (contributor/author), high (admin/editor)",
+                        "description": "none, low (subscriber), mid (contributor/author), high (admin/editor)",
                         "default": "none",
                     },
                     "researcher_tier": {
                         "type": "integer",
-                        "description": "0=Standard, 1=1337, 2=Resourceful (default: 0)",
+                        "description": "0=Standard, 1=1337, 2=Resourceful",
                         "default": 0,
                     },
                 },
@@ -832,7 +833,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_finding_check_duplicate",
-            description="Check for potential duplicate findings before creating a new one. Returns similar findings by file, function, and vuln type.",
+            description="Check for duplicate findings by file, function, and vuln type",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -840,7 +841,7 @@ async def list_tools() -> list[Tool]:
                     "affected_file": {"type": "string", "description": "Affected file path"},
                     "affected_function": {"type": "string", "description": "Affected function name"},
                     "vuln_type": {"type": "string", "description": "Vulnerability type"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                    "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
                 "required": ["plugin_slug", "affected_file"],
             },
@@ -848,18 +849,18 @@ async def list_tools() -> list[Tool]:
         # Sandbox Management Tools
         Tool(
             name="wpguard_sandbox_start",
-            description="Start the WordPress sandbox Docker containers (builds if needed). Use this if sandbox_status shows the sandbox is not running.",
+            description="Start the sandbox Docker containers (builds if needed)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "wait_ready": {
                         "type": "boolean",
-                        "description": "Wait for WordPress to be fully ready (default: true)",
+                        "description": "Wait for WordPress to be ready",
                         "default": True,
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "Max seconds to wait for WordPress to be ready (default: 120)",
+                        "description": "Max seconds to wait",
                         "default": 120,
                     },
                 },
@@ -868,7 +869,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_stop",
-            description="Stop the WordPress sandbox Docker containers",
+            description="Stop the sandbox Docker containers",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -877,13 +878,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_restart",
-            description="Restart the WordPress sandbox (stop then start)",
+            description="Restart the sandbox (stop then start)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "wait_ready": {
                         "type": "boolean",
-                        "description": "Wait for WordPress to be fully ready (default: true)",
+                        "description": "Wait for WordPress to be ready",
                         "default": True,
                     },
                 },
@@ -892,7 +893,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_sandbox_destroy",
-            description="Stop and remove all sandbox data (volumes). This completely resets WordPress.",
+            description="Destroy sandbox and remove all volumes (full reset)",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -902,34 +903,7 @@ async def list_tools() -> list[Tool]:
         # Wordfence Scope Validation Tools
         Tool(
             name="wpguard_scope_check_plugin",
-            description="Check if a plugin is eligible for Wordfence bounty research (vendor exclusion, install count, availability)",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "plugin_slug": {
-                        "type": "string",
-                        "description": "Plugin slug to check",
-                    },
-                    "active_installs": {
-                        "type": "integer",
-                        "description": "Number of active installations",
-                    },
-                    "author": {
-                        "type": "string",
-                        "description": "Plugin author name (for vendor exclusion check)",
-                    },
-                    "is_available": {
-                        "type": "boolean",
-                        "description": "Whether plugin is available for download (default: true)",
-                        "default": True,
-                    },
-                },
-                "required": ["plugin_slug", "active_installs"],
-            },
-        ),
-        Tool(
-            name="wpguard_scope_check_finding",
-            description="Validate if a vulnerability finding is eligible for Wordfence bounty submission",
+            description="Check if a plugin is eligible for Wordfence bounty scope",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -939,15 +913,42 @@ async def list_tools() -> list[Tool]:
                     },
                     "active_installs": {
                         "type": "integer",
-                        "description": "Number of active installations",
+                        "description": "Active installations",
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Author name (vendor exclusion check)",
+                    },
+                    "is_available": {
+                        "type": "boolean",
+                        "description": "Available for download",
+                        "default": True,
+                    },
+                },
+                "required": ["plugin_slug", "active_installs"],
+            },
+        ),
+        Tool(
+            name="wpguard_scope_check_finding",
+            description="Validate if a finding is eligible for Wordfence bounty",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "plugin_slug": {
+                        "type": "string",
+                        "description": "Plugin slug",
+                    },
+                    "active_installs": {
+                        "type": "integer",
+                        "description": "Active installations",
                     },
                     "vuln_type": {
                         "type": "string",
-                        "description": "Vulnerability type (e.g., 'sql_injection', 'stored_xss', 'rce')",
+                        "description": "Vulnerability type",
                     },
                     "auth_level": {
                         "type": "string",
-                        "description": "Required authentication level",
+                        "description": "Required auth level",
                         "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
                     },
                     "cvss_score": {
@@ -964,13 +965,13 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_scope_get_vulns",
-            description="Get all in-scope vulnerability types for a given install count",
+            description="Get in-scope vulnerability types for an install count",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "active_installs": {
                         "type": "integer",
-                        "description": "Number of active installations",
+                        "description": "Active installations",
                     },
                 },
                 "required": ["active_installs"],
@@ -979,14 +980,14 @@ async def list_tools() -> list[Tool]:
         # Finding Persistence Tools
         Tool(
             name="wpguard_finding_create",
-            description="Create a new security vulnerability finding",
+            description="Create a new vulnerability finding",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "plugin_slug": {"type": "string", "description": "Plugin slug"},
                     "plugin_version": {"type": "string", "description": "Plugin version"},
                     "active_installs": {"type": "integer", "description": "Active installations"},
-                    "vuln_type": {"type": "string", "description": "Vulnerability type (e.g., sql_injection, stored_xss)"},
+                    "vuln_type": {"type": "string", "description": "Vulnerability type"},
                     "title": {"type": "string", "description": "Finding title"},
                     "description": {"type": "string", "description": "Detailed description"},
                     "auth_level": {
@@ -996,49 +997,49 @@ async def list_tools() -> list[Tool]:
                     },
                     "cvss_score": {"type": "number", "description": "CVSS 3.1 score"},
                     "cvss_vector": {"type": "string", "description": "CVSS vector string"},
-                    "affected_file": {"type": "string", "description": "Path to affected file"},
+                    "affected_file": {"type": "string", "description": "Affected file path"},
                     "affected_function": {"type": "string", "description": "Affected function name"},
                     "affected_line": {"type": "integer", "description": "Line number"},
                     "poc_path": {"type": "string", "description": "Path to PoC script"},
                     "tier": {"type": "string", "description": "Bounty tier"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["plugin_slug", "plugin_version", "active_installs", "vuln_type", "title", "description", "auth_level", "cvss_score", "cvss_vector", "affected_file"],
             },
         ),
         Tool(
             name="wpguard_finding_update",
-            description="Update an existing finding (status, validation notes, auth level, etc.)",
+            description="Update an existing finding",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "finding_id": {"type": "string", "description": "Finding ID to update"},
+                    "finding_id": {"type": "string", "description": "Finding ID"},
                     "status": {
                         "type": "string",
                         "description": "New status",
                         "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
                     },
                     "validation_notes": {"type": "string", "description": "Validation notes"},
-                    "submission_id": {"type": "string", "description": "Submission ID if submitted"},
+                    "submission_id": {"type": "string", "description": "Submission ID"},
                     "poc_path": {"type": "string", "description": "Path to PoC script"},
                     "auth_level": {
                         "type": "string",
-                        "description": "Updated auth level (use when QA discovers a lower exploitable level)",
+                        "description": "Updated auth level",
                         "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
                     },
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["finding_id"],
             },
         ),
         Tool(
             name="wpguard_finding_get",
-            description="Get a finding by ID",
+            description="Get finding details by ID",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "finding_id": {"type": "string", "description": "Finding ID"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["finding_id"],
             },
@@ -1049,38 +1050,38 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "plugin_slug": {"type": "string", "description": "Filter by plugin"},
+                    "plugin_slug": {"type": "string", "description": "Filter by plugin slug"},
                     "status": {
                         "type": "string",
                         "description": "Filter by status",
                         "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
                     },
-                    "vuln_type": {"type": "string", "description": "Filter by vulnerability type"},
+                    "vuln_type": {"type": "string", "description": "Filter by vuln type"},
                     "min_cvss": {"type": "number", "description": "Minimum CVSS score"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": [],
             },
         ),
         Tool(
             name="wpguard_finding_delete",
-            description="Delete a finding",
+            description="Delete a finding by ID",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "finding_id": {"type": "string", "description": "Finding ID to delete"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "finding_id": {"type": "string", "description": "Finding ID"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["finding_id"],
             },
         ),
         Tool(
             name="wpguard_finding_stats",
-            description="Get statistics about all findings",
+            description="Get aggregate finding statistics",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": [],
             },
@@ -1088,43 +1089,43 @@ async def list_tools() -> list[Tool]:
         # ── Audit History Tools ───────────────────────────────
         Tool(
             name="wpguard_audit_record",
-            description="Record a completed audit in the history. Call after finishing an audit to prevent redundant re-audits.",
+            description="Record completed audit in history",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {"type": "string", "description": "Plugin or theme slug"},
                     "version": {"type": "string", "description": "Version audited"},
-                    "asset_type": {"type": "string", "description": "plugin or theme (default: plugin)", "default": "plugin"},
+                    "asset_type": {"type": "string", "description": "plugin or theme", "default": "plugin"},
                     "active_installs": {"type": "integer", "description": "Active installations", "default": 0},
-                    "findings_count": {"type": "integer", "description": "Total findings discovered", "default": 0},
+                    "findings_count": {"type": "integer", "description": "Total findings", "default": 0},
                     "validated_count": {"type": "integer", "description": "Validated findings", "default": 0},
-                    "status": {"type": "string", "description": "completed, partial, or skipped (default: completed)", "default": "completed"},
-                    "notes": {"type": "string", "description": "Optional notes about the audit", "default": ""},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                    "status": {"type": "string", "description": "completed, partial, or skipped", "default": "completed"},
+                    "notes": {"type": "string", "description": "Audit notes", "default": ""},
+                    "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
                 "required": ["slug", "version"],
             },
         ),
         Tool(
             name="wpguard_audit_check",
-            description="Check if a plugin/theme has been audited before. Returns version history, iteration count, and findings summary. Use BEFORE starting an audit to avoid redundant work.",
+            description="Check if slug was previously audited",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "slug": {"type": "string", "description": "Plugin or theme slug to check"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                    "slug": {"type": "string", "description": "Plugin or theme slug"},
+                    "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
                 "required": ["slug"],
             },
         ),
         Tool(
             name="wpguard_audit_list",
-            description="List all previously audited plugins/themes with iteration counts and findings summaries.",
+            description="List all previously audited plugins/themes",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "asset_type": {"type": "string", "description": "Filter by plugin or theme"},
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})", "default": DEFAULT_OUTPUT_DIR},
+                    "asset_type": {"type": "string", "description": "Filter: plugin or theme"},
+                    "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
                 "required": [],
             },
@@ -1132,51 +1133,51 @@ async def list_tools() -> list[Tool]:
         # Discord Notification Tools
         Tool(
             name="wpguard_discord_notify_finding",
-            description="Send a finding notification to Discord (use when a finding is validated and ready for review)",
+            description="Send a finding notification to Discord",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "finding_id": {"type": "string", "description": "Finding ID to notify about"},
+                    "finding_id": {"type": "string", "description": "Finding ID"},
                     "title_prefix": {
                         "type": "string",
-                        "description": "Optional title prefix (e.g., 'NEW: ', 'VALIDATED: ')",
+                        "description": "Title prefix",
                     },
                     "mention": {
                         "type": "string",
-                        "description": "Optional mention (e.g., '@everyone', '<@user_id>')",
+                        "description": "Discord mention string",
                     },
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["finding_id"],
             },
         ),
         Tool(
             name="wpguard_discord_notify_summary",
-            description="Send a summary of findings to Discord",
+            description="Send findings summary to Discord",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Summary title (default: 'Security Research Summary')",
+                        "description": "Summary title",
                     },
                     "status_filter": {
                         "type": "string",
-                        "description": "Filter findings by status",
+                        "description": "Filter by status",
                         "enum": ["draft", "validated", "submitted", "rejected", "duplicate"],
                     },
-                    "output_dir": {"type": "string", "description": f"Output directory (default: {DEFAULT_OUTPUT_DIR})"},
+                    "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": [],
             },
         ),
         Tool(
             name="wpguard_discord_send_message",
-            description="Send a simple text message to Discord",
+            description="Send a text message to Discord",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "message": {"type": "string", "description": "Message content to send"},
+                    "message": {"type": "string", "description": "Message content"},
                 },
                 "required": ["message"],
             },
@@ -1184,13 +1185,13 @@ async def list_tools() -> list[Tool]:
         # Project Initialization
         Tool(
             name="wpguard_init_research",
-            description="Initialize a new wpguard research project with agent instructions and directory structure. Creates CLAUDE.md, slash commands, and folders for targets/reports.",
+            description="Initialize a wpguard research project (agents, commands, dirs)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "output_dir": {
                         "type": "string",
-                        "description": "Directory to create research project in (default: ./wpguard-research)",
+                        "description": "Project directory",
                         "default": "./wpguard-research",
                     },
                 },
@@ -1200,13 +1201,13 @@ async def list_tools() -> list[Tool]:
         # Wordfence CVE Database Tools
         Tool(
             name="wpguard_cve_download",
-            description="Download/refresh the Wordfence vulnerability database (cached in /tmp/wordfence_vulns.json)",
+            description="Download/refresh the Wordfence vulnerability database",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "force": {
                         "type": "boolean",
-                        "description": "Force re-download even if cache is fresh (default: false)",
+                        "description": "Force re-download even if cache is fresh",
                         "default": False,
                     },
                 },
@@ -1215,25 +1216,25 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_cve_search",
-            description="Search Wordfence CVE database by plugin slug or keyword. Use this to find known vulnerabilities for target plugins.",
+            description="Search Wordfence CVE database by slug or keyword",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "slug": {
                         "type": "string",
-                        "description": "Plugin slug to get all CVEs for (e.g., 'contact-form-7')",
+                        "description": "Plugin slug for CVE lookup",
                     },
                     "query": {
                         "type": "string",
-                        "description": "Search term (searches title and description)",
+                        "description": "Search title and description",
                     },
                     "vuln_type": {
                         "type": "string",
-                        "description": "Filter by vulnerability type (e.g., 'XSS', 'SQL Injection')",
+                        "description": "Filter by vulnerability type",
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum results to return (default: 50)",
+                        "description": "Max results",
                         "default": 50,
                     },
                 },
@@ -1248,7 +1249,7 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "vuln_id": {
                         "type": "string",
-                        "description": "Wordfence vulnerability ID (UUID) or CVE ID (e.g., 'CVE-2024-1234')",
+                        "description": "Wordfence UUID or CVE ID",
                     },
                 },
                 "required": ["vuln_id"],
@@ -1256,7 +1257,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="wpguard_cve_stats",
-            description="Get statistics about the Wordfence vulnerability database",
+            description="Get Wordfence vulnerability database statistics",
             inputSchema={
                 "type": "object",
                 "properties": {},
