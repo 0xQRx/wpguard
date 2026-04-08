@@ -6,7 +6,7 @@ WordPress plugins from the official repository.
 """
 
 __version__ = "2.3.0"
-__author__ = "Security Research"
+__author__ = "0xQRx"
 
 from wpguard.core.models import PluginInfo, ThemeInfo, ChangeReport
 from wpguard.api.wordpress import WordPressPluginAPI
