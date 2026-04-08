@@ -791,6 +791,18 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_progpilot_scan",
+            description="Run progpilot PHP taint analysis against plugin/theme source code inside the sandbox container. Traces data flow from user input ($_GET, $_POST) to dangerous sinks (SQL, file ops, eval). Complements semgrep pattern matching.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target_dir": {"type": "string", "description": "Path to source code on HOST (e.g., targets/plugin-slug/extracted/plugin-slug/)"},
+                    "timeout": {"type": "integer", "description": "Scan timeout in seconds (default: 120)", "default": 120},
+                },
+                "required": ["target_dir"],
+            },
+        ),
+        Tool(
             name="wpguard_bounty_estimate",
             description="Estimate Wordfence bug bounty reward for a vulnerability. Uses live calculator config from Wordfence. Returns bounty range, scope status, and breakdown.",
             inputSchema={
@@ -1476,6 +1488,12 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["target_dir"],
             arguments.get("category"),
             arguments.get("severity", "WARNING"),
+        )
+
+    elif name == "wpguard_progpilot_scan":
+        return await _progpilot_scan(
+            arguments["target_dir"],
+            arguments.get("timeout", 120),
         )
 
     elif name == "wpguard_bounty_estimate":
@@ -3029,6 +3047,96 @@ def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> 
 
 async def _semgrep_scan(target_dir: str, category: str | None, severity: str) -> dict[str, Any]:
     return await run_in_executor(_semgrep_scan_sync, target_dir, category, severity)
+
+
+# ── Progpilot Scan Implementation ─────────────────────
+
+def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
+    """Run progpilot taint analysis inside the sandbox container (sync version)."""
+    from wpguard.config import WP_CONTAINER_NAME
+
+    target = Path(target_dir)
+    if not target.exists():
+        return {"error": f"Target directory not found: {target_dir}"}
+
+    # Check container is running
+    try:
+        check = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", WP_CONTAINER_NAME],
+            capture_output=True, text=True, timeout=10,
+        )
+        if "true" not in check.stdout.lower():
+            return {"error": f"Container {WP_CONTAINER_NAME} is not running. Start sandbox first."}
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return {"error": "Docker not available"}
+
+    # Copy source into container
+    container_scan_dir = "/tmp/progpilot_scan"
+    subprocess.run(
+        ["docker", "exec", WP_CONTAINER_NAME, "rm", "-rf", container_scan_dir],
+        capture_output=True, timeout=10,
+    )
+    copy_result = subprocess.run(
+        ["docker", "cp", str(target.resolve()), f"{WP_CONTAINER_NAME}:{container_scan_dir}"],
+        capture_output=True, text=True, timeout=60,
+    )
+    if copy_result.returncode != 0:
+        return {"error": f"Failed to copy source to container: {copy_result.stderr}"}
+
+    # Run progpilot
+    try:
+        result = subprocess.run(
+            ["docker", "exec", WP_CONTAINER_NAME, "php", "/usr/local/bin/progpilot", container_scan_dir],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {"error": f"Progpilot scan timed out after {timeout}s"}
+
+    # Clean up
+    subprocess.run(
+        ["docker", "exec", WP_CONTAINER_NAME, "rm", "-rf", container_scan_dir],
+        capture_output=True, timeout=10,
+    )
+
+    # Parse JSON output
+    try:
+        findings = json.loads(result.stdout) if result.stdout.strip() else []
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse progpilot output", "raw": result.stdout[:1000]}
+
+    if not isinstance(findings, list):
+        findings = []
+
+    # Simplify and rank results
+    results = []
+    for f in findings[:100]:  # Cap at 100
+        source = f.get("source", {})
+        sink = f.get("sink", {})
+        results.append({
+            "vuln_type": f.get("vuln_name", "unknown"),
+            "source": source.get("name", ""),
+            "source_file": source.get("file", "").replace(container_scan_dir + "/", ""),
+            "source_line": source.get("line", 0),
+            "sink": sink.get("name", ""),
+            "sink_file": sink.get("file", "").replace(container_scan_dir + "/", ""),
+            "sink_line": sink.get("line", 0),
+            "taint_flow": f" {source.get('name','')} → {sink.get('name','')}",
+        })
+
+    # Summary
+    by_type: dict[str, int] = {}
+    for r in results:
+        by_type[r["vuln_type"]] = by_type.get(r["vuln_type"], 0) + 1
+
+    return {
+        "total_findings": len(results),
+        "findings": results,
+        "summary": by_type,
+    }
+
+
+async def _progpilot_scan(target_dir: str, timeout: int) -> dict[str, Any]:
+    return await run_in_executor(_progpilot_scan_sync, target_dir, timeout)
 
 
 # ── Bounty Estimator Implementation ───────────────────

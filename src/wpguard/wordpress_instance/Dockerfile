@@ -24,6 +24,10 @@ COPY wpguard-php-extensions.conf /etc/apache2/conf-enabled/wpguard-php-extension
 RUN mkdir -p /var/log/apache2 /var/log/wpguard \
     && chown www-data:www-data /var/log/apache2 /var/log/wpguard
 
+# Install progpilot for PHP taint analysis
+RUN curl -sL https://github.com/designsecurity/progpilot/releases/download/v1.3.0/progpilot_v1.3.0.phar -o /usr/local/bin/progpilot \
+    && chmod +x /usr/local/bin/progpilot
+
 # Copy custom entrypoint
 COPY custom-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 RUN chmod +x /usr/local/bin/custom-entrypoint.sh

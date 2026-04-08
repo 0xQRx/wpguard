@@ -178,6 +178,7 @@ Track the entire WordPress ecosystem for research opportunities:
 | **Playwright** (Python) | Browser PoC video recording with `record_video_dir` | `pip install playwright && playwright install chromium` |
 | **ffmpeg** | Video format conversion (webm/cast → gif) | `apt install ffmpeg` |
 | **semgrep** | Automated vulnerability pattern pre-scan | `pipx install semgrep` |
+| **progpilot** | PHP taint analysis (runs inside sandbox container) | Bundled in sandbox Docker image |
 | **svg-term-cli** (optional) | Convert terminal recordings to animated SVG | `npx svg-term-cli` |
 
 **API Keys:**
