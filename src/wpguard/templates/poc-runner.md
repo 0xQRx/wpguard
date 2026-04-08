@@ -3,7 +3,7 @@ name: poc-runner
 description: Executes PoC scripts against sandbox, verifies expected results, detects false positives
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 35
 ---
 
 # PoC Runner Agent - Wordfence Edition

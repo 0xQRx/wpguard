@@ -3,7 +3,7 @@ name: qa-triage
 description: Validates findings, tests PoCs, checks Wordfence scope, creates submission writeups
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 35
 ---
 
 # QA/Triager Agent - Wordfence Edition

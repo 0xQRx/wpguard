@@ -3,7 +3,7 @@ name: priv-esc-expert
 description: Find privilege escalation chains — options update, role manipulation, registration bypass, and authentication bypass in WordPress
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Privilege Escalation Expert - Wordfence Edition

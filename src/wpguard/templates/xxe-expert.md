@@ -3,7 +3,7 @@ name: xxe-expert
 description: Analyze WordPress plugins for XML external entity injection in SVG/XML processing
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # XXE Expert - Wordfence Edition

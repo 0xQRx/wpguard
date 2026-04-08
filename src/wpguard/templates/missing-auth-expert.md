@@ -3,7 +3,7 @@ name: missing-auth-expert
 description: Find missing capability checks on AJAX handlers, REST API endpoints, and admin actions in WordPress plugins
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Missing Authorization Expert - Wordfence Edition

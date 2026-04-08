@@ -3,7 +3,7 @@ name: auth-expert
 description: Analyze WordPress plugins for authentication bypass, privilege escalation, IDOR, and missing authorization
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Authentication & Authorization Expert - Wordfence Edition

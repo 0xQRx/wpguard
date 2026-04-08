@@ -3,7 +3,7 @@ name: csrf-expert
 description: Analyze WordPress plugins for cross-site request forgery and missing nonce validation
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # CSRF Expert - Wordfence Edition

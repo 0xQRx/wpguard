@@ -3,7 +3,7 @@ name: data-flow-expert
 description: Trace cross-feature data flows to find multi-step vulnerabilities where data written by one feature is consumed unsafely by another
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Data Flow Expert - Wordfence Edition

@@ -3,7 +3,7 @@ name: idor-expert
 description: Find Insecure Direct Object Reference (IDOR) vulnerabilities — unauthorized access to other users' data via ID manipulation
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # IDOR Expert - Wordfence Edition

@@ -3,7 +3,7 @@ name: poc-creator
 description: Analyzes changelogs for security fixes and creates PoCs for patched vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # PoC Creator Agent - Changelog Security Analysis

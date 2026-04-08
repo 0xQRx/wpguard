@@ -3,7 +3,7 @@ name: ssrf-expert
 description: Analyze WordPress plugins for server-side request forgery and cloud metadata access vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # SSRF Expert - Wordfence Edition

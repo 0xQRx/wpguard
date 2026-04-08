@@ -3,7 +3,7 @@ name: info-disclosure-expert
 description: Analyze WordPress plugins for sensitive data exposure, debug endpoints, and user enumeration
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Information Disclosure Expert - Wordfence Edition

@@ -3,7 +3,7 @@ name: open-redirect-expert
 description: Analyze WordPress plugins for open redirect vulnerabilities via wp_redirect, header Location, and JavaScript redirects
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Open Redirect Expert - Wordfence Edition

@@ -3,7 +3,7 @@ name: file-rce-expert
 description: Analyze WordPress plugins for file upload, read, write, delete, path traversal, and RCE vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # File Operations & RCE Expert - Wordfence Edition

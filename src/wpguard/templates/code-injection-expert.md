@@ -3,7 +3,7 @@ name: code-injection-expert
 description: Analyze WordPress plugins for code injection via eval, assert, preg_replace /e, call_user_func, and dynamic code execution
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Code Injection Expert - Wordfence Edition

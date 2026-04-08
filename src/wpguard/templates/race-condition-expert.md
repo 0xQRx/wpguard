@@ -3,7 +3,7 @@ name: race-condition-expert
 description: Analyze WordPress plugins for TOCTOU, database races, double-spend, and limit bypass vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Race Condition Expert - Wordfence Edition

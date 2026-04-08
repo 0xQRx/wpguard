@@ -3,7 +3,7 @@ name: logic-flaw-expert
 description: Analyze WordPress plugins for business logic bugs, payment bypass, and workflow manipulation
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Logic Flaw Expert - Wordfence Edition

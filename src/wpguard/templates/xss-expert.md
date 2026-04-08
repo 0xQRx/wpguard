@@ -3,7 +3,7 @@ name: xss-expert
 description: Analyze WordPress plugins for stored, reflected, and DOM-based XSS vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # XSS Expert - Wordfence Edition

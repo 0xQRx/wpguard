@@ -3,7 +3,7 @@ name: poc-writer
 description: Writes standalone PoC scripts for new vulnerabilities discovered by expert agents
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # PoC Writer Agent - Wordfence Edition

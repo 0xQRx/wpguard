@@ -3,7 +3,7 @@ name: object-injection-expert
 description: Analyze WordPress plugins for PHP object injection and phar deserialization vulnerabilities
 model: opus
 memory: project
-maxTurns: 50
+maxTurns: 30
 ---
 
 # Object Injection Expert - Wordfence Edition
