@@ -145,11 +145,19 @@ When the user wants a comprehensive audit:
    - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
    - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
    This ensures no artifacts from previous audits affect results.
-5.5. **Run automated pre-scans** — before surface-mapper, run both:
-   - `wpguard_semgrep_scan(target_dir)` — pattern matching: missing auth, SQLi, file ops, priv esc, IDOR, crypto (20+ rules)
-   - `wpguard_progpilot_scan(target_dir)` — taint analysis: traces user input ($_POST/$_GET) through function calls to dangerous sinks
-   Feed combined results to experts as "start here" targets. Semgrep finds structural patterns, progpilot finds data flows. Together they save 50-70% of expert context waste.
-6. **Map attack surface** — delegate to `surface-mapper` FIRST. For large plugins (50+ PHP files or 20k+ lines), **split into multiple surface-mapper instances** with assigned directories:
+5.5. **Run automated pre-scans** (parallel, < 60 seconds) — save to `reports/{slug}/`:
+   - `wpguard_semgrep_scan(target_dir, output_dir="reports/{slug}/")` — pattern matching (33 rules)
+   - `wpguard_progpilot_scan(target_dir, output_dir="reports/{slug}/")` — taint analysis
+   - Read the summary counts from returned JSON to decide which experts to launch
+   - These results persist to disk — experts read `reports/{slug}/semgrep_scan.md` and `reports/{slug}/progpilot_scan.md` directly
+6. **Lightweight surface-mapper** — delegate to `surface-mapper` for things tools CAN'T do:
+   - REST route table with permission_callbacks
+   - Nonce generation locations + page capability requirements
+   - wp_localize_script nonce exposure (frontend vs admin)
+   - Custom role/capability creation
+   - Plugin dependency detection
+   - Auth framework pattern identification
+   **Surface-mapper should NOT re-scan for SQL/file/XSS patterns** — semgrep already did that. For large plugins (50+ PHP files), still split into multiple mapper instances by directory — but each instance only does auth/nonce/dependency mapping, not pattern scanning.
    - Instance 1: "Scan `includes/` and `admin/`"
    - Instance 2: "Scan `api/`, `rest/`, and `ajax/`"
    - Instance 3: "Scan remaining directories"
@@ -169,7 +177,7 @@ When the user wants a comprehensive audit:
    - SKIP experts: those with zero relevant patterns (save context)
    - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
    - ALWAYS run `critical-thinker` last for cross-domain chains
-   - **Always tell experts:** "Read the surface map at `reports/{plugin_slug}/surface_map.md` for prioritized targets. Start with those, then expand your own analysis."
+   - **Always tell experts:** "Read `reports/{slug}/semgrep_scan.md` and `reports/{slug}/progpilot_scan.md` for pre-identified code-level targets (file:line + code snippets). Read `reports/{slug}/surface_map.md` for auth model and nonce accessibility. Start from CRITICAL findings, not blind search."
    - **⚠️ LARGE PLUGINS: Split work across multiple instances of the SAME expert.** Do NOT limit yourself to 1 instance per expert type — a single agent running out of context means lost coverage. For large plugins:
      - Divide the surface map targets by file/directory and assign subsets to parallel expert instances
      - Example: sqli-expert #1 gets `includes/ajax.php`, `includes/api.php`; sqli-expert #2 gets `includes/query.php`, `includes/search.php`
