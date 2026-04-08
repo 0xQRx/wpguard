@@ -334,7 +334,8 @@ async def list_tools() -> list[Tool]:
                     },
                     "browse": {
                         "type": "string",
-                        "description": "Category: popular, new, updated",
+                        "description": "Browse category",
+                        "enum": ["popular", "new", "updated"],
                     },
                 },
                 "required": [],
@@ -784,8 +785,8 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "target_dir": {"type": "string", "description": "Path to source code directory"},
-                    "category": {"type": "string", "description": "Filter: missing-auth, sqli, file-ops, priv-esc, idor, crypto, incomplete-fix"},
-                    "severity": {"type": "string", "description": "Minimum severity: INFO, WARNING, ERROR", "default": "WARNING"},
+                    "category": {"type": "string", "description": "Filter by category", "enum": ["missing-auth", "sqli", "file-ops", "priv-esc", "idor", "crypto", "incomplete-fix"]},
+                    "severity": {"type": "string", "description": "Minimum severity", "enum": ["INFO", "WARNING", "ERROR"], "default": "WARNING"},
                 },
                 "required": ["target_dir"],
             },
@@ -819,7 +820,8 @@ async def list_tools() -> list[Tool]:
                     },
                     "auth_level": {
                         "type": "string",
-                        "description": "none, low (subscriber), mid (contributor/author), high (admin/editor)",
+                        "description": "Auth level",
+                        "enum": ["none", "low", "mid", "high"],
                         "default": "none",
                     },
                     "researcher_tier": {
@@ -1095,11 +1097,11 @@ async def list_tools() -> list[Tool]:
                 "properties": {
                     "slug": {"type": "string", "description": "Plugin or theme slug"},
                     "version": {"type": "string", "description": "Version audited"},
-                    "asset_type": {"type": "string", "description": "plugin or theme", "default": "plugin"},
+                    "asset_type": {"type": "string", "description": "Asset type", "enum": ["plugin", "theme"], "default": "plugin"},
                     "active_installs": {"type": "integer", "description": "Active installations", "default": 0},
                     "findings_count": {"type": "integer", "description": "Total findings", "default": 0},
                     "validated_count": {"type": "integer", "description": "Validated findings", "default": 0},
-                    "status": {"type": "string", "description": "completed, partial, or skipped", "default": "completed"},
+                    "status": {"type": "string", "description": "Audit status", "enum": ["completed", "partial", "skipped"], "default": "completed"},
                     "notes": {"type": "string", "description": "Audit notes", "default": ""},
                     "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
@@ -1124,7 +1126,7 @@ async def list_tools() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "asset_type": {"type": "string", "description": "Filter: plugin or theme"},
+                    "asset_type": {"type": "string", "description": "Filter by type", "enum": ["plugin", "theme"]},
                     "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
                 },
                 "required": [],
