@@ -145,6 +145,7 @@ When the user wants a comprehensive audit:
    - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
    - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
    This ensures no artifacts from previous audits affect results.
+5.5. **Run semgrep pre-scan** (if semgrep installed) — call `wpguard_semgrep_scan(target_dir)` before surface-mapper. This runs automated pattern detection for the top 20 vulnerability patterns (missing auth, SQLi, file ops, priv esc, IDOR, crypto) in seconds. Feed the results to experts as "start here" targets. Saves 50-70% of expert context waste.
 6. **Map attack surface** — delegate to `surface-mapper` FIRST. For large plugins (50+ PHP files or 20k+ lines), **split into multiple surface-mapper instances** with assigned directories:
    - Instance 1: "Scan `includes/` and `admin/`"
    - Instance 2: "Scan `api/`, `rest/`, and `ajax/`"

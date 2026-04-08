@@ -300,7 +300,16 @@ RECOMMENDED EXPERTS:
   ALWAYS:     critical-thinker (last)
 ```
 
-For every non-zero category, include the top file locations (file:line) so experts know where to start.
+For every non-zero category, include the **top 5 matches with surrounding code context** (use `grep -B1 -A3` instead of plain grep). This gives experts the exact suspicious code, not just file:line pointers. Truncate each snippet to 5 lines max.
+
+Example snippet format in your report:
+```
+### $wpdb without prepare (3 matches)
+includes/ajax.php:142:   $wpdb->query("SELECT * FROM {$wpdb->prefix}orders WHERE id = " . $_POST['order_id']);
+includes/search.php:87:  $results = $wpdb->get_results("SELECT * FROM $table WHERE name LIKE '%" . $term . "%'");
+```
+
+**Experts will start from these snippets** — they can jump directly to the flagged line and trace data flows. This eliminates re-grepping and saves ~40% of expert context.
 
 ---
 

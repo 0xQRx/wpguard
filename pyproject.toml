@@ -57,7 +57,7 @@ version = {attr = "wpguard.__version__"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-wpguard = ["py.typed", "templates/*.md", "wordpress_instance/**/*"]
+wpguard = ["py.typed", "templates/*.md", "templates/poc-templates/*.py", "semgrep_rules/*.yaml", "semgrep_rules/*.py", "wordpress_instance/**/*"]
 
 [tool.black]
 line-length = 100

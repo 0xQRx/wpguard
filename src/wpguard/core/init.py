@@ -292,6 +292,14 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write PM plan template to project root
         (root / "pm-plan.md").write_text(_load_template("pm-plan.md"))
 
+        # Copy PoC templates
+        poc_templates_src = TEMPLATES_DIR / "poc-templates"
+        if poc_templates_src.exists():
+            poc_templates_dst = root / "poc-templates"
+            poc_templates_dst.mkdir(exist_ok=True)
+            for template_file in poc_templates_src.glob("*.py"):
+                shutil.copy2(template_file, poc_templates_dst / template_file.name)
+
         # Write slash commands
         (root / ".claude" / "commands" / "target-research.md").write_text(
             get_target_researcher_instructions()

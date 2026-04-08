@@ -778,6 +778,19 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_semgrep_scan",
+            description="Run semgrep WordPress security rules against plugin/theme source code. Returns ranked JSON results by severity. Requires semgrep installed.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target_dir": {"type": "string", "description": "Path to source code directory (e.g., targets/plugin-slug/extracted/plugin-slug/)"},
+                    "category": {"type": "string", "description": "Filter by category: missing-auth, sqli, file-ops, priv-esc, idor, crypto, incomplete-fix"},
+                    "severity": {"type": "string", "description": "Minimum severity: INFO, WARNING, ERROR (default: WARNING)", "default": "WARNING"},
+                },
+                "required": ["target_dir"],
+            },
+        ),
+        Tool(
             name="wpguard_bounty_estimate",
             description="Estimate Wordfence bug bounty reward for a vulnerability. Uses live calculator config from Wordfence. Returns bounty range, scope status, and breakdown.",
             inputSchema={
@@ -1456,6 +1469,13 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("slug"),
             arguments.get("slugs"),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_semgrep_scan":
+        return await _semgrep_scan(
+            arguments["target_dir"],
+            arguments.get("category"),
+            arguments.get("severity", "WARNING"),
         )
 
     elif name == "wpguard_bounty_estimate":
@@ -2930,6 +2950,85 @@ def _target_score_sync(slug: str | None, slugs: list[str] | None, output_dir: st
 
 async def _target_score(slug: str | None, slugs: list[str] | None, output_dir: str) -> dict[str, Any]:
     return await run_in_executor(_target_score_sync, slug, slugs, output_dir)
+
+
+# ── Semgrep Scan Implementation ───────────────────────
+
+def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> dict[str, Any]:
+    """Run semgrep WordPress security scan (sync version)."""
+    from wpguard.semgrep_rules import RULES_FILE
+
+    # Check semgrep is installed
+    try:
+        subprocess.run(["semgrep", "--version"], capture_output=True, timeout=10)
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return {"error": "semgrep not installed. Install with: pip install semgrep"}
+
+    if not Path(target_dir).exists():
+        return {"error": f"Target directory not found: {target_dir}"}
+
+    if not RULES_FILE.exists():
+        return {"error": f"Rules file not found: {RULES_FILE}"}
+
+    cmd = ["semgrep", "--config", str(RULES_FILE), "--json", "--no-git-ignore", "--quiet", str(target_dir)]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        data = json.loads(result.stdout) if result.stdout else {"results": [], "errors": []}
+    except subprocess.TimeoutExpired:
+        return {"error": "Semgrep scan timed out after 120s"}
+    except json.JSONDecodeError:
+        return {"error": "Failed to parse semgrep output", "stderr": result.stderr[:500]}
+
+    results = data.get("results", [])
+
+    # Filter by category
+    if category:
+        results = [r for r in results if r.get("extra", {}).get("metadata", {}).get("category") == category]
+
+    # Filter by severity
+    sev_order = {"INFO": 0, "WARNING": 1, "ERROR": 2}
+    min_sev = sev_order.get(severity, 1)
+    results = [r for r in results if sev_order.get(r.get("extra", {}).get("severity", "INFO"), 0) >= min_sev]
+
+    # Sort by severity desc, then cvss_estimate desc
+    results.sort(key=lambda r: (
+        -sev_order.get(r.get("extra", {}).get("severity", "INFO"), 0),
+        -float(r.get("extra", {}).get("metadata", {}).get("cvss_estimate", 0)),
+    ))
+
+    # Build summary
+    by_category: dict[str, int] = {}
+    by_severity: dict[str, int] = {}
+    for r in results:
+        cat = r.get("extra", {}).get("metadata", {}).get("category", "unknown")
+        sev = r.get("extra", {}).get("severity", "INFO")
+        by_category[cat] = by_category.get(cat, 0) + 1
+        by_severity[sev] = by_severity.get(sev, 0) + 1
+
+    # Simplify results for output
+    findings = []
+    for r in results[:50]:  # Cap at 50
+        findings.append({
+            "rule_id": r.get("check_id", ""),
+            "file": r.get("path", ""),
+            "line": r.get("start", {}).get("line", 0),
+            "severity": r.get("extra", {}).get("severity", ""),
+            "message": r.get("extra", {}).get("message", ""),
+            "category": r.get("extra", {}).get("metadata", {}).get("category", ""),
+            "cvss_estimate": r.get("extra", {}).get("metadata", {}).get("cvss_estimate", 0),
+            "code_snippet": r.get("extra", {}).get("lines", "")[:200],
+        })
+
+    return {
+        "total_findings": len(results),
+        "findings": findings,
+        "summary": {"by_category": by_category, "by_severity": by_severity},
+        "errors": [e.get("message", "") for e in data.get("errors", [])][:5],
+    }
+
+
+async def _semgrep_scan(target_dir: str, category: str | None, severity: str) -> dict[str, Any]:
+    return await run_in_executor(_semgrep_scan_sync, target_dir, category, severity)
 
 
 # ── Bounty Estimator Implementation ───────────────────

@@ -1,0 +1,290 @@
+rules:
+  # ============================================================
+  # Missing Authorization (~30% of real findings)
+  # ============================================================
+
+  - id: wp-ajax-nonce-only-no-capability
+    patterns:
+      - pattern: |
+          check_ajax_referer(...);
+      - pattern-not-inside: |
+          if (! current_user_can(...)) { ... }
+      - pattern-not-inside: |
+          current_user_can(...)
+    message: "Nonce check without capability check — nonce proves form was displayed, not that user is authorized"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: missing-auth
+      cvss_estimate: 6.5
+      references:
+        - "CVE-2025-15157 (Starfish Reviews)"
+        - "CVE-2025-13342 (Frontend Admin)"
+
+  - id: rest-return-true-permission
+    pattern: |
+      register_rest_route(..., array(..., 'permission_callback' => '__return_true', ...))
+    message: "REST route with __return_true permission — accessible by all users including unauthenticated"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: missing-auth
+      cvss_estimate: 5.0
+
+  - id: wp-verify-nonce-no-capability
+    patterns:
+      - pattern: |
+          wp_verify_nonce(...);
+      - pattern-not-inside: |
+          current_user_can(...)
+    message: "wp_verify_nonce without capability check — nonce is NOT authorization"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: missing-auth
+      cvss_estimate: 6.5
+
+  # ============================================================
+  # SQL Injection (~15% of real findings)
+  # ============================================================
+
+  - id: wpdb-query-string-concat
+    pattern: |
+      $wpdb->query("..." . $VAR . "...")
+    message: "Direct string concatenation in $wpdb->query — use $wpdb->prepare()"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 8.0
+
+  - id: wpdb-get-results-string-concat
+    pattern: |
+      $wpdb->get_results("..." . $VAR . "...")
+    message: "Direct string concatenation in $wpdb->get_results — use $wpdb->prepare()"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 8.0
+
+  - id: wpdb-get-var-string-concat
+    pattern: |
+      $wpdb->get_var("..." . $VAR . "...")
+    message: "Direct string concatenation in $wpdb->get_var — use $wpdb->prepare()"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 8.0
+
+  - id: wpdb-get-row-string-concat
+    pattern: |
+      $wpdb->get_row("..." . $VAR . "...")
+    message: "Direct string concatenation in $wpdb->get_row — use $wpdb->prepare()"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 8.0
+
+  - id: trim-prepare-quote-strip
+    pattern: |
+      trim($wpdb->prepare('%s', ...), "'")
+    message: "trim() strips quotes from prepare() output — breaks SQL escaping entirely"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 9.0
+      references:
+        - "Confirmed finding pattern in multiple audits"
+
+  - id: wpdb-interpolated-variable
+    pattern: |
+      $wpdb->query("...$VAR...")
+    message: "PHP variable interpolation in $wpdb->query — use $wpdb->prepare()"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: sqli
+      cvss_estimate: 8.0
+
+  # ============================================================
+  # File Operations (~10% of real findings)
+  # ============================================================
+
+  - id: unlink-user-input
+    patterns:
+      - pattern: |
+          unlink($PATH)
+      - pattern-not-inside: |
+          realpath(...)
+    message: "unlink() without realpath validation — path traversal to delete wp-config.php → RCE"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: file-ops
+      cvss_estimate: 8.5
+      references:
+        - "CVE-2025-14675 (Meta Box)"
+
+  - id: file-put-contents-variable-path
+    patterns:
+      - pattern: |
+          file_put_contents($PATH, ...)
+      - metavariable-pattern:
+          metavariable: $PATH
+          pattern: |
+            $_POST[...]
+    message: "file_put_contents with user-controlled path from POST"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: file-ops
+      cvss_estimate: 9.0
+
+  - id: readfile-variable
+    pattern: |
+      readfile($VAR)
+    message: "readfile() with variable path — potential arbitrary file read"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: file-ops
+      cvss_estimate: 7.0
+
+  - id: ziparchive-extractto-no-validation
+    patterns:
+      - pattern: |
+          $ZIP->extractTo(...)
+      - pattern-not-inside: |
+          basename(...)
+    message: "ZipArchive extractTo without entry name validation — zip slip vulnerability"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: file-ops
+      cvss_estimate: 7.5
+
+  # ============================================================
+  # Privilege Escalation / Auth Bypass
+  # ============================================================
+
+  - id: wp-set-password-post-input
+    pattern: |
+      wp_set_password(..., $_POST[...])
+    message: "wp_set_password with user_id from POST — account takeover if no ownership check"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: priv-esc
+      cvss_estimate: 9.8
+      references:
+        - "CVE-2025-15364 (Download Manager)"
+
+  - id: wp-update-user-post-id
+    pattern: |
+      wp_update_user(array('ID' => $_POST[...], ...))
+    message: "wp_update_user with ID from POST — IDOR to account takeover"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: priv-esc
+      cvss_estimate: 9.8
+      references:
+        - "CVE-2024-8791 (Charitable)"
+
+  - id: update-option-in-loop
+    pattern: |
+      foreach ($ARRAY as $KEY => $VALUE) { ... update_option($KEY, ...); ... }
+    message: "update_option in loop with variable key — arbitrary options update → site takeover"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: priv-esc
+      cvss_estimate: 9.8
+      references:
+        - "CVE-2025-15157 (Starfish Reviews)"
+        - "CVE-2025-13342 (Frontend Admin)"
+
+  - id: hardcoded-hash-time-token
+    pattern: |
+      hash($ALGO, time())
+    message: "Token generated from time() — only 86,400 values per day, brute-forceable"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: priv-esc
+      cvss_estimate: 7.0
+      references:
+        - "CVE-2024-12432 (WPC Shop as Customer)"
+
+  # ============================================================
+  # IDOR
+  # ============================================================
+
+  - id: handler-user-id-from-post-no-ownership
+    patterns:
+      - pattern: |
+          $USER_ID = $_POST[...];
+      - pattern-not-inside: |
+          get_current_user_id()
+    message: "User ID from POST without ownership check — potential IDOR"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: idor
+      cvss_estimate: 6.5
+
+  # ============================================================
+  # Crypto / Token Weakness
+  # ============================================================
+
+  - id: rand-small-range-security
+    pattern: |
+      rand($LOW, $HIGH)
+    message: "rand() for security token — weak PRNG with potentially small output space"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: 6.0
+      references:
+        - "CVE-2024-9302 (App Builder)"
+
+  - id: loose-comparison-security-token
+    patterns:
+      - pattern: |
+          $TOKEN == $STORED
+      - pattern-not: |
+          $TOKEN === $STORED
+    message: "Loose comparison on token — type juggling bypass possible"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: 5.0
+
+  - id: empty-nonce-check
+    pattern: |
+      if (empty($NONCE)) { ... }
+    message: "empty() on nonce — empty('0') === true in PHP, bypasses validation for '0' values"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: 5.0
+
+  # ============================================================
+  # Incomplete Fix Detection
+  # ============================================================
+
+  - id: commented-out-capability-check
+    pattern-regex: "//\\s*current_user_can|/\\*\\s*current_user_can"
+    message: "Commented-out capability check — possible incomplete fix or debug leftover"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: incomplete-fix
+      cvss_estimate: 6.5

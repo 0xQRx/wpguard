@@ -281,6 +281,20 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
+## PoC Template Library
+
+Reference templates are in `poc-templates/` (copied to project root during init). **Start from these** to avoid wasting context on login/nonce boilerplate:
+
+| Template | When to Use |
+|----------|-------------|
+| `template_ajax_auth.py` | Authenticated AJAX handler vulns (login + nonce) |
+| `template_ajax_nopriv.py` | Unauthenticated AJAX (wp_ajax_nopriv_*) |
+| `template_rest_auth.py` | Authenticated REST API (login + X-WP-Nonce) |
+| `template_rest_nopriv.py` | Unauthenticated REST (__return_true permission) |
+| `template_file_upload.py` | File upload via AJAX/form |
+
+**How to use:** Read the matching template, copy to `reports/{slug}/{finding_id}/poc.py`, replace all `# === CUSTOMIZE ===` sections with exploit-specific values, update `EXPECTED_RESULT`.
+
 ## Writing Guidelines
 
 ### DO

@@ -54,7 +54,9 @@ When you need nonces for testing endpoints, call `wpguard_sandbox_map_nonces()` 
 
 ### Rule 4: Start From the Surface Map
 
-Read the surface map at `reports/{plugin_slug}/surface_map.md` first — it has prioritized file:line targets for your specialty. **Start with those high-value targets** to get findings fast. Then expand your own analysis into areas the surface mapper may have missed — grep for patterns, trace data flows, follow your instincts. The surface map is a head start, not a boundary.
+Read the surface map at `reports/{plugin_slug}/surface_map.md` first — it has prioritized file:line targets AND code snippets for your specialty. **Start from the code snippets** — they show the exact suspicious code patterns with line numbers. Jump directly to the flagged line and trace data flows from there. You do NOT need to re-grep for basic patterns; the surface map already did that. Then expand into areas the mapper may have missed. The surface map is a head start, not a boundary.
+
+Also check if `wpguard_semgrep_scan` results are available — semgrep provides ranked findings with exact code locations and CVSS estimates.
 
 ---
 
