@@ -365,7 +365,6 @@ def initialize_research_project(output_dir: str) -> dict:
         # Write per-project devrag config
         rag_docs_dir = os.environ.get("WPGUARD_RAG_DOCS")
         doc_patterns = [
-            str(root / "specs"),
             str(root / "reports"),
         ]
         if rag_docs_dir and Path(rag_docs_dir).exists():
