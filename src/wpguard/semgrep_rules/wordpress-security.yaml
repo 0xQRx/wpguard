@@ -305,3 +305,99 @@ rules:
     metadata:
       category: incomplete-fix
       cvss_estimate: "6.5"
+
+  # ============================================================
+  # Additional High-Yield Patterns (from 100+ audit data)
+  # ============================================================
+
+  - id: nopriv-ajax-handler
+    pattern: |
+      add_action('wp_ajax_nopriv_$ACTION', $FUNC)
+    message: "Nopriv AJAX handler — unauthenticated, verify handler has internal auth"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: missing-auth
+      cvss_estimate: "6.0"
+
+  - id: update-option-direct-post
+    pattern: |
+      update_option($KEY, $_POST[$VALUE])
+    message: "update_option with direct POST input"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: priv-esc
+      cvss_estimate: "9.0"
+
+  - id: update-option-direct-request
+    pattern: |
+      update_option($KEY, $_REQUEST[$VALUE])
+    message: "update_option with direct REQUEST input"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: priv-esc
+      cvss_estimate: "9.0"
+
+  - id: weak-token-md5-time
+    pattern: |
+      md5(time())
+    message: "md5(time()) token — 86,400 values/day, trivially brute-forceable"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: "7.0"
+
+  - id: weak-token-md5-rand
+    pattern: |
+      md5(rand(...))
+    message: "md5(rand()) token — predictable PRNG seeded from weak entropy"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: crypto
+      cvss_estimate: "6.0"
+
+  - id: file-put-contents-post-path
+    pattern: |
+      file_put_contents($_POST[$KEY], ...)
+    message: "file_put_contents with POST-controlled path — arbitrary file write"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: file-ops
+      cvss_estimate: "9.0"
+
+  - id: file-put-contents-get-path
+    pattern: |
+      file_put_contents($_GET[$KEY], ...)
+    message: "file_put_contents with GET-controlled path — arbitrary file write"
+    languages: [php]
+    severity: ERROR
+    metadata:
+      category: file-ops
+      cvss_estimate: "9.0"
+
+  - id: wpdb-interpolated-order-by
+    pattern-regex: "ORDER\\s+BY\\s+[^'\"]*\\$"
+    message: "Variable in ORDER BY clause — SQL injection if not whitelisted"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: sqli
+      cvss_estimate: "7.0"
+
+  - id: floatval-check-raw-sql
+    patterns:
+      - pattern: |
+          floatval($X)
+      - pattern-inside: |
+          $wpdb->$METHOD("...$X...")
+    message: "floatval() check but raw $X in SQL — floatval validates but doesn't sanitize for SQL"
+    languages: [php]
+    severity: WARNING
+    metadata:
+      category: sqli
+      cvss_estimate: "6.0"

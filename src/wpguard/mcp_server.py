@@ -798,7 +798,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "target_dir": {"type": "string", "description": "Path to source code on host"},
-                    "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 120},
+                    "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 300},
                 },
                 "required": ["target_dir"],
             },
@@ -2991,9 +2991,13 @@ def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> 
     if not RULES_FILE.exists():
         return {"error": f"Rules file not found: {RULES_FILE}"}
 
-    cmd = ["semgrep", "--config", str(RULES_FILE), "--json", "--no-git-ignore", "--quiet", str(target_dir)]
+    cmd = [
+        "semgrep", "--config", str(RULES_FILE), "--json", "--no-git-ignore", "--quiet",
+        "--include=*.php", "--exclude=vendor", "--exclude=node_modules", "--exclude=lib",
+        str(target_dir),
+    ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         data = json.loads(result.stdout) if result.stdout else {"results": [], "errors": []}
     except subprocess.TimeoutExpired:
         return {"error": "Semgrep scan timed out after 120s"}
@@ -3029,15 +3033,21 @@ def _semgrep_scan_sync(target_dir: str, category: str | None, severity: str) -> 
     # Simplify results for output
     findings = []
     for r in results[:50]:  # Cap at 50
+        # Extract actual matched source code
+        snippet = r.get("extra", {}).get("lines", "")
+        if not snippet:
+            # Fallback: build from matched content
+            snippet = r.get("extra", {}).get("metavars", {}).get("$X", {}).get("abstract_content", "")
         findings.append({
-            "rule_id": r.get("check_id", ""),
+            "rule_id": r.get("check_id", "").split(".")[-1],
             "file": r.get("path", ""),
             "line": r.get("start", {}).get("line", 0),
+            "end_line": r.get("end", {}).get("line", 0),
             "severity": r.get("extra", {}).get("severity", ""),
             "message": r.get("extra", {}).get("message", ""),
             "category": r.get("extra", {}).get("metadata", {}).get("category", ""),
-            "cvss_estimate": r.get("extra", {}).get("metadata", {}).get("cvss_estimate", 0),
-            "code_snippet": r.get("extra", {}).get("lines", "")[:200],
+            "cvss_estimate": r.get("extra", {}).get("metadata", {}).get("cvss_estimate", "0"),
+            "code_snippet": snippet.strip()[:300],
         })
 
     return {
@@ -3073,7 +3083,7 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
     except (subprocess.SubprocessError, FileNotFoundError):
         return {"error": "Docker not available"}
 
-    # Copy source into container
+    # Copy source into container, excluding vendor/node_modules
     container_scan_dir = "/tmp/progpilot_scan"
     subprocess.run(
         ["docker", "exec", WP_CONTAINER_NAME, "rm", "-rf", container_scan_dir],
@@ -3086,14 +3096,38 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
     if copy_result.returncode != 0:
         return {"error": f"Failed to copy source to container: {copy_result.stderr}"}
 
-    # Run progpilot
-    try:
-        result = subprocess.run(
-            ["docker", "exec", WP_CONTAINER_NAME, "php", "/usr/local/bin/progpilot", container_scan_dir],
-            capture_output=True, text=True, timeout=timeout,
+    # Remove vendor/node_modules inside container to speed up scan
+    for exclude in ["vendor", "node_modules", "lib", "assets"]:
+        subprocess.run(
+            ["docker", "exec", WP_CONTAINER_NAME, "rm", "-rf", f"{container_scan_dir}/{exclude}"],
+            capture_output=True, timeout=10,
         )
+
+    # Copy WordPress-specific config if available
+    from wpguard.semgrep_rules import RULES_DIR
+    pp_config = RULES_DIR / "progpilot-wordpress.yml"
+    container_config = "/tmp/progpilot-wordpress.yml"
+    if pp_config.exists():
+        subprocess.run(
+            ["docker", "cp", str(pp_config), f"{WP_CONTAINER_NAME}:{container_config}"],
+            capture_output=True, timeout=10,
+        )
+
+    # Run progpilot with WordPress config
+    pp_cmd = ["docker", "exec", WP_CONTAINER_NAME, "php", "/usr/local/bin/progpilot"]
+    if pp_config.exists():
+        pp_cmd.extend(["--configuration", container_config])
+    pp_cmd.append(container_scan_dir)
+
+    try:
+        result = subprocess.run(pp_cmd, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return {"error": f"Progpilot scan timed out after {timeout}s"}
+        # Clean up on timeout
+        subprocess.run(
+            ["docker", "exec", WP_CONTAINER_NAME, "rm", "-rf", container_scan_dir],
+            capture_output=True, timeout=10,
+        )
+        return {"error": f"Progpilot scan timed out after {timeout}s. Try targeting a subdirectory."}
 
     # Clean up
     subprocess.run(
@@ -3110,20 +3144,28 @@ def _progpilot_scan_sync(target_dir: str, timeout: int) -> dict[str, Any]:
     if not isinstance(findings, list):
         findings = []
 
-    # Simplify and rank results
+    # Map progpilot's actual JSON structure correctly
+    # Fields are flat: vuln_name, source_name, source_file, source_line,
+    # sink_name, sink_file, sink_line, tainted_flow[]
     results = []
-    for f in findings[:100]:  # Cap at 100
-        source = f.get("source", {})
-        sink = f.get("sink", {})
+    for f in findings[:100]:
+        src_file = f.get("source_file", "").replace(container_scan_dir + "/", "")
+        sink_file = f.get("sink_file", "").replace(container_scan_dir + "/", "")
+        # Build readable taint flow from tainted_flow array
+        flow_steps = []
+        for step in f.get("tainted_flow", []):
+            step_file = step.get("file", "").replace(container_scan_dir + "/", "")
+            flow_steps.append(f"{step.get('name', '')} ({step_file}:{step.get('line', '')})")
+
         results.append({
             "vuln_type": f.get("vuln_name", "unknown"),
-            "source": source.get("name", ""),
-            "source_file": source.get("file", "").replace(container_scan_dir + "/", ""),
-            "source_line": source.get("line", 0),
-            "sink": sink.get("name", ""),
-            "sink_file": sink.get("file", "").replace(container_scan_dir + "/", ""),
-            "sink_line": sink.get("line", 0),
-            "taint_flow": f" {source.get('name','')} → {sink.get('name','')}",
+            "source": f.get("source_name", ""),
+            "source_file": src_file,
+            "source_line": f.get("source_line", 0),
+            "sink": f.get("sink_name", ""),
+            "sink_file": sink_file,
+            "sink_line": f.get("sink_line", 0),
+            "taint_flow": " → ".join(flow_steps) if flow_steps else f"{f.get('source_name','')} → {f.get('sink_name','')}",
         })
 
     # Summary
