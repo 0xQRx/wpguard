@@ -150,14 +150,16 @@ When the user wants a comprehensive audit:
    - `wpguard_progpilot_scan(target_dir, output_dir="reports/{slug}/")` — taint analysis
    - Read the summary counts from returned JSON to decide which experts to launch
    - These results persist to disk — experts read `reports/{slug}/semgrep_scan.md` and `reports/{slug}/progpilot_scan.md` directly
-6. **Lightweight surface-mapper** — delegate to `surface-mapper` for things tools CAN'T do:
-   - REST route table with permission_callbacks
-   - Nonce generation locations + page capability requirements
-   - wp_localize_script nonce exposure (frontend vs admin)
-   - Custom role/capability creation
-   - Plugin dependency detection
-   - Auth framework pattern identification
-   **Surface-mapper should NOT re-scan for SQL/file/XSS patterns** — semgrep already did that. For large plugins (50+ PHP files), still split into multiple mapper instances by directory — but each instance only does auth/nonce/dependency mapping, not pattern scanning.
+6. **⚠️ MANDATORY: Surface-mapper** — delegate to `surface-mapper`. This is NOT optional even when semgrep/progpilot ran. Static tools miss critical context that only surface-mapper provides:
+   - REST route table with ALL permission_callbacks (not just __return_true)
+   - Nonce generation locations + which page renders them + what capability that page requires
+   - wp_localize_script nonce exposure (determines if subscribers/unauth can obtain nonces)
+   - Custom role/capability creation (add_role, add_cap)
+   - Plugin dependency detection (WooCommerce, Elementor, etc.)
+   - Auth framework pattern identification (central dispatcher, per-handler checks, etc.)
+   - init/template_redirect implicit endpoints
+   - Standalone PHP files with require wp-load.php
+   **Without this, experts waste time on false positives** (nonce-only handlers where the nonce isn't actually accessible) **and miss real vulns** (implicit endpoints, custom roles). For large plugins, split into multiple instances by directory.
    - Instance 1: "Scan `includes/` and `admin/`"
    - Instance 2: "Scan `api/`, `rest/`, and `ajax/`"
    - Instance 3: "Scan remaining directories"
