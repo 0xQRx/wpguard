@@ -799,7 +799,7 @@ async def list_tools() -> list[Tool]:
                 "type": "object",
                 "properties": {
                     "target_dir": {"type": "string", "description": "Path to source code on host"},
-                    "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 300},
+                    "timeout": {"type": "integer", "description": "Scan timeout in seconds", "default": 600},
                     "output_dir": {"type": "string", "description": "Save results to dir (JSON + markdown)"},
                 },
                 "required": ["target_dir"],
@@ -1499,7 +1499,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     elif name == "wpguard_progpilot_scan":
         return await _progpilot_scan(
             arguments["target_dir"],
-            arguments.get("timeout", 300),
+            arguments.get("timeout", 600),
             arguments.get("output_dir"),
         )
 
