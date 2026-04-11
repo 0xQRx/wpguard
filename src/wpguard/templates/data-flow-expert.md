@@ -385,35 +385,25 @@ Before marking any data flow as "not exploitable":
 
 ## Progress Saving (CRITICAL)
 
-**Save findings IMMEDIATELY as you discover them — do NOT accumulate findings in memory.**
+### Checkpoint Start (FIRST tool call)
+```
+wpguard_agent_checkpoint(action="start", agent_name="data-flow-expert", plugin_slug="{slug}", priority_targets=[...write sinks from surface map...])
+```
 
-1. The moment you identify a chain, call `wpguard_finding_create()` right away
-2. If unsure, create it as `status="draft"` — drafts are reviewed by QA, never lost
-3. Do NOT wait until the end — if you run out of context, unsaved findings are LOST
+### Checkpoint After Every Chain + Every 3-5 Write Sinks Traced
+```
+wpguard_agent_checkpoint(action="progress", agent_name="data-flow-expert", plugin_slug="{slug}", files_analyzed=["file1.php"], findings_created=["FIND-xxx"], notes=["update_option in settings.php → consumed by shortcode renderer without validation"])
+```
+If urgency="high" → save ALL draft findings, call `checkpoint(action="partial", files_remaining=[...])`.
 
-### Progress Report (REQUIRED before finishing)
+### Save Findings IMMEDIATELY
+1. The moment you identify a chain, call `wpguard_finding_create()` right away with `status="draft"`
+2. Then call `wpguard_agent_checkpoint(action="progress", findings_created=["{id}"])`
+3. Do NOT accumulate findings in memory — if you run out of context, unsaved work is LOST
 
-Save to `reports/{plugin_slug}/progress_data-flow-expert.md`:
-
-```markdown
-# Progress Report: data-flow-expert on {plugin_slug}
-
-## Write Sinks Mapped
-- [x] update_option calls: {count} found, {count} with user input
-- [x] update_user_meta calls: {count} found, {count} with variable keys
-- [x] update_post_meta calls: {count} found
-- [x] $wpdb->insert/update: {count} found
-- [ ] file_put_contents: {count} found (not yet traced)
-
-## Chains Identified
-- {finding_id}: {write_sink} → {consumer} = {vulnerability type}
-- DRAFT: {description of promising but unconfirmed chain}
-
-## Remaining Work
-- {specific write sinks or consumers not yet traced}
-
-## Notes
-- {patterns observed, promising areas for further analysis}
+### When Done
+```
+wpguard_agent_checkpoint(action="complete", agent_name="data-flow-expert", plugin_slug="{slug}", notes=["summary"])
 ```
 
 ---

@@ -806,6 +806,26 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_agent_checkpoint",
+            description="Save agent progress. Call FIRST (start), after every finding + every 3-5 files (progress), when done (complete/partial). Returns turn warnings.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["start", "progress", "complete", "partial"], "description": "Checkpoint action"},
+                    "agent_name": {"type": "string", "description": "Agent name"},
+                    "plugin_slug": {"type": "string", "description": "Plugin slug"},
+                    "files_analyzed": {"type": "array", "items": {"type": "string"}, "description": "Files fully analyzed since last checkpoint"},
+                    "files_partial": {"type": "array", "items": {"type": "string"}, "description": "Files partially analyzed"},
+                    "files_remaining": {"type": "array", "items": {"type": "string"}, "description": "Known files not yet analyzed"},
+                    "findings_created": {"type": "array", "items": {"type": "string"}, "description": "Finding IDs created"},
+                    "notes": {"type": "array", "items": {"type": "string"}, "description": "Observations to preserve"},
+                    "priority_targets": {"type": "array", "items": {"type": "string"}, "description": "Initial targets (start only)"},
+                    "output_dir": {"type": "string", "description": "Output dir", "default": DEFAULT_OUTPUT_DIR},
+                },
+                "required": ["action", "agent_name", "plugin_slug"],
+            },
+        ),
+        Tool(
             name="wpguard_bounty_estimate",
             description="Estimate Wordfence bug bounty reward for a vulnerability",
             inputSchema={
@@ -1501,6 +1521,20 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["target_dir"],
             arguments.get("timeout", 600),
             arguments.get("output_dir"),
+        )
+
+    elif name == "wpguard_agent_checkpoint":
+        return await _agent_checkpoint(
+            arguments["action"],
+            arguments["agent_name"],
+            arguments["plugin_slug"],
+            arguments.get("files_analyzed"),
+            arguments.get("files_partial"),
+            arguments.get("files_remaining"),
+            arguments.get("findings_created"),
+            arguments.get("notes"),
+            arguments.get("priority_targets"),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
         )
 
     elif name == "wpguard_bounty_estimate":
@@ -3262,6 +3296,44 @@ def _progpilot_scan_sync(target_dir: str, timeout: int, output_dir: str | None =
 
 async def _progpilot_scan(target_dir: str, timeout: int, output_dir: str | None = None) -> dict[str, Any]:
     return await run_in_executor(_progpilot_scan_sync, target_dir, timeout, output_dir)
+
+
+# ── Agent Checkpoint Implementation ───────────────────
+
+def _agent_checkpoint_sync(
+    action: str, agent_name: str, plugin_slug: str,
+    files_analyzed: list[str] | None, files_partial: list[str] | None,
+    files_remaining: list[str] | None, findings_created: list[str] | None,
+    notes: list[str] | None, priority_targets: list[str] | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    from wpguard.core.checkpoint import CheckpointManager
+    mgr = CheckpointManager(output_dir)
+
+    if action == "start":
+        return mgr.start(agent_name, plugin_slug, priority_targets)
+    elif action == "progress":
+        return mgr.progress(agent_name, plugin_slug, files_analyzed, files_partial, files_remaining, findings_created, notes)
+    elif action == "complete":
+        return mgr.complete(agent_name, plugin_slug, notes)
+    elif action == "partial":
+        return mgr.partial(agent_name, plugin_slug, files_remaining, notes)
+    else:
+        return {"error": f"Unknown action: {action}"}
+
+
+async def _agent_checkpoint(
+    action: str, agent_name: str, plugin_slug: str,
+    files_analyzed: list[str] | None, files_partial: list[str] | None,
+    files_remaining: list[str] | None, findings_created: list[str] | None,
+    notes: list[str] | None, priority_targets: list[str] | None,
+    output_dir: str,
+) -> dict[str, Any]:
+    return await run_in_executor(
+        _agent_checkpoint_sync, action, agent_name, plugin_slug,
+        files_analyzed, files_partial, files_remaining,
+        findings_created, notes, priority_targets, output_dir,
+    )
 
 
 # ── Bounty Estimator Implementation ───────────────────

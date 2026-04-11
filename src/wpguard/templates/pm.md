@@ -226,10 +226,10 @@ BB Submission prepares final reports        ← MANDATORY
 3. **Provide context** — tell each agent which plugin, where source code is, what to focus on
 4. **Track what's been done** — don't re-delegate work that's already completed
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
-6. **Remind agents about context survival** — when delegating, tell each agent: "Create your progress report scaffold FIRST (before reading code). Checkpoint every 10 tool calls. Save findings via wpguard_finding_create() immediately as drafts — do NOT accumulate in memory."
+6. **Remind agents about checkpoints** — when delegating, tell each agent: "Call `wpguard_agent_checkpoint(action='start')` as your FIRST tool call. Checkpoint after every finding and every 3-5 files. If checkpoint returns urgency='high', save everything and call checkpoint(action='partial')."
 7. **Test ALL auth levels including Author** — author-level bugs (RCE, file upload, SQLi, Stored XSS) are bounty-eligible. Tell experts to test as author, not just subscriber/contributor. Author can upload media, publish posts, access post editor — these are rich attack surfaces.
 8. **Test ecosystem-specific roles** — when a base plugin is installed, test its additional roles. WooCommerce `customer` can view orders, manage account, access shop endpoints. BuddyPress members can access groups, profiles, activity. These roles often have access to plugin features that subscriber does not.
-9. **Relaunch incomplete experts** — if an expert reports PARTIAL analysis (ran out of context), relaunch it with its progress report as context. Tell it: "Continue analysis from your progress report at `reports/{plugin_slug}/progress_{agent_name}.md`. Skip files already marked [x]. Focus on the Remaining Work section. Existing findings: {list finding IDs}." Do NOT skip incomplete analysis — the remaining files often contain the most interesting code.
+9. **Relaunch incomplete experts** — if an expert's checkpoint shows `status: partial`, read `reports/{slug}/checkpoint_{agent_name}.json` for structured state. Relaunch with: "Call `wpguard_agent_checkpoint(action='start')` — it will load your previous state. Focus on `files_remaining`. Existing findings: {findings_created from checkpoint}." Do NOT skip incomplete analysis — remaining files often contain the most interesting code.
 
 ## Token Efficiency
 

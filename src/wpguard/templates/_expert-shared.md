@@ -13,51 +13,36 @@
 - **DO** batch your observations and write them to the progress report, not to conversation
 - **Target: < 50 words between tool calls.** If you're writing more, you're wasting context.
 
-### Rule 1: Save Structure FIRST (within your first 3 tool calls)
+### Rule 1: Checkpoint Start (your VERY FIRST tool call)
 
-Before analyzing ANY code, create your progress report scaffold:
-
+Before reading ANY code, call:
 ```
-reports/{plugin_slug}/progress_{agent_name}.md
+wpguard_agent_checkpoint(action="start", agent_name="{your_name}", plugin_slug="{slug}", priority_targets=[...files from surface map/semgrep...])
 ```
+If you're continuing from a previous run, the tool returns your prior state — skip files already marked analyzed.
 
-```markdown
-# Progress Report: {agent_name} on {plugin_slug}
+### Rule 2: Checkpoint After Every Finding + Every 3-5 Files
 
-## Priority Targets (from surface map)
-- [ ] {file1}:{line} — {pattern found}
-- [ ] {file2}:{line} — {pattern found}
-
-## Additional Files Discovered
-- [ ] {file} — {why it's interesting}
-
-## Findings Created
-(none yet)
-
-## Notes
-(none yet)
+After creating a finding OR reading 3-5 files, call:
 ```
-
-**This is your lifeline.** If you run out of context, the PM relaunches you from this file.
-
-### Rule 2: Checkpoint Every 10 Tool Calls
-
-After every ~10 tool calls, UPDATE your progress report:
-- Mark files as `[x]` analyzed or `[~]` partial
-- Add any promising leads to Notes
-- Add any findings created
-
-**Do NOT wait until you're "done" to save progress.** Save continuously.
+wpguard_agent_checkpoint(action="progress", agent_name="{your_name}", plugin_slug="{slug}", files_analyzed=["file1.php", "file2.php"], notes=["ajax.php:142 — $wpdb->query without prepare"])
+```
+The tool accumulates your state server-side. **If the response says urgency="high":**
+1. Create draft findings for ALL promising leads immediately
+2. Call `wpguard_agent_checkpoint(action="partial", files_remaining=[...], notes=["most promising: callbacks.php admin_init handler"])`
+3. Stop analysis — the PM will relaunch you from your checkpoint
 
 ### Rule 3: Save Findings IMMEDIATELY
 
 The moment you identify a vulnerability — even a maybe:
-1. **Check for duplicates first**: Call `wpguard_finding_check_duplicate(plugin_slug, affected_file, affected_function)` — if an exact match exists, skip
-2. Call `wpguard_finding_create()` RIGHT NOW with `status="draft"` if unverified
-3. Update your progress report with the finding ID
+1. **Check for duplicates**: `wpguard_finding_check_duplicate(plugin_slug, affected_file, affected_function)`
+2. Call `wpguard_finding_create()` with `status="draft"` if unverified
+3. Call `wpguard_agent_checkpoint(action="progress", findings_created=["{finding_id}"])`
 4. Then continue analyzing
 
-A saved draft is infinitely more valuable than a lost validated finding.
+### Rule 4: When Done
+
+Call `wpguard_agent_checkpoint(action="complete", agent_name, plugin_slug, notes=["analysis summary"])` — this generates the final progress report the PM reads.
 
 ### Rule 5: Use Nonce Mapper for Auth Testing
 

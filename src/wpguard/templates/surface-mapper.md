@@ -374,12 +374,16 @@ When a base plugin dependency is detected, ALWAYS add these experts to the MUST 
 
 ## Saving the Report (CRITICAL — other agents depend on this)
 
-**Save incrementally, not at the end.** Expert agents read your surface map to decide where to start. If you run out of context before saving, all downstream experts lose their head start.
+### Checkpoint (FIRST tool call)
+```
+wpguard_agent_checkpoint(action="start", agent_name="surface-mapper", plugin_slug="{slug}")
+```
 
-1. **After scanning each category**, append results to the report immediately
-2. Save to `reports/{plugin_slug}/surface_map.md` — create the directory if needed
-3. **Write the file after every 2-3 grep categories** — do not accumulate the whole report in memory
-4. Your final save should add the RECOMMENDED EXPERTS section
+### Save Incrementally
+1. **After scanning each category**, write results to `reports/{plugin_slug}/surface_map.md` immediately
+2. **After every 2-3 categories**, also call `wpguard_agent_checkpoint(action="progress", files_analyzed=[...categories done...], notes=["endpoints: 15 AJAX, 8 REST"])`
+3. If checkpoint returns urgency="high" → write what you have, add `STATUS: PARTIAL`, call `checkpoint(action="partial")`
+4. Your final save adds the RECOMMENDED EXPERTS section
 
 Every expert agent will read this file. Include specific `file:line` locations, not just counts — that's what makes their analysis efficient.
 
