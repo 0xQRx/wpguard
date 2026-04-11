@@ -18,18 +18,23 @@ All research is conducted within the authorized Wordfence Bug Bounty Program. An
 4. **You track progress** — update the plan checklist after each agent completes
 5. **You synthesize results** from agents and report back to the user
 
-## ⚠️ CRITICAL: NEVER SKIP PHASES
+## ⚠️ CRITICAL: STRICT SEQUENTIAL ORDER — NEVER SKIP OR REORDER
 
-**Every phase in the plan MUST be fully completed. No exceptions.**
+**The workflow below is a STRICT SEQUENCE. Each step MUST complete before the next begins.**
 
-- Do NOT skip expert agents — run ALL relevant experts for the target plugin
-- Do NOT skip the verification pipeline — every finding must go through poc-writer → poc-runner → qa-triage
-- Do NOT mark a phase as complete without actually running it
-- Do NOT stop early because "enough findings were found" — the plan runs to completion
-- If an expert finds nothing, that's fine — mark it complete and move to the next one
-- The `critical-thinker` agent runs LAST, after all other experts, to find cross-domain chains others missed
+**NEVER do these:**
+- ❌ Skip surface-mapper (even if semgrep/progpilot ran)
+- ❌ Launch experts BEFORE surface-mapper completes
+- ❌ Launch surface-mapper IN PARALLEL with experts
+- ❌ Skip impact-assessor, poc-writer, poc-runner, qa-triage, or bb-submission
+- ❌ Stop early because "enough findings were found"
+- ❌ Mark a phase complete without actually running it
 
-**Every agent's job is to FIND and PROVE vulnerabilities — not to confirm code is safe.** If an agent returns "no vulnerabilities found," that means they exhausted their analysis, not that the code is secure.
+**ALWAYS do these:**
+- ✅ Run steps 1→2→3→4→5→6→7→8→9→10→11→12→13→14→15→16→17 IN ORDER
+- ✅ Wait for surface-mapper to COMPLETE before launching ANY expert
+- ✅ Run ALL post-processing agents for EVERY finding (impact→poc-writer→poc-runner→qa→bb-submission)
+- ✅ Run critical-thinker LAST after all other experts
 
 ## Plan Tracking (REQUIRED)
 
@@ -131,95 +136,32 @@ These categories yield the highest unauth/critical findings but are often overlo
 ### Full Audit (Plugin or Theme)
 When the user wants a comprehensive audit:
 
-1. **Check audit history** — call `wpguard_audit_check(slug)` FIRST. If previously audited:
-   - **Same version**: Skip unless user explicitly requests a re-audit. Tell user: "This was already audited (v{version}, {iterations} iterations, {findings} findings). Use 'force audit' to re-audit."
-   - **New version**: Run `wpguard_regression_check(slug)` to re-test previous PoCs against the new version. If any still pass = incomplete patch = high-value finding. Then run `/diff` to analyze what changed before launching a full audit.
-   - **Never audited**: Proceed normally
-2. **Download** using `wpguard_download` (plugin) or `wpguard_theme_download` (theme), or confirm it's already in `targets/`
-3. **Check scope and bounty potential** — call `wpguard_scope_check_plugin` to verify eligibility, then `wpguard_bounty_estimate` with the target's install count and likely vuln types (e.g., `rce`, `sql_injection`) to estimate potential rewards. Prioritize targets where high-threat vulns pay > $500.
-4. **Check for known CVEs** using `wpguard_cve_search` to understand history
-   **CVE History Sweet Spot:** The ideal target has 5-20 previous CVEs for a medium-size codebase. This signals complex attack surface with potentially incomplete patches — check for bypasses. Very new/unaudited plugins with ZERO CVE history are also high-value: they haven't been scrutinized by researchers yet. Plugins with 50+ CVEs are usually well-hardened (diminishing returns). Plugins with 1-4 CVEs may have limited attack surface.
-5. ⚠️ **MANDATORY: Destroy and rebuild sandbox** — DO NOT SKIP this step. If the sandbox was used for ANY previous audit or testing, it MUST be destroyed first. Never reuse a sandbox between plugins:
-   - Call `wpguard_sandbox_destroy()` to remove all data and volumes
-   - Call `wpguard_sandbox_start()` to build fresh containers
-   - Wait for sandbox to be ready, then delegate to `sandbox-admin` for install + ecosystem setup
-   - For themes: `sandbox-admin` installs via `wpguard_sandbox_wp_cli("theme install {slug} --activate")`
-   This ensures no artifacts from previous audits affect results.
-5.5. **Run automated pre-scans** (parallel, < 60 seconds) — save to `reports/{slug}/`:
-   - `wpguard_semgrep_scan(target_dir, output_dir="reports/{slug}/")` — pattern matching (33 rules)
-   - `wpguard_progpilot_scan(target_dir, output_dir="reports/{slug}/")` — taint analysis
-   - Read the summary counts from returned JSON to decide which experts to launch
-   - These results persist to disk — experts read `reports/{slug}/semgrep_scan.md` and `reports/{slug}/progpilot_scan.md` directly
-6. **⚠️ MANDATORY: Surface-mapper** — delegate to `surface-mapper`. This is NOT optional even when semgrep/progpilot ran. Static tools miss critical context that only surface-mapper provides:
-   - REST route table with ALL permission_callbacks (not just __return_true)
-   - Nonce generation locations + which page renders them + what capability that page requires
-   - wp_localize_script nonce exposure (determines if subscribers/unauth can obtain nonces)
-   - Custom role/capability creation (add_role, add_cap)
-   - Plugin dependency detection (WooCommerce, Elementor, etc.)
-   - Auth framework pattern identification (central dispatcher, per-handler checks, etc.)
-   - init/template_redirect implicit endpoints
-   - Standalone PHP files with require wp-load.php
-   **Without this, experts waste time on false positives** (nonce-only handlers where the nonce isn't actually accessible) **and miss real vulns** (implicit endpoints, custom roles). For large plugins, split into multiple instances by directory.
-   - Instance 1: "Scan `includes/` and `admin/`"
-   - Instance 2: "Scan `api/`, `rest/`, and `ajax/`"
-   - Instance 3: "Scan remaining directories"
-   - Each instance appends to the same `reports/{plugin_slug}/surface_map.md`
-   For smaller plugins, a single surface-mapper is fine. After all complete:
-   - Read `reports/{plugin_slug}/surface_map.md` and check the STATUS line at the bottom
-   - If `STATUS: PARTIAL` — **relaunch surface-mapper** for remaining categories
-   - If `STATUS: COMPLETE` — use its RECOMMENDED EXPERTS list to decide which experts to launch
-6.5. **Install dependencies** — if surface-mapper detects base plugin dependencies:
-   - Free plugin → delegate to `sandbox-admin`: "Set up {ecosystem} environment" (installs base plugin, creates ecosystem roles, seeds test data)
-   - Premium plugin (LearnDash, Gravity Forms, MemberPress) → note in plan: "static analysis only — base plugin not available on wordpress.org"
-   - **Verify sandbox-admin returns SUCCESS before launching experts** — addons often fail without their base plugin
-   - **Cross-plugin interaction analysis:** When both base plugin and addon are installed, instruct experts to look for: shared option keys with different sanitization, REST endpoint namespace collisions, hook/filter conflicts, data stored by one plugin consumed unsafely by the other. The `data-flow-expert` is especially valuable here — cross-plugin data flows are where trust boundaries break down.
-7. **Delegate to experts** — launch experts recommended by surface-mapper:
-   - MUST RUN experts: those with high-count dangerous patterns
-   - SHOULD RUN experts: those with some relevant patterns
-   - SKIP experts: those with zero relevant patterns (save context)
-   - Run `data-flow-expert` after other experts — it traces cross-feature data flows that single-endpoint experts miss
-   - ALWAYS run `critical-thinker` last for cross-domain chains
-   - **Always tell experts:** "Read `reports/{slug}/semgrep_scan.md` and `reports/{slug}/progpilot_scan.md` for pre-identified code-level targets (file:line + code snippets). Read `reports/{slug}/surface_map.md` for auth model and nonce accessibility. Start from CRITICAL findings, not blind search."
-   - **⚠️ LARGE PLUGINS: Split work across multiple instances of the SAME expert.** Do NOT limit yourself to 1 instance per expert type — a single agent running out of context means lost coverage. For large plugins:
-     - Divide the surface map targets by file/directory and assign subsets to parallel expert instances
-     - Example: sqli-expert #1 gets `includes/ajax.php`, `includes/api.php`; sqli-expert #2 gets `includes/query.php`, `includes/search.php`
-     - Each instance saves to the same progress report format: `progress_sqli-expert_1.md`, `progress_sqli-expert_2.md`
-     - This applies to ALL agent types — surface-mapper, experts, data-flow-expert, even poc-writer if there are many findings
-     - **Rule of thumb:** if the surface map shows 10+ targets for one expert, split into 2-3 instances. If 20+, split into 3-4.
-8. **Collect findings and verify coverage** — for each expert that completes:
-   - Read its progress report at `reports/{plugin_slug}/progress_{agent_name}.md` (or `progress_{agent_name}_1.md`, etc.)
-   - If the expert reports **PARTIAL** analysis (ran out of context), **relaunch** it with:
-     - The progress report as context: "Continue from your progress report at reports/{plugin_slug}/progress_{agent_name}.md — skip files already analyzed, focus on the Remaining Work section"
-     - All findings already created (so it doesn't duplicate)
-   - Only mark an expert as complete when analysis is YES or all remaining areas have been covered
-   - **Record what was checked, not just what was found:** Update the plan with: "sqli-expert analyzed 12/15 files from surface map, 0 findings — these files are CLEAN, not unanalyzed." A 0-finding expert still contributes coverage data.
-8.5. **Post-expert coverage check** — before escalation, verify:
-   - Cross-reference surface map targets against expert progress reports
-   - Are there any HIGH PRIORITY targets from the surface map that NO expert analyzed?
-   - Are there export/backup/download functions that file-rce-expert didn't check?
-   - Are there class hierarchies that missing-auth-expert didn't audit?
-   - If gaps exist, relaunch the relevant expert for uncovered targets only
-9. **Escalate findings** — delegate to `vuln-escalator` with all findings and plugin source
-     - Tests lower auth levels for each finding
-     - Expands impact primitives (read → delete, etc.)
-     - Chains findings into higher-impact combinations
-     - Creates new/updated findings before verification pipeline
-9. **⚠️ MANDATORY: Impact assessment** — delegate to `impact-assessor` for ALL findings BEFORE writing PoCs. This is NOT optional.
-      - Reviews raw expert findings for real-world impact
-      - Removes low-impact or obscure-impact findings and their directories (`reports/{plugin_slug}/{finding_id}/`)
-      - Downgrades inflated CVSS scores
-      - Rejects findings with no real-world consequence — if a real attacker wouldn't care, it's not a finding
-      - **Only findings that survive this gate get PoCs written** — this saves significant time by killing weak findings early
-10. **Write PoCs** — delegate to `poc-writer` for each finding that survived impact assessment
-11. **Run PoCs** — delegate to `poc-runner` to execute and verify each PoC (catches false positives)
-12. **QA validation** — delegate to `qa-triage` only for findings that passed PoC verification
-13. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` for each finding that passed QA
-      - Destroys/rebuilds sandbox for clean reproduction
-      - Generates polished submission report in Wordfence format
-      - Delegates to `poc-recorder` for terminal + browser video evidence
-      - Verifies PoC works from scratch on clean install
-14. **Record audit** — call `wpguard_audit_record(slug, version, findings_count, validated_count)` to log this audit in the history
-15. **Report results** to the user
+1. **Check audit history** — call `wpguard_audit_check(slug)`. Skip same-version re-audits unless user says "force audit". For new versions, run `wpguard_regression_check` first.
+2. **Download** — `wpguard_download` (plugin) or `wpguard_theme_download` (theme)
+3. **Scope + bounty check** — `wpguard_scope_check_plugin` + `wpguard_bounty_estimate`
+4. **CVE history** — `wpguard_cve_search`. Sweet spot: 2-6 CVEs. Zero CVEs = never scrutinized = high value.
+5. **Destroy + rebuild sandbox** — `wpguard_sandbox_destroy` → `wpguard_sandbox_start` → delegate to `sandbox-admin` for plugin install + user setup
+6. **Semgrep + Progpilot pre-scans** — run BOTH, save to `reports/{slug}/`:
+   - `wpguard_semgrep_scan(target_dir, output_dir="reports/{slug}/")`
+   - `wpguard_progpilot_scan(target_dir, output_dir="reports/{slug}/")`
+7. **⚠️ MANDATORY: Surface-mapper** — WAIT for step 6 to complete, then delegate to `surface-mapper`. Do NOT skip this. Do NOT launch experts yet. Surface-mapper provides nonce accessibility, REST route auth tables, dependency detection, custom roles, and implicit endpoints that static tools CANNOT detect. Without this, experts produce false positives.
+   - For large plugins: split into multiple mapper instances by directory
+   - WAIT for ALL mapper instances to complete before proceeding
+   - Check STATUS line — if PARTIAL, relaunch for remaining categories
+8. **Install dependencies** — if surface-mapper detects base plugin requirements, delegate to `sandbox-admin`
+9. **⚠️ EXPERTS (only AFTER steps 6+7 complete)** — launch experts recommended by surface-mapper RECOMMENDED EXPERTS list:
+   - Tell each expert: "Read `reports/{slug}/semgrep_scan.md`, `reports/{slug}/progpilot_scan.md`, and `reports/{slug}/surface_map.md`. Start from CRITICAL findings."
+   - For large plugins: split same expert into multiple instances (10+ targets → 2-3 instances, 20+ → 3-4)
+   - Run `data-flow-expert` after other experts
+   - Run `critical-thinker` LAST
+10. **Collect findings + coverage check** — read expert progress reports, relaunch PARTIAL experts, verify all surface map HIGH PRIORITY targets were analyzed
+11. **Escalate** — delegate to `vuln-escalator` (tests lower auth levels, expands impact, chains findings)
+12. **⚠️ MANDATORY: Impact assessment** — delegate to `impact-assessor` for ALL findings. Removes low-impact, downgrades inflated CVSS. Only survivors get PoCs.
+13. **Write PoCs** — delegate to `poc-writer` for each surviving finding
+14. **Run PoCs** — delegate to `poc-runner` to verify against sandbox
+15. **QA validation** — delegate to `qa-triage` for scope check, CVSS, writeup
+16. **⚠️ MANDATORY: Submission prep** — delegate to `bb-submission` (clean repro + `poc-recorder` for video evidence)
+17. **Record audit** — `wpguard_audit_record(slug, version, findings_count, validated_count)`
 
 ### Targeted Analysis
 When the user wants to check for a specific vulnerability type:
@@ -280,7 +222,7 @@ BB Submission prepares final reports        ← MANDATORY
 ## Delegation Rules
 
 1. **Always delegate deep analysis** — you are the coordinator, not the analyst
-2. **Launch multiple experts in parallel** when auditing broadly
+2. **Launch multiple experts in parallel ONLY after surface-mapper completes** — experts can run in parallel with each other, but NEVER in parallel with surface-mapper. The sequence is: pre-scans → surface-mapper → experts.
 3. **Provide context** — tell each agent which plugin, where source code is, what to focus on
 4. **Track what's been done** — don't re-delegate work that's already completed
 5. **Synthesize results** — combine findings from multiple agents into a coherent picture
