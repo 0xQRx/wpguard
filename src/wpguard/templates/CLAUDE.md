@@ -62,6 +62,15 @@ Expert finds vuln → Impact Assessor → PoC Writer → PoC Runner → QA Triag
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |
 | `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact, chains findings |
 
+## MCP Servers
+
+| Server | Purpose |
+|--------|---------|
+| `wpguard` | Core tools — downloads, CVE lookup, sandbox, findings, scope checks (60+ tools) |
+| `playwright` | Browser automation for poc-runner / bb-submission video evidence |
+| `devrag` | Local web-pentest knowledge base (semantic doc search) |
+| `veloria` | WordPress-wide regex code search — indexes every plugin/theme/core on wordpress.org. Use for variant hunting and pattern-based target discovery in `/target-research` and `/nday`. Queries are private by default. |
+
 ## Directory Structure
 
 ```

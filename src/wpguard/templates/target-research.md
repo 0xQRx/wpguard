@@ -63,6 +63,38 @@ wpguard_bulk_download(browse="updated", count=10, min_installs=500)
 - External: API, webhook, proxy, fetch, remote
 - Admin: settings, options, configuration
 
+#### Pattern-Based Discovery (Veloria MCP)
+
+`wpguard_search` finds plugins by **name/metadata**. The **veloria** MCP server finds plugins by **code pattern** — it indexes every plugin, theme, and core release on wordpress.org and supports Go RE2 regex across the full directory. This surfaces targets that keyword search cannot.
+
+All MCP queries are private by default (not listed in veloria.dev's public search feed). Use it via the `search_code` tool.
+
+Use Veloria to hunt for plugins containing dangerous sinks directly:
+
+```
+# Unsafe deserialization on user input
+veloria.search_code(pattern="unserialize\\s*\\(\\s*\\$_(GET|POST|REQUEST|COOKIE)", source="plugins", file_type=".php", exclude_minified=true)
+
+# Raw user input flowing into file operations
+veloria.search_code(pattern="(file_get_contents|file_put_contents|fopen|readfile|include|require)\\s*\\(\\s*\\$_", source="plugins", file_type=".php")
+
+# Dynamic code execution
+veloria.search_code(pattern="(eval|assert|create_function|call_user_func)\\s*\\(\\s*\\$_", source="plugins", file_type=".php")
+
+# Unauthenticated AJAX handlers (candidates for missing-auth)
+veloria.search_code(pattern="add_action\\(\\s*['\"]wp_ajax_nopriv_", source="plugins", file_type=".php")
+
+# SQL concatenation with user input (not prepared)
+veloria.search_code(pattern="\\$wpdb->(query|get_results|get_var|get_row)\\s*\\(\\s*[\"'][^\"']*\\$", source="plugins", file_type=".php")
+```
+
+Triage hits: prioritize plugins with >500 installs, no excluded vendor, active maintenance. Use `list_extensions` + `get_extension_details` to cross-check metadata without downloading. Only download promising candidates with `wpguard_download`.
+
+**When to reach for Veloria instead of `wpguard_search`:**
+- You're hunting a *specific bug class* across the ecosystem (variant hunting after an n-day drops)
+- You want targets with a *known-bad pattern* regardless of plugin purpose
+- Keyword search returned too few or too many results for the category you want
+
 ### Step 2: Vendor Verification
 
 Before selecting a target, verify it's not from an excluded vendor:
