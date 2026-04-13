@@ -23,6 +23,7 @@ MCP_TOOLS = [
     "mcp__playwright__*",
     "mcp__plugin_claude-mem_mcp-search__*",
     "mcp__devrag__*",
+    "mcp__veloria__*",
 ]
 
 # Slash commands for agent workflows
