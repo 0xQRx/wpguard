@@ -407,6 +407,10 @@ def initialize_research_project(output_dir: str) -> dict:
                     "command": devrag_bin,
                     "args": ["--config", str(devrag_dir / "config.json")],
                 },
+                "veloria": {
+                    "type": "http",
+                    "url": "https://veloria.dev/mcp",
+                },
             }
         }
         (root / ".mcp.json").write_text(json.dumps(mcp_config, indent=2))
