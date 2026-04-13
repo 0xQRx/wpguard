@@ -2,38 +2,49 @@
 
 Scan the WordPress plugin AND theme ecosystems for recent updates, new additions, and check your watchlist. Any code change is a potential research target — not just security patches.
 
+## Usage
+
+`/watch <target>` — pick exactly which scan to run. Running everything at once is noisy and burns API calls, so this command requires an explicit target.
+
+| Target | Tool | What it does |
+|--------|------|--------------|
+| `plugins` | `wpguard_watch_global(min_installs=1000)` | Recently updated plugins (≥10k installs enriched with changelog + SVN log) |
+| `themes` | `wpguard_watch_global_themes(min_installs=1000)` | Recently updated themes (≥10k installs enriched) |
+| `new-plugins` | `wpguard_watch_new(min_installs=0)` | Newly added plugins |
+| `new-themes` | `wpguard_watch_new_themes(min_installs=0)` | Newly added themes |
+| `list` | `wpguard_watch_check()` | Version changes in watchlist (with SVN diffs) |
+| `all` | all of the above | Only use when explicitly requested — verbose |
+
+If the user runs `/watch` with no argument, ask which target to run and show the table above. **Do not default to `all`.**
+
 ## Steps
 
-1. **Plugin global scan** — Call `wpguard_watch_global(min_installs=1000)` to discover recently updated plugins. Plugins with >= 10k installs are enriched with changelog and SVN commit log.
+1. **Parse the argument.** Map it to exactly one tool (or the full set if `all`). Reject unknown targets with the usage table.
 
-2. **Theme global scan** — Call `wpguard_watch_global_themes(min_installs=1000)` to discover recently updated themes. Themes with >= 10k installs are enriched with changelog and SVN log.
+2. **Run only the selected tool(s).** Do not call the others.
 
-3. **New plugins scan** — Call `wpguard_watch_new(min_installs=0)` to discover newly added plugins.
+3. **Analyze changelogs and SVN logs** for enriched updates:
+   - Changelog entries = developer's perspective
+   - SVN commit messages = actual code-level changes
+   - ANY code change is interesting — new features add attack surface, refactors break assumptions, "bug fixes" can introduce new bugs
 
-4. **New themes scan** — Call `wpguard_watch_new_themes(min_installs=0)` to discover newly added themes.
-
-5. **Watchlist check** — Call `wpguard_watch_check()` to detect version changes in your watched plugins (with SVN diffs).
-
-4. **Analyze changelogs and SVN logs** — for enriched updates, review what changed:
-   - Changelog entries describe the update from the developer's perspective
-   - SVN commit messages show the actual code-level changes
-   - ANY code change is interesting — new features introduce new attack surface, refactors can break assumptions, "bug fixes" can introduce new bugs
-
-5. **Categorize updates** for research potential:
+4. **Categorize updates** for research potential:
    - **High-value targets** (>50k installs) — always list with changelog summary
    - **Notable** (>10k installs) — list with changelog if available
-   - **New plugins** — fresh code with zero prior scrutiny
+   - **New plugins/themes** — fresh code with zero prior scrutiny
    - **Watchlist changes** — detailed SVN diff summary
 
-6. **Flag especially interesting changes** — look for keywords in changelogs and commit messages:
+5. **Flag especially interesting changes** — look for keywords in changelogs and commit messages:
    - Security-adjacent: `security`, `fix`, `vulnerability`, `CVE`, `patch`, `sanitize`, `escape`, `nonce`, `auth`, `bypass`
    - New attack surface: `new feature`, `REST API`, `AJAX`, `upload`, `import`, `export`, `webhook`, `payment`, `registration`, `login`, `role`, `capability`
    - Risky operations: `database`, `migration`, `serialize`, `unserialize`, `eval`, `exec`, `include`, `require`, `file_get_contents`
 
 ## Output Format
 
+Only include sections for the scans you actually ran.
+
 ```
-## Plugin Update Monitor
+## Plugin Update Monitor — <target>
 
 ### Global Updates (X new since last check, Y enriched)
 
@@ -68,6 +79,6 @@ Scan the WordPress plugin AND theme ecosystems for recent updates, new additions
 - Changelog and SVN log enrichment only runs for plugins with >= 10k installs to keep API calls reasonable.
 - Use `wpguard_watch_add` to add specific plugins for SVN-level change tracking.
 - Results are saved to `recently_updated.json` and `new_plugins.json` in the project directory.
-- Use `/loop 30m /watch` to continuously monitor for updates.
+- Use `/loop 30m /watch list` (or another specific target) to continuously monitor.
 - For high-interest updates, run `/diff {slug}` to analyze security-relevant code changes before launching a full audit.
 - Use `wpguard_target_score(slugs=[...])` to rank updated plugins by research priority.
