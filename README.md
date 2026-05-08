@@ -105,8 +105,13 @@ Built-in rules for the Wordfence Bug Bounty Program:
 Track the entire WordPress ecosystem for research opportunities:
 
 ```
-/watch                    # One-time scan
-/loop 30m /watch          # Continuous monitoring every 30 minutes
+/watch plugins            # Scan recently updated plugins
+/watch themes             # Scan recently updated themes
+/watch new-plugins        # Scan newly added plugins
+/watch new-themes         # Scan newly added themes
+/watch list               # Check watchlist for SVN-level changes
+/watch all                # Run everything (verbose; only on demand)
+/loop 30m /watch plugins  # Continuous monitoring every 30 minutes
 ```
 
 - **Global plugin updates** — recently updated plugins with changelog + SVN log
@@ -124,13 +129,17 @@ Track the entire WordPress ecosystem for research opportunities:
                           |
                /pm  /watch  /recon  /nday  ...
                           |
-                    MCP Protocol (stdio)
+                    MCP Protocol (stdio / http)
                           |
-          +---------------+---------------+
-          |                               |
-    wpguard MCP Server              Playwright MCP
-      (60+ tools)                  (browser automation)
-          |
+          +-------+-------+-------+-------+
+          |       |       |               |
+    wpguard MCP   |       |          Veloria MCP
+    (60+ tools)   |       |       (WordPress-wide
+          |       |       |        regex code search,
+          |       |       |        private by default)
+          |   Playwright  devrag
+          |   (browser    (RAG over web-pentest KB,
+          |    automation) optional)
     +-----+-----+-----+-----+
     |     |     |     |     |
   Plugin Theme  SVN  Sandbox Findings
@@ -164,86 +173,163 @@ Track the entire WordPress ecosystem for research opportunities:
 
 ## Installation
 
-### Prerequisites
+> Tested on Debian 13 (trixie). Adapt repo URLs and package names for other distros. Commands are intended to be run on a disposable VM or dedicated research host (see warning at the top of this README).
 
-| Requirement | Purpose | Install |
-|-------------|---------|---------|
-| **Python 3.11+** | Runtime | `apt install python3` / `brew install python` |
-| **pipx** | Isolated install | `apt install pipx` / `pip install pipx` |
-| **[Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI** | Agent orchestration | `npm install -g @anthropic-ai/claude-code` |
-| **Docker + Compose** | WordPress sandbox | `apt install docker.io docker-compose-plugin` |
-| **SVN** | Plugin/theme version history | `apt install subversion` |
-| **Node.js 18+** | Playwright MCP, svg-term-cli | `apt install nodejs` / `brew install node` |
-| **asciinema** | Terminal PoC video recording | `pipx install asciinema` |
-| **Playwright** (Python) | Browser PoC video recording with `record_video_dir` | `pip install playwright && playwright install chromium` |
-| **ffmpeg** | Video format conversion (webm/cast → gif) | `apt install ffmpeg` |
-| **semgrep** | Automated vulnerability pattern pre-scan | `pipx install semgrep` |
-| **progpilot** | PHP taint analysis (runs inside sandbox container) | Bundled in sandbox Docker image |
-| **svg-term-cli** (optional) | Convert terminal recordings to animated SVG | `npx svg-term-cli` |
+### 1. Install Claude Code
 
-**API Keys:**
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
 
-| Key | Purpose | How to Get |
-|-----|---------|------------|
-| **Anthropic API key** | Claude Code agents | [console.anthropic.com](https://console.anthropic.com) |
-| **Wordfence API key** | CVE database search (`wpguard_cve_search`) | [wordfence.com/threat-intel](https://www.wordfence.com/threat-intel/) — free tier available |
-| **Discord webhook** (optional) | Finding notifications | Server Settings > Integrations > Webhooks |
+### 2. Uninstall old Docker (if present)
+
+```bash
+sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-doc podman-docker containerd runc | cut -f1)
+```
+
+### 3. Install Docker
+
+**3.1. Add Docker repo:**
+
+```bash
+# Add Docker's official GPG key:
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/debian
+Suites: trixie
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+```
+
+**3.2. Install Docker:**
+
+```bash
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+**3.3. Start Docker:**
+
+```bash
+sudo systemctl start docker
+```
+
+**3.4. Add your user to the docker group:**
+
+```bash
+sudo usermod -aG docker $USER && newgrp docker
+```
+
+### 4. Install NVM (Node Version Manager)
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.4/install.sh | bash
+```
+
+**4.1. Add proper exports to `.zshrc` or `.bashrc`:**
+
+```bash
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+```
+
+**4.2. Source your config:**
+
+```bash
+source ~/.zshrc
+```
+
+### 5. Install Node
+
+```bash
+nvm install 24
+```
+
+### 6. Install dependencies
+
+```bash
+npm install -g svg-term-cli
+
+sudo apt install subversion
+sudo apt install ffmpeg
+
+pipx install asciinema
+pipx install semgrep
+pipx install playwright && playwright install chromium && npx playwright install-deps chromium && sudo mkdir -p /opt/google/chrome && sudo ln -s /usr/bin/chromium /opt/google/chrome/chrome
+```
+
+### 7. Install agg (asciinema gif generator)
+
+Get the proper architecture binary from [asciinema/agg releases](https://github.com/asciinema/agg/releases/tag/v1.8.1).
+
+```bash
+curl -L https://github.com/asciinema/agg/releases/download/v1.8.1/agg-x86_64-unknown-linux-gnu -o ~/.local/bin/agg && chmod +x ~/.local/bin/agg
+```
+
+### 8. Register for Wordfence Bug Bounty Platform and get an API Key
+
+Sign up at [wordfence.com/threat-intel](https://www.wordfence.com/threat-intel/), then go to **Account → Integrations** to get your API key.
+
+### 9. (Optional) Create a Discord server and webhook
+
+For finding notifications. Server Settings → Integrations → Webhooks.
+
+### 10. Export variables in `.zshrc` or `.bashrc` and reload your shell
 
 ```bash
 # Set API keys
 export WORDFENCE_API_KEY="your-key-here"
 export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # optional
+```
 
-# Point to your web pentesting knowledge base for RAG-powered agent assistance
+### 11. Install WPGuard and WPGuard MCP server
+
+Clone the repo and install from source:
+
+```bash
+git clone https://github.com/0xQRx/wpguard.git
+cd wpguard
+pipx install .
+```
+
+### 12. Initiate project
+
+```bash
+wpguard init wpsec
+```
+
+This creates the full project structure inside `wpsec/`: `CLAUDE.md`, all agent definitions, slash commands, `.mcp.json` (wpguard, playwright, devrag, veloria), and `settings.local.json` permissions.
+
+### 13. Start Claude Code inside the project folder
+
+```bash
+cd wpsec && claude
+```
+
+Claude will prompt you to approve the MCP servers configured in `.mcp.json`. **Disable `devrag` for now** — it requires a separate knowledge-base configuration. Leave the others (`wpguard`, `playwright`, `veloria`) enabled.
+
+### Optional: devrag (RAG over security knowledge base)
+
+`devrag` provides RAG-powered search over curated security research documents (PayloadsAllTheThings, HackTricks, OWASP, etc.) and significantly improves expert-agent effectiveness. Not required to start, but recommended once you're ready to set up a corpus. See [github.com/0xQRx/devrag](https://github.com/0xQRx/devrag) for setup. Once configured, set:
+
+```bash
 export WPGUARD_RAG_DOCS="/path/to/WebPentestRAG"
 ```
 
-### Install wpguard
-
-```bash
-# From GitHub (recommended)
-pipx install git+https://github.com/0xQRx/wpguard.git
-
-# Development
-git clone https://github.com/0xQRx/wpguard.git
-cd wpguard
-pipx install -e .
-```
-
-### Setup MCP Servers
-
-wpguard uses three MCP servers — wpguard itself (required), Playwright (required for PoC verification), and devrag (optional but recommended):
-
-```bash
-# Required: wpguard tools (plugin/theme API, sandbox, findings, scope validation)
-claude mcp add wpguard -s user -- wpguard-mcp
-
-# Required: Playwright (browser automation for XSS/CSRF PoC verification)
-claude mcp add playwright -s user -- npx @playwright/mcp@latest
-
-# Optional but recommended: devrag (RAG over security knowledge base)
-# Build from web pentesting resources — PayloadsAllTheThings, HackTricks, OWASP, etc.
-# See: https://github.com/0xQRx/devrag
-claude mcp add devrag -s user -- /path/to/devrag --config /path/to/devrag/config.json
-
-# Verify all MCP servers
-claude mcp list
-```
-
-**devrag** provides RAG-powered search over curated security research documents. When configured with resources like [PayloadsAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings), [HackTricks](https://book.hacktricks.wiki/), and OWASP guides, it gives agents access to bypass techniques, payload lists, and exploitation patterns during analysis. Not required, but significantly improves expert agent effectiveness.
+and re-run `wpguard init <project>` so the new `.devrag/config.json` picks it up.
 
 ## Quick Start
-
-### Initialize a Research Project
-
-```bash
-mkdir my-research && cd my-research
-
-# In Claude Code:
-# > Use wpguard_init_research to set up this directory
-```
-
-This creates the full project structure: CLAUDE.md, all agent definitions, slash commands, MCP config, and permissions.
 
 ### Run Your First Audit
 
@@ -387,10 +473,10 @@ This starts the first audit. PM creates the plan, launches experts, runs the ful
 ### Ecosystem Monitor
 
 ```
-/loop 30m /watch
+/loop 30m /watch plugins
 ```
 
-Scans WordPress.org every 30 minutes for plugin and theme updates. Results saved to `recently_updated.json` and `recently_updated_themes.json`. The research loop above picks these up automatically.
+Scans WordPress.org every 30 minutes for plugin updates (swap `plugins` for `themes`, `new-plugins`, `new-themes`, or `list` as needed). Results saved to `recently_updated.json` and `recently_updated_themes.json`. The research loop above picks these up automatically.
 
 ### Context Compaction
 
