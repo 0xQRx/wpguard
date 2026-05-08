@@ -5,7 +5,7 @@ A defensive security research tool for downloading, monitoring, and analyzing
 WordPress plugins from the official repository.
 """
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 __author__ = "0xQRx"
 
 from wpguard.core.models import PluginInfo, ThemeInfo, ChangeReport
