@@ -983,6 +983,29 @@ async def list_tools() -> list[Tool]:
                 "required": [],
             },
         ),
+        Tool(
+            name="wpguard_sandbox_set_core_version",
+            description=(
+                "Pin the sandbox WordPress core to a specific version "
+                "(wp core update --force, works for upgrade and downgrade) and "
+                "reliably disable core auto-update so it stays pinned"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string",
+                        "description": "Target core version, e.g. '6.9.4'",
+                    },
+                    "disable_auto_update": {
+                        "type": "boolean",
+                        "description": "Bake AUTOMATIC_UPDATER_DISABLED/WP_AUTO_UPDATE_CORE into wp-config.php",
+                        "default": True,
+                    },
+                },
+                "required": ["version"],
+            },
+        ),
         # Wordfence Scope Validation Tools
         Tool(
             name="wpguard_scope_check_plugin",
@@ -1645,6 +1668,12 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_sandbox_destroy":
         return await _sandbox_destroy()
+
+    elif name == "wpguard_sandbox_set_core_version":
+        return await _sandbox_set_core_version(
+            arguments["version"],
+            arguments.get("disable_auto_update", True),
+        )
 
     # Wordfence Scope Validation Tools
     elif name == "wpguard_scope_check_plugin":
@@ -2747,6 +2776,17 @@ def _sandbox_destroy_sync() -> dict[str, Any]:
 async def _sandbox_destroy() -> dict[str, Any]:
     """Destroy the WordPress sandbox."""
     return await run_in_executor(_sandbox_destroy_sync)
+
+
+def _sandbox_set_core_version_sync(version: str, disable_auto_update: bool) -> dict[str, Any]:
+    """Pin sandbox core version (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.set_core_version(version, disable_auto_update=disable_auto_update)
+
+
+async def _sandbox_set_core_version(version: str, disable_auto_update: bool) -> dict[str, Any]:
+    """Pin the sandbox WordPress core to a specific version and disable auto-update."""
+    return await run_in_executor(_sandbox_set_core_version_sync, version, disable_auto_update)
 
 
 # Wordfence Scope Validation Tool Implementations
