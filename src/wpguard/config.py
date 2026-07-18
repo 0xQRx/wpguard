@@ -15,6 +15,12 @@ WP_THEMES_API_BASE = "https://api.wordpress.org/themes/info/1.2/"
 WP_THEMES_SVN = "https://themes.svn.wordpress.org/"
 WP_THEMES_URL = "https://wordpress.org/themes/"
 
+# API endpoints — Core
+WP_CORE_SVN = "https://core.svn.wordpress.org/"
+WP_CORE_VERSION_CHECK = "https://api.wordpress.org/core/version-check/1.7/"
+WP_CORE_STABLE_CHECK = "https://api.wordpress.org/core/stable-check/1.0/"
+WP_CORE_DOWNLOAD = "https://wordpress.org/wordpress-{version}.zip"
+
 # WordPress Sandbox Settings
 WP_SANDBOX_HOST = os.environ.get("WP_SANDBOX_HOST", "172.17.0.1")
 WP_SANDBOX_PORT = int(os.environ.get("WP_SANDBOX_PORT", "8000"))
@@ -61,6 +67,7 @@ MAX_PER_PAGE = 250
 DEFAULT_OUTPUT_DIR = "./wpguard_output"
 PLUGINS_SUBDIR = "plugins"
 THEMES_SUBDIR = "themes"
+CORE_SUBDIR = "core"
 REPORTS_SUBDIR = "reports"
 STATE_FILENAME = "state.json"
 

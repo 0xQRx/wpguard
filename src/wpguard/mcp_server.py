@@ -26,7 +26,8 @@ from wpguard.config import (
     WP_PLUGINS_SVN,
     WP_PLUGINS_URL,
 )
-from wpguard.core.downloader import PluginDownloader, SVNClient
+from wpguard.core.downloader import PluginDownloader, SVNClient, CoreDownloader
+from wpguard.api.wordpress_core import WordPressCoreAPI
 
 # MCP-specific default: use current directory so tools work in initialized project root
 # CLI uses DEFAULT_OUTPUT_DIR from config (./wpguard_output) for standalone usage
@@ -536,6 +537,64 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["slug"],
+            },
+        ),
+        # ── Core Tools ──────────────────────────────────────
+        Tool(
+            name="wpguard_core_versions",
+            description="List WordPress core versions with latest/security-release flags",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max versions to return (newest first)",
+                        "default": 25,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_core_download",
+            description="Download a WordPress core version tag into targets/core-{version}/extracted/",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "version": {
+                        "type": "string",
+                        "description": "Core version (e.g. 6.9.4)",
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output dir",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": ["version"],
+            },
+        ),
+        Tool(
+            name="wpguard_core_svn_diff",
+            description="Diff two WordPress core version tags (changed files + unified diff)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "from_version": {
+                        "type": "string",
+                        "description": "Older core version tag (e.g. 6.9.4)",
+                    },
+                    "to_version": {
+                        "type": "string",
+                        "description": "Newer core version tag (e.g. 7.0.2)",
+                    },
+                    "show_diff": {
+                        "type": "boolean",
+                        "description": "Include full diff output",
+                        "default": False,
+                    },
+                },
+                "required": ["from_version", "to_version"],
             },
         ),
         Tool(
@@ -1440,6 +1499,23 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     elif name == "wpguard_plugin_versions":
         return await _plugin_versions(arguments["slug"])
+
+    # Core tools
+    elif name == "wpguard_core_versions":
+        return await _core_versions(arguments.get("limit", 25))
+
+    elif name == "wpguard_core_download":
+        return await _core_download(
+            arguments["version"],
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_core_svn_diff":
+        return await _core_svn_diff(
+            arguments["from_version"],
+            arguments["to_version"],
+            arguments.get("show_diff", False),
+        )
 
     elif name == "wpguard_state_info":
         return await _state_info(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
@@ -2391,6 +2467,99 @@ def _plugin_versions_sync(slug: str) -> dict[str, Any]:
 async def _plugin_versions(slug: str) -> dict[str, Any]:
     """Get all available versions for a plugin."""
     return await run_in_executor(_plugin_versions_sync, slug)
+
+
+# ── Core handler functions ───────────────────────────────
+
+def _core_versions_sync(limit: int) -> dict[str, Any]:
+    """List WordPress core versions (sync version)."""
+    api = WordPressCoreAPI()
+    versions = api.list_versions()
+
+    if not versions:
+        return {"error": "Could not list core versions", "versions": []}
+
+    latest = api.get_latest()
+
+    return {
+        "type": "core",
+        "latest": latest.version if latest else "",
+        "versions_count": len(versions),
+        "security_releases": [v.version for v in versions if v.is_security_release],
+        "versions": [v.to_dict() for v in versions[:limit]],
+    }
+
+
+async def _core_versions(limit: int) -> dict[str, Any]:
+    """List WordPress core versions."""
+    return await run_in_executor(_core_versions_sync, limit)
+
+
+def _core_download_sync(version: str, output_dir: str) -> dict[str, Any]:
+    """Download a WordPress core version (sync version)."""
+    if not _check_svn_available():
+        # SVN unavailable — CoreDownloader falls back to the release ZIP
+        print("[*] SVN unavailable, core download will use ZIP fallback", file=sys.stderr)
+
+    targets_dir = Path(output_dir) / "targets"
+    downloader = CoreDownloader(targets_dir)
+
+    result = downloader.download(version)
+
+    if not result.extracted_path:
+        return {"error": f"Failed to download core '{version}'"}
+
+    return {
+        "type": "core",
+        "version": result.version,
+        "source": result.source,
+        "extracted_path": str(result.extracted_path),
+        "zip_path": str(result.zip_path) if result.zip_path else None,
+        "success": result.extracted_path is not None,
+    }
+
+
+async def _core_download(version: str, output_dir: str) -> dict[str, Any]:
+    """Download a WordPress core version."""
+    return await run_in_executor(_core_download_sync, version, output_dir)
+
+
+def _core_svn_diff_sync(
+    from_version: str, to_version: str, show_diff: bool
+) -> dict[str, Any]:
+    """Diff two core version tags (sync version)."""
+    if not _check_svn_available():
+        return {"error": "SVN is not installed. Install with: apt install subversion"}
+
+    downloader = CoreDownloader()
+    change_info = downloader.svn_diff(from_version, to_version)
+
+    result = {
+        "type": "core",
+        "from_version": from_version,
+        "to_version": to_version,
+        "changed_files": change_info.changed_files,
+        "added_files": change_info.added_files,
+        "removed_files": change_info.removed_files,
+        "total_changes": change_info.total_changes,
+    }
+
+    if show_diff:
+        diff = change_info.diff_output
+        if len(diff) > 50000:
+            diff = diff[:50000] + "\n... [truncated]"
+        result["diff_output"] = diff
+
+    return result
+
+
+async def _core_svn_diff(
+    from_version: str, to_version: str, show_diff: bool
+) -> dict[str, Any]:
+    """Diff two core version tags."""
+    return await run_in_executor(
+        _core_svn_diff_sync, from_version, to_version, show_diff
+    )
 
 
 def _state_info_sync(output_dir: str) -> dict[str, Any]:

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from wpguard.config import WP_PLUGINS_SVN, WP_THEMES_SVN
+from wpguard.config import WP_PLUGINS_SVN, WP_THEMES_SVN, WP_CORE_SVN
 
 
 @dataclass
@@ -144,6 +144,55 @@ class PluginInfo:
     def svn_trunk_url(self) -> str:
         """Get SVN trunk URL for this plugin."""
         return f"{WP_PLUGINS_SVN}{self.slug}/trunk/"
+
+
+@dataclass
+class CoreVersionInfo:
+    """Represents a WordPress core release from the stable/version-check API."""
+
+    version: str
+    branch: str = ""
+    release_date: str = ""
+    is_security_release: bool = False
+    status: str = ""  # latest, outdated, insecure
+    download_link: str = ""
+
+    @classmethod
+    def from_stable_check(cls, version: str, status: str) -> "CoreVersionInfo":
+        """
+        Create CoreVersionInfo from a stable-check entry.
+
+        The stable-check endpoint maps each version to a status string:
+            "latest"   — current stable release
+            "outdated" — superseded, but not a security concern
+            "insecure" — a later security release exists (vulnerable)
+        """
+        branch = ".".join(version.split(".")[:2])
+        from wpguard.config import WP_CORE_DOWNLOAD
+        return cls(
+            version=version,
+            branch=branch,
+            release_date="",
+            is_security_release=(status == "insecure"),
+            status=status or "",
+            download_link=WP_CORE_DOWNLOAD.format(version=version),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "version": self.version,
+            "branch": self.branch,
+            "release_date": self.release_date,
+            "is_security_release": self.is_security_release,
+            "status": self.status,
+            "download_link": self.download_link,
+        }
+
+    @property
+    def svn_tag_url(self) -> str:
+        """Get SVN tag URL for this core version."""
+        return f"{WP_CORE_SVN}tags/{self.version}/"
 
 
 @dataclass
