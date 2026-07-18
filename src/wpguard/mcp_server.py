@@ -33,7 +33,7 @@ from wpguard.api.wordpress_core import WordPressCoreAPI
 # CLI uses DEFAULT_OUTPUT_DIR from config (./wpguard_output) for standalone usage
 DEFAULT_OUTPUT_DIR = "."
 from wpguard.api.themes import WordPressThemeAPI
-from wpguard.core.watcher import PluginWatcher
+from wpguard.core.watcher import CoreWatcher, PluginWatcher
 from wpguard.core.sandbox import WordPressSandbox
 from wpguard.core.scope_validator import WorkfenceScopeValidator, CoreScopeValidator
 from wpguard.core.findings import FindingsManager
@@ -595,6 +595,41 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["from_version", "to_version"],
+            },
+        ),
+        Tool(
+            name="wpguard_watch_core",
+            description="Watch WordPress core releases — detect a new/security release; auto-trigger the Phase 1 diff",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "auto_diff": {
+                        "type": "boolean",
+                        "description": "Run the core SVN diff (previous latest -> new latest) when a new release is found",
+                        "default": False,
+                    },
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output dir (holds core_state.json)",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="wpguard_watch_core_state",
+            description="Get the core release watcher state (last-seen latest, insecure versions, last check)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_dir": {
+                        "type": "string",
+                        "description": "Output dir (holds core_state.json)",
+                        "default": DEFAULT_OUTPUT_DIR,
+                    },
+                },
+                "required": [],
             },
         ),
         Tool(
@@ -1572,6 +1607,15 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments["to_version"],
             arguments.get("show_diff", False),
         )
+
+    elif name == "wpguard_watch_core":
+        return await _watch_core(
+            arguments.get("auto_diff", False),
+            arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+        )
+
+    elif name == "wpguard_watch_core_state":
+        return await _watch_core_state(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
 
     elif name == "wpguard_state_info":
         return await _state_info(arguments.get("output_dir", DEFAULT_OUTPUT_DIR))
@@ -2630,6 +2674,28 @@ async def _core_svn_diff(
     return await run_in_executor(
         _core_svn_diff_sync, from_version, to_version, show_diff
     )
+
+
+def _watch_core_sync(auto_diff: bool, output_dir: str) -> dict[str, Any]:
+    """Check WordPress core for a new/security release (sync version)."""
+    watcher = CoreWatcher(output_dir=output_dir)
+    return watcher.check_core_updates(auto_diff=auto_diff)
+
+
+async def _watch_core(auto_diff: bool, output_dir: str) -> dict[str, Any]:
+    """Check WordPress core for a new/security release."""
+    return await run_in_executor(_watch_core_sync, auto_diff, output_dir)
+
+
+def _watch_core_state_sync(output_dir: str) -> dict[str, Any]:
+    """Get the core release watcher state (sync version)."""
+    watcher = CoreWatcher(output_dir=output_dir)
+    return watcher.get_state_info()
+
+
+async def _watch_core_state(output_dir: str) -> dict[str, Any]:
+    """Get the core release watcher state."""
+    return await run_in_executor(_watch_core_state_sync, output_dir)
 
 
 def _state_info_sync(output_dir: str) -> dict[str, Any]:

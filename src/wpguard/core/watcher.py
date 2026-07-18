@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from wpguard.api.wordpress import WordPressPluginAPI
+from wpguard.api.wordpress_core import WordPressCoreAPI, _version_key
 from wpguard.config import (
+    CORE_STATE_FILENAME,
     DEFAULT_OUTPUT_DIR,
     NEW_PLUGINS_FILENAME,
     RECENTLY_UPDATED_FILENAME,
@@ -20,8 +22,8 @@ from wpguard.config import (
     STATE_FILENAME,
     DEFAULT_WATCH_INTERVAL,
 )
-from wpguard.core.downloader import SVNClient, SVNChangeInfo
-from wpguard.core.models import ChangeReport, PluginInfo
+from wpguard.core.downloader import CoreDownloader, SVNClient, SVNChangeInfo
+from wpguard.core.models import ChangeReport, CoreVersionInfo, PluginInfo
 from wpguard.notifications.discord import DiscordNotifier
 
 
@@ -570,3 +572,233 @@ class PluginWatcher:
         )
 
         return result
+
+
+class CoreWatcher:
+    """Watches WordPress core releases and auto-triggers the Phase 1 diff.
+
+    Mirrors :class:`PluginWatcher` (state load/save + return-dict style) but is
+    fully isolated from plugin/theme watch state: it persists to its own
+    ``core_state.json`` file, so it never reads or clobbers ``state.json``.
+
+    A new security release is the high-value trigger — when ``auto_diff`` is set
+    it downloads and diffs ``previous_latest``→``new_latest`` (the Phase 1 diff)
+    so the changed files are ready for the core-patch variant hunt.
+    """
+
+    def __init__(
+        self,
+        output_dir: str | Path = DEFAULT_OUTPUT_DIR,
+        discord_webhook: str | None = None,
+    ):
+        """
+        Initialize the core watcher.
+
+        Args:
+            output_dir: Base output directory (default: ./wpguard_output)
+            discord_webhook: Discord webhook URL for notifications
+        """
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Dedicated state file — isolated from PluginWatcher's state.json
+        self.state_file = self.output_dir / CORE_STATE_FILENAME
+
+        self.api = WordPressCoreAPI()
+        self.notifier = DiscordNotifier(discord_webhook) if discord_webhook else None
+
+        self.state = self._load_state()
+
+    def _load_state(self) -> dict[str, Any]:
+        """Load core-watch state from file."""
+        if self.state_file.exists():
+            try:
+                with open(self.state_file, "r") as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {
+            "latest": None,
+            "seen_versions": [],
+            "insecure_versions": [],
+            "last_check": None,
+        }
+
+    def _save_state(self) -> None:
+        """Save core-watch state to file."""
+        self.state["last_check"] = datetime.now(timezone.utc).isoformat()
+        with open(self.state_file, "w") as f:
+            json.dump(self.state, f, indent=2)
+
+    @staticmethod
+    def _prior_version(
+        versions: list[CoreVersionInfo], target: str
+    ) -> str | None:
+        """Find the version released just before ``target``.
+
+        Prefers the prior version on the same minor branch (e.g. 7.0.2 -> 7.0.1);
+        falls back to the highest version overall below ``target``.
+        """
+        target_key = _version_key(target)
+        branch = ".".join(target.split(".")[:2])
+
+        same_branch = [
+            v.version
+            for v in versions
+            if v.branch == branch and _version_key(v.version) < target_key
+        ]
+        if same_branch:
+            return max(same_branch, key=_version_key)
+
+        lower = [v.version for v in versions if _version_key(v.version) < target_key]
+        if lower:
+            return max(lower, key=_version_key)
+        return None
+
+    def check_core_updates(self, auto_diff: bool = False) -> dict[str, Any]:
+        """
+        Check WordPress core for a new release and/or new security flags.
+
+        Detects (1) a NEW latest version vs the last-seen latest, and (2) any
+        version newly flagged ``insecure`` (a later security release exists).
+        When a new release is found, computes the Phase 1 diff bounds
+        (``diff_from`` = previous latest / prior branch version, ``diff_to`` =
+        new latest); with ``auto_diff=True`` it runs the actual core SVN diff.
+
+        Args:
+            auto_diff: If True, run ``CoreDownloader().svn_diff(diff_from, diff_to)``
+                       when a new release is detected and include ``changed_files``
+                       + ``total_changes`` (the "security release auto-triggers
+                       Phase 1 diff" behaviour).
+
+        Returns:
+            Dict with new_release, latest, previous_latest, security_release,
+            diff_from, diff_to, and (when auto_diff ran) changed_files +
+            total_changes.
+        """
+        versions = self.api.list_versions()
+        latest_info = self.api.get_latest()
+
+        latest = None
+        if latest_info:
+            latest = latest_info.version
+        elif versions:
+            latest = versions[0].version
+
+        previous_latest = self.state.get("latest")
+        prev_insecure = set(self.state.get("insecure_versions", []))
+        seen = set(self.state.get("seen_versions", []))
+
+        current_versions = {v.version for v in versions}
+        insecure_versions = {
+            v.version
+            for v in versions
+            if v.status == "insecure" or v.is_security_release
+        }
+        newly_insecure = sorted(insecure_versions - prev_insecure, key=_version_key)
+
+        # A new latest release relative to what we last recorded.
+        new_release = bool(latest) and latest != previous_latest
+
+        # Is the newly-offered latest itself a security release?
+        latest_is_security = bool(
+            latest_info and latest_info.is_security_release
+        ) or (latest in insecure_versions)
+
+        security_release = bool(newly_insecure) or (new_release and latest_is_security)
+
+        diff_from: str | None = None
+        diff_to: str | None = None
+        if new_release and latest:
+            diff_to = latest
+            diff_from = previous_latest or self._prior_version(versions, latest)
+
+        result: dict[str, Any] = {
+            "new_release": new_release,
+            "latest": latest,
+            "previous_latest": previous_latest,
+            "security_release": security_release,
+            "newly_insecure": newly_insecure,
+            "diff_from": diff_from,
+            "diff_to": diff_to,
+        }
+
+        # Auto-trigger the Phase 1 core diff for the new release.
+        if auto_diff and diff_from and diff_to:
+            print(
+                f"[*] Core auto-diff: {diff_from} -> {diff_to}",
+                file=sys.stderr,
+            )
+            try:
+                change_info = CoreDownloader().svn_diff(diff_from, diff_to)
+                result["changed_files"] = change_info.changed_files
+                result["total_changes"] = change_info.total_changes
+            except Exception as e:  # best-effort — never break the watch loop
+                print(f"[!] Core auto-diff failed: {e}", file=sys.stderr)
+                result["changed_files"] = []
+                result["total_changes"] = 0
+                result["diff_error"] = str(e)
+
+        # Persist updated state (union of seen versions, current insecure set).
+        self.state["latest"] = latest or previous_latest
+        self.state["seen_versions"] = sorted(seen | current_versions, key=_version_key)
+        self.state["insecure_versions"] = sorted(insecure_versions, key=_version_key)
+        self._save_state()
+
+        result["last_check"] = self.state["last_check"]
+
+        # Best-effort Discord notification (only when there's something to say).
+        if self.notifier and (new_release or security_release):
+            self.send_report(result)
+
+        print(
+            f"[*] Core monitor: latest={latest} "
+            f"(new_release={new_release}, security_release={security_release})",
+            file=sys.stderr,
+        )
+
+        return result
+
+    def send_report(self, result: dict[str, Any]) -> bool:
+        """
+        Send a core-release notification via the configured Discord notifier.
+
+        Mirrors PluginWatcher.send_report — no-op (returns False) when no
+        notifier is configured; guarded so a failed post never breaks the loop.
+        """
+        if not self.notifier:
+            return False
+
+        latest = result.get("latest")
+        lines = []
+        if result.get("security_release"):
+            lines.append(f"🔒 **WordPress core security release** — latest **{latest}**")
+        elif result.get("new_release"):
+            lines.append(f"🆕 **WordPress core release** — latest **{latest}**")
+        else:
+            lines.append(f"WordPress core check — latest **{latest}**")
+
+        if result.get("diff_from") and result.get("diff_to"):
+            lines.append(f"Diff: `{result['diff_from']}` → `{result['diff_to']}`")
+        if result.get("newly_insecure"):
+            lines.append("Newly insecure: " + ", ".join(result["newly_insecure"]))
+        if "total_changes" in result:
+            lines.append(f"Changed files: {result['total_changes']}")
+
+        try:
+            return self.notifier.send_message("\n".join(lines))
+        except Exception as e:  # best-effort
+            print(f"[!] Core Discord notify failed: {e}", file=sys.stderr)
+            return False
+
+    def get_state_info(self) -> dict[str, Any]:
+        """Get current core-watch state information."""
+        return {
+            "latest": self.state.get("latest"),
+            "seen_count": len(self.state.get("seen_versions", [])),
+            "insecure_count": len(self.state.get("insecure_versions", [])),
+            "insecure_versions": self.state.get("insecure_versions", []),
+            "last_check": self.state.get("last_check"),
+            "state_file": str(self.state_file),
+            "output_dir": str(self.output_dir),
+        }

@@ -85,6 +85,8 @@ WPGUARD_RAG_DOCS = os.environ.get("WPGUARD_RAG_DOCS")
 DEFAULT_WATCH_INTERVAL = 300  # 5 minutes (in seconds)
 RECENTLY_UPDATED_FILENAME = "recently_updated.json"
 NEW_PLUGINS_FILENAME = "new_plugins.json"
+# Core release watcher — separate state file so it never clobbers plugin watch state
+CORE_STATE_FILENAME = "core_state.json"
 
 # HTTP settings
 DEFAULT_TIMEOUT = 30
