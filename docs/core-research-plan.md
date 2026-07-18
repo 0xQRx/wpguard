@@ -86,7 +86,7 @@ exploit.
 ## Progress log
 
 - [x] Phase 1 — Acquire & Diff (commit `d994db9`) — live-verified: 7.0.1→7.0.2 diff = 6 files isolating the wp2shell fix
-- [ ] Phase 2 — Sandbox core control
+- [x] Phase 2 — Sandbox core control (commit `007112f`) — sandbox pinned 6.9.4, auto-update reliably disabled (anchor-failure fallback)
 - [ ] Phase 3 — Core scope & submission
 - [ ] Phase 4 — Core-aware analysis flow
 - [ ] Phase 5 — Continuous monitoring & variant hunting
