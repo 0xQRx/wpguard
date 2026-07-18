@@ -275,4 +275,25 @@ Parallel-array desync → run unvalidated action: rate by the action's impact
 
 ---
 
+## LENS: Cross-schema parameter smuggling (validate under X, execute under Y)
+
+The desync doesn't only forward ONE malicious param — it lets you smuggle **any** param the executing
+handler honors but the validating schema doesn't know. Once a sub-request validated as route X is
+dispatched under handler Y, every Y-parameter absent from X's schema passes through **raw**. In the
+wp2shell forge this is what makes the row-forgery reliable:
+
+- `author_exclude` — absent from `/wp/v2/users` schema, honored by posts `get_items` →
+  `WP_Query::author__not_in` (the SQL sink).
+- `per_page=500` and `orderby=rand` — absent from `/wp/v2/widgets` schema, honored by posts
+  `get_items` → defeat `split_the_query` (full `wp_posts.*` columns for the UNION) and give a
+  UNION-safe `ORDER BY RAND()`.
+
+So the desync is a **write/forge enabler**, not just a single-param SQLi delivery. When you find a
+handler mismatch, enumerate the *full* parameter set the executing handler accepts and ask which ones
+change the query SHAPE (limits, order, fields, columns) — not just which reach a sink. Then hand the
+resulting forge to `sqli-expert` (row forgery), `data-flow-expert` (render-time write), and
+`priv-esc-expert` (user-switch) to complete the chain.
+
+---
+
 {{include:_expert-shared.md|validation_example=handler-mismatch confirmed — a sub-request dispatched under a different route's callback than the one that validated it; time-based or boolean blind SQLi observed via a schema-valid param forwarded into a WP_Query query var}}

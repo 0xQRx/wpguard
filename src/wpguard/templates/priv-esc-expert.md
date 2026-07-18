@@ -368,4 +368,25 @@ Account takeover via email change: 8.1 High
 
 ---
 
+## LENS: `wp_set_current_user()` is process-global and STICKY across nested dispatch
+
+Privilege escalation isn't only "update my role/caps." Any core path that **switches the current
+user mid-request** pollutes the global user state for the *rest of that PHP request* — including
+later batch sub-requests and nested REST re-entry that never re-authenticate. Hunt for callers of
+`wp_set_current_user()` whose target user ID is attacker-influenced:
+
+- **`_wp_customize_publish_changeset()`** (`theme.php`) → `WP_Customize_Manager::_publish_changeset_values`
+  → `wp_set_current_user( $setting_user_ids[$id] )`. The user ID comes from the **changeset content**.
+  If a changeset (post_type `customize_changeset`) can be forged/created with `user_id = admin`,
+  publishing it runs later code as that admin.
+- Any transition/cron/hook that calls `wp_set_current_user` from stored data.
+
+Because the switch is global and not reverted, a subsequent `POST /wp/v2/users` (or any
+`current_user_can('create_users')` action) in the SAME request passes. This is the elevation step of
+the wp2shell pre-auth RCE: forged changeset (status `future`, `user_id`=real admin) + re-entrant
+`parse_request` → `create_users` succeeds unauthenticated. Always ask: *does anything switch the
+current user from data I control, and what runs afterward in the same request?*
+
+---
+
 {{include:_expert-shared.md|validation_example=lower-priv user gains higher-priv capabilities, role changed, options updated}}

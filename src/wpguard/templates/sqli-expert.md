@@ -329,4 +329,29 @@ ORDER BY/LIMIT injection (limited impact): 4.3-6.5 depending on data exposed
 
 ---
 
+## LENS: A read-only SQLi can still be a WRITE / object-forgery primitive
+
+Do not downgrade an injection to "read only, 7.5" just because the driver runs no stacked queries.
+In WordPress a `SELECT`-only injection into a `WP_Query` collection query is a **row-forgery**
+primitive: a `UNION SELECT` fabricates `wp_posts` rows that `WP_Query` hydrates into real `WP_Post`
+objects and writes to the `posts` object cache **by ID — with no check that they correspond to a
+real table write.** For the rest of that request the forged object is indistinguishable from a
+genuine post. (This is the escalation half of the wp2shell chain.)
+
+Requirements to turn the injection into a full-row forge — check all three:
+- **Full columns.** The query must select `wp_posts.*`, not just `wp_posts.ID`. `split_the_query`
+  reduces it to `ID` only, so a UNION can inject one column. It is skipped when
+  `posts_per_page >= 500` **or** `= -1` (empty `$limits`) → force that (e.g. smuggle `per_page=500`)
+  so the UNION can supply all 23 columns.
+- **UNION-safe tail.** A trailing `ORDER BY wp_posts.<col>` breaks the UNION; smuggle `orderby=rand`
+  → `ORDER BY RAND()` (references no table) or comment the tail with `-- `.
+- **A downstream consumer.** The forge only matters if something later in the SAME request reads the
+  forged object (renders its content, transitions it, switches user to its author). Hand the forged
+  object to `critical-thinker` / `data-flow-expert` to find that consumer.
+
+When you find a `SELECT`-only injection, explicitly ask: *can I UNION-forge a full `wp_posts` row,
+and what consumes a post object later in this request?* Report it as a forge primitive, not just a read.
+
+---
+
 {{include:_expert-shared.md|validation_example=SQL error in response, time-based delay observed, UNION query returned extra data}}
