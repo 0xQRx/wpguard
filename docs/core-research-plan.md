@@ -1,6 +1,6 @@
 # WordPress Core Research — wpguard Extension Plan
 
-Status: **in progress** (branch `feature/core-research`)
+Status: **complete** (branch `feature/core-research`, all 5 phases landed & live-verified)
 Owner: security research
 Verification model: **live** — drive real tools against the sandbox and real core SVN/API. No unit-test directory.
 
@@ -89,4 +89,4 @@ exploit.
 - [x] Phase 2 — Sandbox core control (commit `007112f`) — sandbox pinned 6.9.4, auto-update reliably disabled (anchor-failure fallback)
 - [x] Phase 3 — Core scope & submission (commit `c1cf6a2`) — CoreScopeValidator, target_type on findings, HackerOne submission sections; back-compat verified
 - [x] Phase 4 — Core-aware analysis flow (commit `3d4a95e`) — protocol-confusion-expert, core-subsystems catalog, PM core mode; deploy-verified
-- [ ] Phase 5 — Continuous monitoring & variant hunting
+- [x] Phase 5 — Continuous monitoring & variant hunting (commit `a14e204`) — CoreWatcher auto-diff on security release + veloria variant-hunt guidance
