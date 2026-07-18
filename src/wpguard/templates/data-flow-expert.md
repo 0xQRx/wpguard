@@ -214,6 +214,31 @@ CHECK: Is the blocklist complete? Missing entries to test:
 
 ---
 
+## Phase 3.5: Audit Core Dispatch Primitive Invariants
+
+Your write→read chains often terminate at a **core dispatch primitive**, not a raw `$wpdb` call. When
+attacker-influenced data (or worse, attacker-controlled *structure* — a request object, a route, a
+hook name, a query var, a serialized blob) is forwarded into one of these primitives, the "reader" is
+core code that assumes an INVARIANT the writer never guaranteed. The primitive is correct; the flaw is
+the broken assumption at the boundary. Check each explicitly (applies to plugins AND WordPress core):
+
+| Primitive (the "reader") | Invariant the writer must have preserved | Violation → |
+|--------------------------|------------------------------------------|-------------|
+| `rest_do_request` / `WP_REST_Request` / REST batch | Outer-layer method/route/auth allow-list still holds for the NESTED/composed sub-request; the validating schema is the one bound to the RUNNING handler | Nesting bypass; validation-vs-dispatch desync (route confusion) |
+| `WP_Query` / `WP_Meta_Query` query vars | A value "valid per its REST/AJAX schema" is safe as a query var (`author__not_in`, `post__in`, `orderby`, `meta_query` key/`compare`) | Schema-valid param interpolated into SQL |
+| `maybe_unserialize` / `unserialize` | The stored value is a simple string, not an object with magic methods | Object injection on read |
+| `do_shortcode` | Content sanitized once is not re-parsed into new shortcodes | Inner re-parse bypasses outer sanitization |
+| `do_action($name)` / `apply_filters($name)` / `call_user_func` | The dispatched name was validated for THIS dispatch, not just sanitized elsewhere | Arbitrary callback / hook invocation |
+
+**Key move for a data-flow analyst:** when your WRITE stores structure (a serialized array, a route
+string, a param that later becomes a query var) and your READ forwards it into one of these
+primitives, the trust-boundary violation is that the primitive re-interprets the structure under
+assumptions the write path never enforced. If validation and dispatch/reinterpretation live at
+different layers, this is the `protocol-confusion-expert`'s core class — flag it explicitly and, for
+core targets, hand it off. See `core-subsystems.md` for where these primitives live.
+
+---
+
 ## Real-World Chain Patterns
 
 ### Pattern 1: Config → Runtime (CVE-2026-3629)

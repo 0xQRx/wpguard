@@ -33,6 +33,7 @@ Delegated by `/pm` — not invoked directly.
 | `csrf-expert` | CSRF, missing nonce validation |
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 | `data-flow-expert` | Cross-feature data flows — writes in one feature consumed unsafely by another |
+| `protocol-confusion-expert` | Dispatch/validation desync — validation vs. dispatch mismatch, nesting bypass of allow-lists, schema params reinterpreted into sinks (REST batch route confusion). Always included for core research. |
 | `lfi-rfi-expert` | LFI/RFI, path traversal |
 | `xxe-expert` | XXE, SVG/XML processing |
 | `deserialization-expert` | Unsafe deserialization, type juggling |
@@ -118,6 +119,26 @@ See QA Triage for complete list. Editor/Admin/Shop Manager = always OOS (PR:H).
 - Stored XSS via post content rendered to other users
 - Object injection via metadata
 - SSRF via embed/oEmbed processing
+
+## WordPress Core Research
+
+The system also researches **WordPress core** (target slug `core-{version}`, source at
+`targets/core-{version}/extracted/`) alongside plugins and themes. Core breaks the plugin
+assumptions, so it runs a parallel flow — see the PM's **Core Research Mode**:
+
+- **Scope by subsystem, not install count.** Core has no active-install tiers. Instead of a
+  `surface_map.md`, scope analysis to `core-subsystems.md` (in the project root) — a catalog of
+  high-value core surfaces (REST + batch controller, `WP_Query`/`meta_query` SQL builders,
+  shortcodes, `wp_kses`, XML-RPC, phar/deserialization, auth/nonce/cap, multisite, media). Never
+  grep-map all of core. **Lead with the `/diff` of a security release** to narrow to the changed
+  subsystem.
+- **Core scope + submission.** Validate findings with `wpguard_core_scope_check` (no install tiers,
+  core OOS list, `EXCLUDED_VENDORS` bypass, multisite super-admin auth model). Core findings are
+  submitted to the **HackerOne "WordPress" program** (not Wordfence) with HackerOne format and core
+  CVSS norms.
+- **Sandbox pinned by version** via `wpguard_sandbox_set_core_version`; sandbox-only testing.
+- **`protocol-confusion-expert` is always included for core** — it covers the REST batch
+  route-confusion / dispatch-desync class that is core's signature bug.
 
 ## Rules
 

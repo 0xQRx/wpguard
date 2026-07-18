@@ -668,3 +668,18 @@ Report all results back to the PM. Include:
 - Engagement summary in `reports/{plugin_slug}/SUMMARY.md`
 - Discord notifications sent for all findings
 - Any draft findings that need manual review with detailed notes
+---
+
+## WordPress Core Findings (HackerOne WordPress program)
+
+If a finding targets **WordPress core** (`target_type == "core"`) rather than a plugin/theme, its scope rules differ and it is **not** a Wordfence submission — it goes to the **HackerOne "WordPress" program** (`https://hackerone.com/wordpress` — *verify against current program policy*).
+
+For core findings, validate scope with the **`wpguard_core_scope_check`** MCP tool instead of the plugin scope tools:
+
+- **No install tiers** — do not gate on active installs; core affects the whole population.
+- **Auth model** — in scope: unauthenticated → subscriber → contributor → author. **Admin and multisite network/super-admin are OUT OF SCOPE** (privileged by design). An issue only reachable as super-admin is not eligible.
+- **Vuln types** — real injection/authz/memory-safety/logic classes are in scope; the shared OOS list (self-XSS, open redirect, username enumeration, missing headers, clickjacking, DoS-without-impact, etc.) still applies.
+- **CVSS/severity still apply** — keep the CVSS 3.1 score/vector; the 4.0 minimum still holds.
+- **Submission format differs** — HackerOne report format, not the Wordfence template.
+
+> Flag any uncertain program specifics (payout tiers, required fields, disclosure policy) with "verify against current program policy."

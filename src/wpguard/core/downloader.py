@@ -11,7 +11,14 @@ from pathlib import Path
 
 import requests
 
-from wpguard.config import DEFAULT_OUTPUT_DIR, PLUGINS_SUBDIR, WP_PLUGINS_SVN, USER_AGENT
+from wpguard.config import (
+    DEFAULT_OUTPUT_DIR,
+    PLUGINS_SUBDIR,
+    WP_PLUGINS_SVN,
+    WP_CORE_SVN,
+    WP_CORE_DOWNLOAD,
+    USER_AGENT,
+)
 from wpguard.core.models import PluginInfo
 
 
@@ -604,3 +611,275 @@ class PluginDownloader:
         if version_dir.exists():
             return version_dir
         return None
+
+
+@dataclass
+class CoreDownloadResult:
+    """Result of a WordPress core download operation."""
+
+    version: str
+    extracted_path: Path | None = None
+    zip_path: Path | None = None
+    source: str = ""  # "svn" or "zip"
+
+
+class CoreDownloader:
+    """
+    Handles downloading WordPress core from SVN tags (with ZIP fallback).
+
+    Directory structure (mirrors the plugin/theme `extracted/` layout):
+        {download_dir}/
+        └── core-{version}/
+            ├── extracted/
+            │   └── {core files: wp-load.php, wp-includes/, wp-admin/, ...}
+            └── zip/
+                └── {version}.zip   (only when the ZIP fallback is used)
+    """
+
+    def __init__(self, download_dir: str | Path | None = None):
+        """
+        Initialize the core downloader.
+
+        Args:
+            download_dir: Base directory for core downloads. Defaults to
+                          {DEFAULT_OUTPUT_DIR}/targets.
+        """
+        if download_dir is None:
+            download_dir = Path(DEFAULT_OUTPUT_DIR) / "targets"
+        self.download_dir = Path(download_dir)
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.svn = SVNClient(svn_base=WP_CORE_SVN)
+        self.session = requests.Session()
+        self.session.headers.update({"User-Agent": USER_AGENT})
+
+    def _get_core_dir(self, version: str) -> Path:
+        """Get the base directory for a core version."""
+        core_dir = self.download_dir / f"core-{version}"
+        core_dir.mkdir(parents=True, exist_ok=True)
+        return core_dir
+
+    def _get_extracted_dir(self, version: str) -> Path:
+        """Get the extracted files directory for a core version."""
+        return self._get_core_dir(version) / "extracted"
+
+    def _get_zip_dir(self, version: str) -> Path:
+        """Get the ZIP storage directory for a core version."""
+        zip_dir = self._get_core_dir(version) / "zip"
+        zip_dir.mkdir(parents=True, exist_ok=True)
+        return zip_dir
+
+    def download(self, version: str) -> CoreDownloadResult:
+        """
+        Download a WordPress core version tag into targets/core-{version}/extracted/.
+
+        Prefers a clean `svn export` of `tags/{version}/`; falls back to the
+        release ZIP if SVN is unavailable or the export fails.
+
+        Args:
+            version: Core version string (e.g. "6.9.4")
+
+        Returns:
+            CoreDownloadResult with the extracted path.
+        """
+        result = CoreDownloadResult(version=version)
+
+        extracted_dir = self._get_extracted_dir(version)
+
+        # Skip if already extracted (non-empty)
+        if extracted_dir.exists() and any(extracted_dir.iterdir()):
+            print(f"[*] Core already extracted: {extracted_dir}", file=sys.stderr)
+            result.extracted_path = extracted_dir
+            result.source = "existing"
+            return result
+
+        # Prefer SVN export for a clean tree
+        svn_path = self._export_svn(version, extracted_dir)
+        if svn_path:
+            result.extracted_path = svn_path
+            result.source = "svn"
+            return result
+
+        # Fall back to ZIP
+        zip_path = self._download_zip(version)
+        if zip_path:
+            result.zip_path = zip_path
+            extracted = self._extract_zip(zip_path, version, extracted_dir)
+            if extracted:
+                result.extracted_path = extracted
+                result.source = "zip"
+
+        return result
+
+    def _export_svn(self, version: str, extracted_dir: Path) -> Path | None:
+        """Export `tags/{version}/` from core SVN into extracted_dir."""
+        tag_url = f"{WP_CORE_SVN}tags/{version}/"
+
+        try:
+            # svn export refuses a pre-existing non-empty destination
+            if extracted_dir.exists():
+                shutil.rmtree(extracted_dir)
+            extracted_dir.parent.mkdir(parents=True, exist_ok=True)
+
+            cmd = [
+                "svn", "export", "--non-interactive", "--force",
+                tag_url, str(extracted_dir),
+            ]
+            print(f"[*] SVN export core {version}...", file=sys.stderr)
+            subprocess.run(
+                cmd, check=True, capture_output=True, text=True, timeout=600
+            )
+            print(f"[+] SVN export complete: {extracted_dir}", file=sys.stderr)
+            return extracted_dir
+
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] SVN export failed for core {version}: {e.stderr}", file=sys.stderr)
+            return None
+        except subprocess.TimeoutExpired:
+            print(f"[ERROR] SVN export timed out for core {version}", file=sys.stderr)
+            return None
+        except FileNotFoundError:
+            print("[ERROR] SVN not installed. Install with: apt install subversion", file=sys.stderr)
+            return None
+
+    def _download_zip(self, version: str, timeout: int = 120) -> Path | None:
+        """Download the release ZIP for a core version."""
+        url = WP_CORE_DOWNLOAD.format(version=version)
+        zip_dir = self._get_zip_dir(version)
+        filepath = zip_dir / f"{version}.zip"
+
+        if filepath.exists():
+            print(f"[*] Core ZIP already exists: {filepath}", file=sys.stderr)
+            return filepath
+
+        try:
+            print(f"[*] Downloading core {version} ZIP...", file=sys.stderr)
+            response = self.session.get(url, stream=True, timeout=timeout)
+            response.raise_for_status()
+            with open(filepath, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"[+] Downloaded: {filepath}", file=sys.stderr)
+            return filepath
+        except (requests.RequestException, IOError) as e:
+            print(f"[ERROR] Failed to download core {version}: {e}", file=sys.stderr)
+            return None
+
+    def _extract_zip(
+        self, zip_path: Path, version: str, extracted_dir: Path
+    ) -> Path | None:
+        """
+        Extract a core ZIP into extracted_dir.
+
+        Core ZIPs unpack into a top-level `wordpress/` directory; its contents
+        are flattened into extracted_dir so `wp-load.php` sits at the root.
+        """
+        try:
+            print(f"[*] Extracting {zip_path.name}...", file=sys.stderr)
+            if extracted_dir.exists():
+                shutil.rmtree(extracted_dir)
+
+            temp_extract = self._get_core_dir(version) / "_temp"
+            if temp_extract.exists():
+                shutil.rmtree(temp_extract)
+
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(temp_extract)
+
+            contents = list(temp_extract.iterdir())
+            if len(contents) == 1 and contents[0].is_dir():
+                # Single top-level "wordpress/" folder — flatten it
+                shutil.move(str(contents[0]), str(extracted_dir))
+                temp_extract.rmdir()
+            else:
+                shutil.move(str(temp_extract), str(extracted_dir))
+
+            print(f"[+] Extracted to: {extracted_dir}", file=sys.stderr)
+            return extracted_dir
+
+        except zipfile.BadZipFile:
+            print(f"[ERROR] Invalid ZIP file: {zip_path}", file=sys.stderr)
+            return None
+        except IOError as e:
+            print(f"[ERROR] Failed to extract {zip_path}: {e}", file=sys.stderr)
+            return None
+
+    def svn_log(self, limit: int = 10) -> list[dict]:
+        """
+        Get SVN commit history for core trunk.
+
+        Args:
+            limit: Maximum number of log entries.
+
+        Returns:
+            List of log entry dictionaries (same shape as SVNClient.get_log).
+        """
+        # SVNClient.get_log builds "{svn_base}{slug}/"; passing "trunk" yields
+        # "{WP_CORE_SVN}trunk/".
+        return self.svn.get_log("trunk", limit=limit)
+
+    def svn_diff(self, from_version: str, to_version: str) -> SVNChangeInfo:
+        """
+        Diff two core version tags.
+
+        Returns the same SVNChangeInfo shape the plugin/theme diffs return so
+        `/diff` works unchanged.
+
+        Args:
+            from_version: Older version tag (e.g. "6.9.4")
+            to_version: Newer version tag (e.g. "7.0.2")
+
+        Returns:
+            SVNChangeInfo with changed/added/removed files and unified diff.
+        """
+        from_url = f"{WP_CORE_SVN}tags/{from_version}/"
+        to_url = f"{WP_CORE_SVN}tags/{to_version}/"
+
+        changed, added, removed = [], [], []
+
+        cmd_summary = ["svn", "diff", "--summarize", from_url, to_url]
+        try:
+            result = subprocess.run(
+                cmd_summary, capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().split("\n"):
+                    if not line:
+                        continue
+                    status = line[0]
+                    filepath = line.split()[-1] if line.split() else ""
+                    # svn reports summarize paths against the first (old) URL
+                    if filepath.startswith(from_url):
+                        filepath = filepath[len(from_url):]
+                    elif filepath.startswith(to_url):
+                        filepath = filepath[len(to_url):]
+                    if status == "M":
+                        changed.append(filepath)
+                    elif status == "A":
+                        added.append(filepath)
+                    elif status == "D":
+                        removed.append(filepath)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            pass
+
+        cmd_diff = ["svn", "diff", from_url, to_url]
+        diff_output = ""
+        try:
+            result = subprocess.run(
+                cmd_diff, capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                diff_output = result.stdout
+                if len(diff_output) > 100000:
+                    diff_output = diff_output[:100000] + "\n... [truncated]"
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            pass
+
+        return SVNChangeInfo(
+            slug=f"core-{from_version}..{to_version}",
+            old_revision=from_version,
+            new_revision=to_version,
+            changed_files=changed,
+            added_files=added,
+            removed_files=removed,
+            diff_output=diff_output,
+        )

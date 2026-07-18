@@ -765,6 +765,252 @@ class WordPressSandbox:
         }
 
     # =========================================================================
+    # Core Version Control Methods
+    # =========================================================================
+
+    # Constants baked into wp-config.php to keep the sandbox pinned. Kept as a
+    # tuple of (name, php_value) where php_value is written --raw (unquoted).
+    _AUTO_UPDATE_CONSTANTS = (
+        ("AUTOMATIC_UPDATER_DISABLED", "true"),
+        ("WP_AUTO_UPDATE_CORE", "false"),
+    )
+    _VERSION_RE = re.compile(r"^[0-9][0-9.]*$")
+
+    def get_core_version(self) -> str:
+        """
+        Return the running WordPress core version (e.g. "6.9.4").
+
+        Returns an empty string if the version could not be determined.
+        """
+        result = self.wp_cli("core version")
+        if result["success"]:
+            return result["stdout"].strip()
+        return ""
+
+    def _config_constant_ok(self, name: str, expected: str) -> bool:
+        """Check that a PHP constant is present in wp-config.php with a truthy/expected value."""
+        # `wp config get <name> --type=constant` prints the value as evaluated by
+        # wp-cli. A bool true renders as "1"/"true"; false renders as ""/"0"/"false".
+        result = self.wp_cli(f"config get {name} --type=constant")
+        if not result["success"]:
+            return False
+        value = result["stdout"].strip().lower()
+        if expected == "true":
+            return value in ("1", "true")
+        # expected == "false": constant just needs to be present (defined false).
+        # `wp config get` succeeding means the define exists.
+        return value in ("", "0", "false", "1", "true")
+
+    def disable_core_auto_update(self) -> dict[str, Any]:
+        """
+        Reliably bake AUTOMATIC_UPDATER_DISABLED=true and WP_AUTO_UPDATE_CORE=false
+        into the container's wp-config.php as PHP constants.
+
+        The default `wp config set` uses the "/* That's all, stop editing! */"
+        placement anchor, which the sandbox image's wp-config.php lacks (causing
+        "Unable to locate placement anchor"). This method escalates through
+        strategies until one verifiably works:
+
+          a. `wp config set <name> <value> --raw --type=constant`
+          b. same, but anchored after the "<?php" opening line
+             (`--anchor=<?php --placement=after`)
+          c. direct idempotent insert of the `define(...)` line after `<?php`
+             via `docker exec ... sh -c` (grep-guarded so it never duplicates)
+
+        Idempotent — safe to call repeatedly. Returns
+        {"success", "method_used", "verified", "detail"}.
+        """
+        methods_used: dict[str, str] = {}
+        details: list[str] = []
+
+        for name, value in self._AUTO_UPDATE_CONSTANTS:
+            # Skip work if already correctly set.
+            if self._config_constant_ok(name, value):
+                methods_used[name] = "already_present"
+                continue
+
+            method = None
+
+            # Strategy (a): plain wp config set.
+            res_a = self.wp_cli(f"config set {name} {value} --raw --type=constant")
+            if res_a["success"] and self._config_constant_ok(name, value):
+                method = "wp_config_set"
+            else:
+                details.append(f"{name}: default set failed ({res_a['stderr'] or res_a['stdout']})")
+
+                # Strategy (b): anchor the placement after the <?php opening tag.
+                res_b = self.wp_cli(
+                    f"config set {name} {value} --raw --type=constant "
+                    f"--anchor=<?php --placement=after"
+                )
+                if res_b["success"] and self._config_constant_ok(name, value):
+                    method = "wp_config_set_anchor"
+                else:
+                    details.append(
+                        f"{name}: anchored set failed ({res_b['stderr'] or res_b['stdout']})"
+                    )
+
+                    # Strategy (c): direct grep-guarded insert after <?php.
+                    res_c = self._insert_define_after_php_tag(name, value)
+                    if res_c["success"] and self._config_constant_ok(name, value):
+                        method = "direct_insert"
+                    else:
+                        details.append(f"{name}: direct insert failed ({res_c['detail']})")
+
+            if method is None:
+                return {
+                    "success": False,
+                    "method_used": methods_used,
+                    "verified": False,
+                    "detail": "; ".join(details) or f"could not set {name}",
+                }
+            methods_used[name] = method
+
+        # Final verification of every constant.
+        verified = all(
+            self._config_constant_ok(name, value)
+            for name, value in self._AUTO_UPDATE_CONSTANTS
+        )
+        return {
+            "success": verified,
+            "method_used": methods_used,
+            "verified": verified,
+            "detail": "; ".join(details) if details else "all auto-update constants present",
+        }
+
+    def _wp_config_path(self) -> str | None:
+        """Return the wp-config.php path inside the container, or None."""
+        result = self.wp_cli("config path")
+        if result["success"] and result["stdout"].strip():
+            return result["stdout"].strip()
+        return None
+
+    def _insert_define_after_php_tag(self, name: str, value: str) -> dict[str, Any]:
+        """
+        Idempotently insert `define('<name>', <value>);` immediately after the
+        first `<?php` line of wp-config.php inside the container.
+
+        Grep-guards on the constant name so repeated calls never duplicate the
+        define. Uses `docker exec ... sh -c` with an awk one-liner (awk avoids the
+        in-place regex escaping pitfalls of sed and cannot corrupt the file — it
+        streams to a temp file that only replaces the original on success).
+        """
+        # Defensive: only ever runs with our own validated constant names/values.
+        if not re.match(r"^[A-Z0-9_]+$", name) or value not in ("true", "false"):
+            return {"success": False, "detail": f"refusing unsafe define {name}={value}"}
+
+        config_path = self._wp_config_path()
+        if not config_path:
+            return {"success": False, "detail": "could not resolve wp config path"}
+
+        define_line = f"define('{name}', {value});"
+        # Shell script executed inside the container:
+        #  1. If the constant name already appears, do nothing (idempotent).
+        #  2. Otherwise awk-insert the define right after the first <?php line,
+        #     writing to a temp file and moving it into place atomically.
+        script = (
+            f'CONFIG="{config_path}"; '
+            f'if grep -q "{name}" "$CONFIG"; then exit 0; fi; '
+            f"TMP=$(mktemp) || exit 1; "
+            f"awk 'NR==1 && /^<\\?php/ {{ print; print \"{define_line}\"; next }} "
+            f"{{ print }}' \"$CONFIG\" > \"$TMP\" && cat \"$TMP\" > \"$CONFIG\"; "
+            f'rm -f "$TMP"'
+        )
+        try:
+            result = subprocess.run(
+                ["docker", "exec", "--user", "www-data", self.container, "sh", "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                return {"success": True, "detail": f"inserted {define_line}"}
+            return {
+                "success": False,
+                "detail": (result.stderr or result.stdout).strip() or "awk insert failed",
+            }
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return {"success": False, "detail": str(e)}
+
+    def set_core_version(self, version: str, disable_auto_update: bool = True) -> dict[str, Any]:
+        """
+        Pin the sandbox WordPress core to a specific version.
+
+        Runs `wp core update --version=<version> --force` (handles both upgrade
+        and downgrade), optionally disables core auto-update, then verifies the
+        running version matches. The version argument is validated against a
+        strict pattern and never interpolated into a shell string unvalidated.
+
+        Returns {"success", "version", "auto_update_disabled", "detail"}.
+        """
+        version = version.strip()
+        if not self._VERSION_RE.match(version):
+            return {
+                "success": False,
+                "version": version,
+                "auto_update_disabled": False,
+                "detail": f"invalid version string: {version!r}",
+            }
+
+        # wp core update --force works for downgrades too. Longer timeout: core
+        # download + reinstall can take a while.
+        update = self.wp_cli(f"core update --version={version} --force", timeout=300)
+        if not update["success"]:
+            return {
+                "success": False,
+                "version": version,
+                "auto_update_disabled": False,
+                "detail": f"core update failed: {update['stderr'] or update['stdout']}",
+            }
+
+        auto_update_disabled = False
+        auto_detail = ""
+        if disable_auto_update:
+            disabled = self.disable_core_auto_update()
+            auto_update_disabled = disabled["success"]
+            auto_detail = disabled["detail"]
+
+        running = self.get_core_version()
+        verified = running == version
+        detail_parts = [f"running={running}", update["stdout"].strip().splitlines()[-1] if update["stdout"].strip() else "updated"]
+        if disable_auto_update:
+            detail_parts.append(f"auto_update: {auto_detail}")
+
+        return {
+            "success": verified,
+            "version": running,
+            "auto_update_disabled": auto_update_disabled,
+            "detail": "; ".join(p for p in detail_parts if p),
+        }
+
+    def reset_to_version(self, version: str) -> dict[str, Any]:
+        """Thin alias for set_core_version — reset the sandbox to a known version."""
+        return self.set_core_version(version)
+
+    def convert_to_multisite(self, title: str = "wpguard-multisite", subdomains: bool = False) -> dict[str, Any]:
+        """
+        Best-effort conversion of the sandbox to a WordPress multisite network.
+
+        WARNING: UNTESTED / OPTIONAL. This changes the sandbox topology (network
+        tables, rewrite rules, wp-config constants) and is NOT exercised during
+        Phase 2 verification. It is provided as a convenience stub for future
+        multisite core research (super-admin auth model). Callers should treat a
+        non-success result as expected and provision multisite manually if needed.
+
+        Returns {"success", "detail"}.
+        """
+        cmd = "core multisite-convert"
+        if title:
+            cmd += f" --title={shlex.quote(title)}"
+        if subdomains:
+            cmd += " --subdomains"
+        result = self.wp_cli(cmd, timeout=120)
+        return {
+            "success": result["success"],
+            "detail": result["stdout"] if result["success"] else result["stderr"],
+        }
+
+    # =========================================================================
     # Docker Compose Management Methods
     # =========================================================================
 

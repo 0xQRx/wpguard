@@ -77,6 +77,7 @@ EXPERT_AGENTS = [
     "info-disclosure-expert",
     "code-injection-expert",
     "open-redirect-expert",
+    "protocol-confusion-expert",
 ]
 
 SUPPORT_AGENTS = [
@@ -292,6 +293,9 @@ def initialize_research_project(output_dir: str) -> dict:
 
         # Write PM plan template to project root
         (root / "pm-plan.md").write_text(_load_template("pm-plan.md"))
+
+        # Write WordPress core subsystem catalog to project root (core-research mode reference)
+        (root / "core-subsystems.md").write_text(_load_template("core-subsystems.md"))
 
         # Copy PoC templates
         poc_templates_src = TEMPLATES_DIR / "poc-templates"

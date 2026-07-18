@@ -13,6 +13,7 @@ Scan the WordPress plugin AND theme ecosystems for recent updates, new additions
 | `new-plugins` | `wpguard_watch_new(min_installs=0)` | Newly added plugins |
 | `new-themes` | `wpguard_watch_new_themes(min_installs=0)` | Newly added themes |
 | `list` | `wpguard_watch_check()` | Version changes in watchlist (with SVN diffs) |
+| `core` | `wpguard_watch_core(auto_diff=true)` | WordPress **core** release monitor — new/security release, auto-runs the Phase 1 diff |
 | `all` | all of the above | Only use when explicitly requested — verbose |
 
 If the user runs `/watch` with no argument, ask which target to run and show the table above. **Do not default to `all`.**
@@ -73,9 +74,21 @@ Only include sections for the scans you actually ran.
 - plugin-a, plugin-b (up to date)
 ```
 
+## Core Release Monitor (`/watch core`)
+
+WordPress **core** is a parallel target type (see the Core Research plan). `wpguard_watch_core` polls the core stable/version-check APIs and persists its own `core_state.json` — fully isolated from the plugin/theme watch state.
+
+Monitoring loop:
+1. Poll with `wpguard_watch_core(auto_diff=true)`. It returns `new_release`, `latest`, `previous_latest`, `security_release`, `diff_from`, `diff_to`, and — when `auto_diff` fired — `changed_files` + `total_changes`.
+2. **On `security_release: true` (or any `new_release`)** the tool has already run the Phase 1 diff (`diff_from` → `diff_to`). Review `changed_files` to identify the patched subsystem.
+3. **Kick off the core-patch variant hunt** — take the diff into `/nday`'s "Core-Patch Variant Hunting" flow: extract the patched pattern, build a `veloria.search_code` RE2 regex, and search `source=plugins`/`source=themes` for plugins replicating it. Each hit is a candidate in-scope Wordfence finding.
+4. Use `wpguard_watch_core_state` to inspect the last-seen latest and known-insecure set without re-polling.
+
+Run it on a schedule with `/loop 6h /watch core`.
+
 ## Notes
 
-- First run seeds the seen state — all current versions/slugs are "seen", so only future changes will be flagged as new.
+- First run seeds the seen state — all current versions/slugs are "seen", so only future changes will be flagged as new. (The core monitor's first run reports `new_release: true` while seeding `core_state.json` — expected.)
 - Changelog and SVN log enrichment only runs for plugins with >= 10k installs to keep API calls reasonable.
 - Use `wpguard_watch_add` to add specific plugins for SVN-level change tracking.
 - Results are saved to `recently_updated.json` and `new_plugins.json` in the project directory.

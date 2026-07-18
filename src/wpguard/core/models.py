@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from wpguard.config import WP_PLUGINS_SVN, WP_THEMES_SVN
+from wpguard.config import WP_PLUGINS_SVN, WP_THEMES_SVN, WP_CORE_SVN
 
 
 @dataclass
@@ -147,6 +147,55 @@ class PluginInfo:
 
 
 @dataclass
+class CoreVersionInfo:
+    """Represents a WordPress core release from the stable/version-check API."""
+
+    version: str
+    branch: str = ""
+    release_date: str = ""
+    is_security_release: bool = False
+    status: str = ""  # latest, outdated, insecure
+    download_link: str = ""
+
+    @classmethod
+    def from_stable_check(cls, version: str, status: str) -> "CoreVersionInfo":
+        """
+        Create CoreVersionInfo from a stable-check entry.
+
+        The stable-check endpoint maps each version to a status string:
+            "latest"   — current stable release
+            "outdated" — superseded, but not a security concern
+            "insecure" — a later security release exists (vulnerable)
+        """
+        branch = ".".join(version.split(".")[:2])
+        from wpguard.config import WP_CORE_DOWNLOAD
+        return cls(
+            version=version,
+            branch=branch,
+            release_date="",
+            is_security_release=(status == "insecure"),
+            status=status or "",
+            download_link=WP_CORE_DOWNLOAD.format(version=version),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "version": self.version,
+            "branch": self.branch,
+            "release_date": self.release_date,
+            "is_security_release": self.is_security_release,
+            "status": self.status,
+            "download_link": self.download_link,
+        }
+
+    @property
+    def svn_tag_url(self) -> str:
+        """Get SVN tag URL for this core version."""
+        return f"{WP_CORE_SVN}tags/{self.version}/"
+
+
+@dataclass
 class ChangeReport:
     """Represents changes detected in a plugin update."""
 
@@ -255,6 +304,11 @@ class Finding:
     poc_path: str = ""
     status: str = "draft"  # draft, validated, submitted, rejected, duplicate
     tier: str = ""  # high_threat, common_dangerous, standard
+    # Which bounty program / target class this finding belongs to.
+    # "plugin" (default, back-compat) => Wordfence; "core" => HackerOne WordPress
+    # program. "theme" is also Wordfence. Absent in older JSON => defaults to
+    # "plugin" on load.
+    target_type: str = "plugin"
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
     updated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
     validation_notes: str = ""
@@ -279,6 +333,7 @@ class Finding:
             "poc_path": self.poc_path,
             "status": self.status,
             "tier": self.tier,
+            "target_type": self.target_type,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "validation_notes": self.validation_notes,
@@ -305,6 +360,7 @@ class Finding:
             poc_path=data.get("poc_path", ""),
             status=data.get("status", "draft"),
             tier=data.get("tier", ""),
+            target_type=data.get("target_type", "plugin"),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
             validation_notes=data.get("validation_notes", ""),

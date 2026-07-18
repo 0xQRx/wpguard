@@ -77,6 +77,7 @@ Each expert performs exhaustive analysis for their specific vulnerability class:
 | `open-redirect-expert` | wp_redirect, header Location, JavaScript redirects |
 | `critical-thinker` | Cross-domain chains, second-order bugs, logic flaws, subtle multi-step vulns |
 | `data-flow-expert` | Cross-feature data flow analysis — finds chains where data written by one feature is consumed unsafely by another |
+| `protocol-confusion-expert` | Dispatch/validation desync — validation against schema X but dispatch to handler Y, allow-lists enforced at a wrapper but not a nested layer, schema params reinterpreted downstream (REST batch route confusion, `rest_do_request`, query-var → SQL). **Always include for core research.** |
 
 ### Verification Pipeline Agents (ALL MANDATORY — in this order)
 | Order | Agent | Purpose |
@@ -113,6 +114,49 @@ The system supports both **plugins** and **themes**. The research workflow is id
 **Everything else is shared:** sandbox, scope validation, experts, findings, verification pipeline. Themes install into the sandbox as themes (`wpguard_sandbox_wp_cli("theme install {slug} --activate")`). Expert agents analyze PHP source the same way regardless of type.
 
 When the user mentions a theme, use the theme tools above. When in doubt, check: does the slug exist at `wordpress.org/themes/{slug}` or `wordpress.org/plugins/{slug}`?
+
+## Core Research Mode
+
+When the target is a **WordPress core** target — a `core-{version}` slug with source at
+`targets/core-{version}/extracted/` (acquired via `wpguard_core_download`) — the workflow is
+DIFFERENT from the plugin/theme flow. Do NOT run the plugin scoping steps. Run the core flow
+ALONGSIDE the existing plugin flow — it does not replace it.
+
+**What changes:**
+
+1. **Skip install-count / ecosystem scoping.** Core has no active-install tiers and no base-plugin
+   ecosystem. Do NOT call `wpguard_scope_check_plugin`, `wpguard_bounty_estimate`, or
+   `wpguard_target_score`. There is no addon dependency setup.
+2. **Use the core scope model.** Validate findings with `wpguard_core_scope_check` (Phase 3
+   `CoreScopeValidator`): no install tiers, core-specific OOS list, `EXCLUDED_VENDORS` bypass for
+   `wordpress`/`automattic`, and the multisite super-admin auth model. Submission target is the
+   **HackerOne "WordPress" program**, not Wordfence — `qa-triage` / `bb-submission` use the HackerOne
+   format and core CVSS norms.
+3. **Scope to subsystems, NOT a surface map.** Core is thousands of files — a whole-tree grep-map
+   blows up context. Instead of `surface-mapper` + `surface_map.md`, use **`core-subsystems.md`**
+   (in the project root) as the scoping catalog. **Lead with the diff:** run `/diff` between the
+   vulnerable and patched core tag, map the changed files to a subsystem in `core-subsystems.md`, and
+   scope experts to that subsystem's paths (as their `priority_targets`). Never launch an expert on
+   "all of core".
+4. **ALWAYS include `protocol-confusion-expert`.** The dispatch/validation-desync class (REST batch
+   route confusion, `rest_do_request` nesting, schema param → `WP_Query` query var → SQL) is core's
+   signature bug and no other expert covers it. Run `data-flow-expert` and `critical-thinker` last to
+   audit cross-subsystem dispatch-primitive invariants.
+5. **Sandbox is pinned by version.** Use `wpguard_sandbox_set_core_version` to pin the sandbox to the
+   affected core version (Phase 2). All testing is sandbox-only — never scan wordpress.org or any live
+   site.
+
+**Core full-audit sequence** (replaces steps 3–9 of the plugin Full Audit; steps 10–17 verification
+pipeline are unchanged):
+- a. `wpguard_core_download(version)` → `targets/core-{version}/extracted/`
+- b. `/diff` vulnerable→patched core tag → identify changed subsystem(s)
+- c. Map changed files to `core-subsystems.md` subsystems
+- d. `wpguard_sandbox_set_core_version(version)` to pin the sandbox
+- e. Launch the subsystem's recommended experts (from `core-subsystems.md`) scoped to that
+  subsystem's paths — ALWAYS including `protocol-confusion-expert`
+- f. `data-flow-expert` then `critical-thinker` last
+- g. Verification pipeline (impact-assessor → poc-writer → poc-runner → qa-triage → bb-submission),
+  using `wpguard_core_scope_check` and HackerOne submission format
 
 ## High-Value Plugin Categories (from n-day analysis)
 

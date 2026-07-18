@@ -176,6 +176,30 @@ if ($user_id != get_current_user_id()) { wp_die(); }
 
 ---
 
+## Core Dispatch Primitive Invariants (audit these — plugins AND core)
+
+The code you review SITS ON core dispatch primitives, and each primitive relies on an INVARIANT the
+caller must not violate. When user-controlled *structure* (not just values — a route, a method name, a
+hook name, a request object, a shortcode, a query var, a serialized blob) is forwarded into a
+primitive, ask: **does this code violate an assumption the primitive relies on?** These bugs pass
+every single-sink check because the sink is core code that is correct — the flaw is the invariant
+break at the boundary.
+
+| Primitive | Invariant the caller must preserve | Break it and you get |
+|-----------|-----------------------------------|----------------------|
+| REST batch / `rest_do_request` / `WP_REST_Request` | The method/route/auth allow-list checked at the OUTER layer also holds for every NESTED / composed sub-request; the schema that VALIDATED a param is the one bound to the handler that RUNS it | Nesting bypass of the guard; validation-vs-dispatch desync (route confusion) |
+| `do_shortcode` / nested shortcodes | Content sanitized ONCE is not re-parsed into new shortcodes/attributes | Inner re-parse escapes outer sanitization |
+| `WP_Query` / `meta_query` / `WP_Meta_Query` query vars | A param that is "valid per its REST/AJAX schema" is ALSO safe as a query var (`author__not_in`, `orderby`, `meta_query` key/`compare`) | Schema-valid param interpolated into SQL |
+| `maybe_unserialize` / `unserialize` | The stored blob is a simple string, not an object with magic methods | Object injection on read |
+| `do_action($name)` / `apply_filters($name)` / `call_user_func` | The dispatched name was validated for THIS dispatch, not merely sanitized for another purpose | Arbitrary callback / hook invocation |
+
+**When you find user-controlled structure reaching one of these, stop and check the invariant
+explicitly.** If validation happens at one layer and dispatch/reinterpretation at another, that is the
+`protocol-confusion-expert`'s core class — flag it and, for core targets, hand it off. See
+`core-subsystems.md` for where these primitives live.
+
+---
+
 ## Your Methodology
 
 ### Phase 1: Architecture Mapping (ALWAYS DO THIS FIRST)

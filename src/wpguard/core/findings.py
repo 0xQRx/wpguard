@@ -74,6 +74,7 @@ class FindingsManager:
         affected_line: int = 0,
         poc_path: str = "",
         tier: str = "",
+        target_type: str = "plugin",
     ) -> Finding:
         """
         Create a new finding.
@@ -93,6 +94,8 @@ class FindingsManager:
             affected_line: Line number
             poc_path: Path to PoC script
             tier: Bounty tier
+            target_type: Program/target class — "plugin" (default) or "theme"
+                for Wordfence, "core" for the HackerOne WordPress program
 
         Returns:
             Created Finding object
@@ -117,6 +120,7 @@ class FindingsManager:
             poc_path=poc_path,
             status="draft",
             tier=tier,
+            target_type=target_type,
             created_at=now,
             updated_at=now,
         )
