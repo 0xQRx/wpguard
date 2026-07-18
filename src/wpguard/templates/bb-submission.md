@@ -192,3 +192,19 @@ reports/{plugin_slug}/{finding_id}/
 ├── poc_browser.gif         # Browser GIF (from poc-recorder)
 └── videos/                 # Playwright raw video output
 ```
+
+---
+
+## WordPress Core Findings (HackerOne WordPress program)
+
+Some findings target **WordPress core**, not a plugin/theme. These do **NOT** go to Wordfence — they are submitted to the **HackerOne "WordPress" program** (`https://hackerone.com/wordpress` — *verify against current program policy*). Detect this via the finding's `target_type == "core"` and validate with the `wpguard_core_scope_check` MCP tool.
+
+Key differences from the Wordfence flow (do NOT change the plugin/theme flow above):
+
+- **Different destination & format.** Submit through HackerOne, using that program's report format/fields — not the Wordfence template. Confirm the required fields against the current program policy before submitting.
+- **No install tiers.** Core affects effectively the whole WordPress population; eligibility is driven by vuln type + attacker auth level, not active installs.
+- **Auth model.** In scope: unauthenticated → subscriber → contributor → author. **Admin and multisite network/super-admin are OUT OF SCOPE** (privileged by design).
+- **CVSS/severity still apply.** Keep the CVSS 3.1 score, vector, and severity; the 4.0 minimum still holds.
+- **Sandbox-only reproduction.** Reproduce against the local sandbox pinned to the affected core version — never test a live site.
+
+> Flag any uncertain program specifics (payout tiers, exact required fields, disclosure timelines) with "verify against current program policy" rather than guessing.

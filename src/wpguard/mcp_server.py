@@ -35,7 +35,7 @@ DEFAULT_OUTPUT_DIR = "."
 from wpguard.api.themes import WordPressThemeAPI
 from wpguard.core.watcher import PluginWatcher
 from wpguard.core.sandbox import WordPressSandbox
-from wpguard.core.scope_validator import WorkfenceScopeValidator
+from wpguard.core.scope_validator import WorkfenceScopeValidator, CoreScopeValidator
 from wpguard.core.findings import FindingsManager
 from wpguard.notifications.discord import DiscordNotifier
 from wpguard.config import DISCORD_WEBHOOK_URL
@@ -1083,6 +1083,34 @@ async def list_tools() -> list[Tool]:
                 "required": ["active_installs"],
             },
         ),
+        Tool(
+            name="wpguard_core_scope_check",
+            description=(
+                "Check if a WordPress CORE finding is eligible for the HackerOne "
+                "WordPress program (separate from Wordfence). No install tiers; "
+                "admin / multisite super-admin are out of scope."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vuln_type": {
+                        "type": "string",
+                        "description": "Vulnerability type",
+                    },
+                    "auth_level": {
+                        "type": "string",
+                        "description": "Required attacker auth level",
+                        "enum": ["unauthenticated", "subscriber", "customer", "contributor", "author", "editor", "administrator"],
+                    },
+                    "is_multisite_only": {
+                        "type": "boolean",
+                        "description": "Issue only reachable in a multisite network context",
+                        "default": False,
+                    },
+                },
+                "required": ["vuln_type", "auth_level"],
+            },
+        ),
         # Finding Persistence Tools
         Tool(
             name="wpguard_finding_create",
@@ -1108,6 +1136,11 @@ async def list_tools() -> list[Tool]:
                     "affected_line": {"type": "integer", "description": "Line number"},
                     "poc_path": {"type": "string", "description": "Path to PoC script"},
                     "tier": {"type": "string", "description": "Bounty tier"},
+                    "target_type": {
+                        "type": "string",
+                        "description": "Program/target class: 'plugin' (default), 'theme', or 'core' (HackerOne WordPress program)",
+                        "enum": ["plugin", "theme", "core"],
+                    },
                     "output_dir": {"type": "string", "description": "Output dir"},
                 },
                 "required": ["plugin_slug", "plugin_version", "active_installs", "vuln_type", "title", "description", "auth_level", "cvss_score", "cvss_vector", "affected_file"],
@@ -1697,6 +1730,13 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     elif name == "wpguard_scope_get_vulns":
         return await _scope_get_vulns(arguments["active_installs"])
 
+    elif name == "wpguard_core_scope_check":
+        return await _core_scope_check(
+            arguments["vuln_type"],
+            arguments["auth_level"],
+            arguments.get("is_multisite_only", False),
+        )
+
     # Finding Persistence Tools
     elif name == "wpguard_finding_create":
         return await _finding_create(
@@ -1715,6 +1755,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             arguments.get("poc_path", ""),
             arguments.get("tier", ""),
             arguments.get("output_dir", DEFAULT_OUTPUT_DIR),
+            arguments.get("target_type", "plugin"),
         )
 
     elif name == "wpguard_finding_update":
@@ -2889,6 +2930,43 @@ async def _scope_get_vulns(active_installs: int) -> dict[str, Any]:
     return await run_in_executor(_scope_get_vulns_sync, active_installs)
 
 
+_core_scope_validator: CoreScopeValidator | None = None
+
+
+def _get_core_scope_validator() -> CoreScopeValidator:
+    """Get or create the core scope validator instance."""
+    global _core_scope_validator
+    if _core_scope_validator is None:
+        _core_scope_validator = CoreScopeValidator()
+    return _core_scope_validator
+
+
+def _core_scope_check_sync(
+    vuln_type: str,
+    auth_level: str,
+    is_multisite_only: bool,
+) -> dict[str, Any]:
+    """Check core finding eligibility (sync version)."""
+    validator = _get_core_scope_validator()
+    result = validator.validate_core_finding(
+        vuln_type,
+        auth_level,
+        is_multisite_only=is_multisite_only,
+    )
+    return result.to_dict()
+
+
+async def _core_scope_check(
+    vuln_type: str,
+    auth_level: str,
+    is_multisite_only: bool,
+) -> dict[str, Any]:
+    """Check core finding eligibility against the HackerOne WordPress program."""
+    return await run_in_executor(
+        _core_scope_check_sync, vuln_type, auth_level, is_multisite_only
+    )
+
+
 # Finding Persistence Tool Implementations
 
 def _finding_create_sync(
@@ -2907,6 +2985,7 @@ def _finding_create_sync(
     poc_path: str,
     tier: str,
     output_dir: str,
+    target_type: str = "plugin",
 ) -> dict[str, Any]:
     """Create a new finding (sync version)."""
     manager = FindingsManager(output_dir)
@@ -2925,6 +3004,7 @@ def _finding_create_sync(
         affected_line=affected_line,
         poc_path=poc_path,
         tier=tier,
+        target_type=target_type,
     )
     return {
         "success": True,
@@ -2949,6 +3029,7 @@ async def _finding_create(
     poc_path: str,
     tier: str,
     output_dir: str,
+    target_type: str = "plugin",
 ) -> dict[str, Any]:
     """Create a new finding."""
     return await run_in_executor(
@@ -2956,6 +3037,7 @@ async def _finding_create(
         plugin_slug, plugin_version, active_installs, vuln_type, title,
         description, auth_level, cvss_score, cvss_vector, affected_file,
         affected_function, affected_line, poc_path, tier, output_dir,
+        target_type,
     )
 
 

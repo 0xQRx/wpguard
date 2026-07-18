@@ -153,6 +153,10 @@ class ValidationResult:
     warnings: list[str] = field(default_factory=list)
     tier: VulnerabilityTier | None = None
     estimated_severity: str | None = None
+    # Which bounty program this result applies to. Defaults to "plugin" for
+    # back-compat with the Wordfence plugin/theme validator; the core validator
+    # sets this to "core".
+    program: str = "plugin"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -163,6 +167,7 @@ class ValidationResult:
             "warnings": self.warnings,
             "tier": self.tier.value if self.tier else None,
             "estimated_severity": self.estimated_severity,
+            "program": self.program,
         }
 
 
@@ -482,3 +487,215 @@ class WorkfenceScopeValidator:
             return TIER_MIN_INSTALLS[VulnerabilityTier.ELITE_1337]
 
         return None
+
+
+# ---------------------------------------------------------------------------
+# WordPress Core bounty program
+# ---------------------------------------------------------------------------
+#
+# WordPress *core* is a separate bounty program from Wordfence (which covers
+# plugins/themes). Core findings are submitted to the HackerOne "WordPress"
+# program, NOT to Wordfence. The rules below are the parts we can encode with
+# confidence; anything program-specific that we are NOT certain of (exact payout
+# tables, precise policy clauses) is deliberately left out and flagged for the
+# researcher to verify against the current program policy.
+
+# Submission destination for core findings.
+# NOTE: verify current policy — program URL/scope may change.
+CORE_SUBMISSION_TARGET = (
+    "HackerOne WordPress program (https://hackerone.com/wordpress) — NOT Wordfence. "
+    "Verify current program policy before submitting."
+)
+
+# Attacker auth levels that are IN scope for core.
+# Same low-privilege attacker model as plugins: unauth -> subscriber ->
+# contributor -> author. Admin and multisite network/super-admin are privileged
+# by design and therefore OUT OF SCOPE.
+CORE_IN_SCOPE_AUTH_LEVELS = {
+    AuthLevel.UNAUTHENTICATED,
+    AuthLevel.SUBSCRIBER,
+    AuthLevel.CUSTOMER,
+    AuthLevel.CONTRIBUTOR,
+    AuthLevel.AUTHOR,
+}
+
+# Auth levels that are explicitly OUT OF SCOPE for core (privileged by design).
+CORE_OUT_OF_SCOPE_AUTH_LEVELS = {
+    AuthLevel.EDITOR,
+    AuthLevel.SHOP_MANAGER,
+    AuthLevel.ADMINISTRATOR,
+}
+
+# Vulnerability types that are IN scope for core. Core has no install tiers, so
+# any real memory-safety / logic / injection / authz class qualifies regardless
+# of "installs". This reuses the same vuln-type vocabulary as the plugin program
+# (minus the tier gating).
+CORE_IN_SCOPE_VULNS = (
+    HIGH_THREAT_VULNS | COMMON_DANGEROUS_VULNS | STANDARD_VULNS
+)
+
+
+class CoreScopeValidator:
+    """
+    Validates WordPress **core** vulnerabilities against the core bounty program.
+
+    Key differences from :class:`WorkfenceScopeValidator`:
+
+    * **No install tiers.** Core affects effectively the entire WordPress
+      population, so any in-scope vuln type qualifies regardless of installs.
+    * **Vendor exclusion is bypassed.** ``wordpress``/``automattic`` are excluded
+      for the *plugin* program but ARE the target here.
+    * **Multisite super-admin / network-admin is OOS** (privileged by design),
+      as is single-site admin.
+    * **Different submission target** — the HackerOne WordPress program, not
+      Wordfence (see :data:`CORE_SUBMISSION_TARGET`).
+    """
+
+    submission_target: str = CORE_SUBMISSION_TARGET
+
+    def __init__(self):
+        """Initialize the core scope validator."""
+        pass
+
+    def check_auth_level(self, auth_level: str | AuthLevel) -> bool:
+        """
+        Check if an attacker auth level is in scope for core.
+
+        Args:
+            auth_level: Authentication level required for the vulnerability.
+
+        Returns:
+            True if in scope (unauth..author), False otherwise (editor/admin/
+            super-admin are privileged by design => OOS).
+        """
+        if isinstance(auth_level, str):
+            try:
+                auth_level = AuthLevel(auth_level.lower())
+            except ValueError:
+                return False
+
+        return auth_level in CORE_IN_SCOPE_AUTH_LEVELS
+
+    def check_vuln_type_in_scope(self, vuln_type: str) -> bool:
+        """
+        Check if a vulnerability type is in scope for core.
+
+        Args:
+            vuln_type: Vulnerability type identifier.
+
+        Returns:
+            True if in scope, False if on the shared out-of-scope list or not a
+            recognized in-scope class.
+        """
+        vuln_type = vuln_type.lower().replace(" ", "_").replace("-", "_")
+
+        # Shared obviously-OOS list (self-XSS, open redirect, username
+        # enumeration, missing headers, clickjacking, DoS-without-impact, ...).
+        if vuln_type in OUT_OF_SCOPE_VULNS:
+            return False
+
+        return vuln_type in CORE_IN_SCOPE_VULNS
+
+    def validate_core_finding(
+        self,
+        vuln_type: str,
+        auth_level: str,
+        *,
+        is_multisite_only: bool = False,
+        cvss_score: float | None = None,
+    ) -> ValidationResult:
+        """
+        Validate whether a core vulnerability finding is eligible for the
+        WordPress core (HackerOne) bounty program.
+
+        Unlike the plugin validator, there is no install count / tier gating —
+        core affects the whole population, so eligibility hinges on the vuln type
+        and the attacker auth level only.
+
+        Args:
+            vuln_type: Vulnerability type identifier.
+            auth_level: Required attacker authentication level.
+            is_multisite_only: True if the issue is only reachable in a multisite
+                network context. Multisite network/super-admin privilege is OOS;
+                a network-admin-only issue is therefore not eligible.
+            cvss_score: Optional CVSS 3.1 score. If provided, the 4.0 minimum is
+                enforced and an estimated severity is attached.
+
+        Returns:
+            ValidationResult with eligibility status. ``program`` is "core" and a
+            message records the HackerOne submission target.
+        """
+        result = ValidationResult(eligible=True, program="core")
+
+        # Record submission target so downstream tooling / agents route correctly.
+        result.messages.append(f"Submission target: {CORE_SUBMISSION_TARGET}")
+
+        # Check 1: no install tiers — always satisfied for core.
+        result.checks["no_install_tier_gating"] = True
+
+        # Check 2: vendor exclusion is intentionally bypassed for core.
+        result.checks["vendor_exclusion_bypassed"] = True
+
+        # Check 3: attacker auth level in scope (admin / super-admin OOS).
+        auth_in_scope = self.check_auth_level(auth_level)
+        result.checks["auth_level_in_scope"] = auth_in_scope
+        if not auth_in_scope:
+            result.eligible = False
+            result.messages.append(
+                f"Authentication level '{auth_level}' is out of scope for core "
+                "(admin / multisite super-admin are privileged by design)"
+            )
+
+        # Check 4: multisite-only network-admin issues are OOS.
+        if is_multisite_only:
+            # Multisite-only issues that require the network/super-admin context
+            # are privileged by design. Flag as a warning; combined with an
+            # elevated auth level this is a hard reject above.
+            result.warnings.append(
+                "Issue reported as multisite-only — confirm it is NOT a "
+                "network/super-admin-only capability (super-admin is OOS)"
+            )
+            result.checks["multisite_only"] = True
+
+        # Check 5: vulnerability type in scope.
+        vuln_in_scope = self.check_vuln_type_in_scope(vuln_type)
+        result.checks["vuln_type_in_scope"] = vuln_in_scope
+        if not vuln_in_scope:
+            result.eligible = False
+            result.messages.append(
+                f"Vulnerability type '{vuln_type}' is out of scope for core"
+            )
+
+        # Check 6: optional CVSS minimum (only enforced when supplied).
+        if cvss_score is not None:
+            cvss_ok = cvss_score >= 4.0
+            result.checks["cvss_minimum_met"] = cvss_ok
+            if not cvss_ok:
+                result.eligible = False
+                result.messages.append(
+                    f"CVSS score ({cvss_score}) below minimum threshold (4.0)"
+                )
+            if cvss_score >= 9.0:
+                result.estimated_severity = "Critical"
+            elif cvss_score >= 7.0:
+                result.estimated_severity = "High"
+            elif cvss_score >= 4.0:
+                result.estimated_severity = "Medium"
+            else:
+                result.estimated_severity = "Low"
+
+        if result.eligible:
+            result.messages.append(
+                "Eligible for the WordPress core program — no install-tier gating."
+            )
+
+        return result
+
+    def get_in_scope_vulns(self) -> list[str]:
+        """
+        Get all in-scope vulnerability types for core (no tier gating).
+
+        Returns:
+            Sorted list of in-scope vulnerability type identifiers.
+        """
+        return sorted(CORE_IN_SCOPE_VULNS)
