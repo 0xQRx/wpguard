@@ -85,7 +85,7 @@ exploit.
 
 ## Progress log
 
-- [ ] Phase 1 — Acquire & Diff
+- [x] Phase 1 — Acquire & Diff (commit `d994db9`) — live-verified: 7.0.1→7.0.2 diff = 6 files isolating the wp2shell fix
 - [ ] Phase 2 — Sandbox core control
 - [ ] Phase 3 — Core scope & submission
 - [ ] Phase 4 — Core-aware analysis flow
