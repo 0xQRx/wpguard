@@ -291,4 +291,25 @@ Admin-only code injection: 4.7 Medium (usually not in scope)
 
 ---
 
+## LENS: Dynamic hook-name collision (`do_action`/`apply_filters` with attacker-controlled names)
+
+Callback injection isn't only `call_user_func($_GET['fn'])`. WordPress builds **hook names from
+data** and then fires every callback registered under that name. When any component of the name is
+attacker-controlled, you can dispatch an *unrelated* security-sensitive handler that was registered
+under the colliding name. Grep for interpolated hook names:
+
+- `do_action( "{$new_status}_{$post->post_type}" )` in `wp_transition_post_status` — if `post_status`
+  and `post_type` are forgeable (see the SQLi row-forge lens), a post with status `parse` + type
+  `request` fires `do_action("parse_request")`, whose callback (`WP_REST_Server::parse_request`,
+  bound to `rest_api_loaded`) re-enters the REST stack → nested dispatch. This is the re-entry step
+  of the wp2shell RCE.
+- Any `do_action( $variable )` / `apply_filters( "prefix_{$user_input}", … )` /
+  `do_action( "{$meta}_{$type}" )` where a piece comes from post fields, meta, options, or request data.
+
+Ask: *which security-relevant hooks exist, and can I make a dynamic `do_action` name collide with one
+of them?* A collision that reaches `parse_request`, `admin_init`, `init`, or an auth/redirect hook is
+a dispatch primitive, not a curiosity.
+
+---
+
 {{include:_expert-shared.md|validation_example=injected code executed, eval/call_user_func triggered with attacker input, observable side effect confirms execution}}

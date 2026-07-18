@@ -107,6 +107,31 @@ Paths are relative to the extracted core root (the directory containing `wp-incl
   in scope.
 - **Point at it:** `file-rce-expert` (primary), `ssrf-expert` (oEmbed), `xxe-expert` (SVG).
 
+## 10. Render-time writes + user-switch (SQLi-forge escalation home)  ⭐
+
+- **Where:** `wp-includes/class-wp-embed.php` (`shortcode` → `oembed_cache` insert),
+  `class-wp-query.php` (`split_the_query`, `update_post_caches`), `theme.php`
+  (`_wp_customize_publish_changeset`, `_wp_keep_alive_customize_changeset_dependent_auto_drafts`),
+  `class-wp-customize-manager.php` (`_publish_changeset_values` → `wp_set_current_user`),
+  `post.php` (`wp_transition_post_status` → `do_action("{$status}_{$type}")`, `wp_publish_post`),
+  block render for `core/rss`, `core/navigation`, `core/calendar`.
+- **Why interesting:** This is how a **read-only** `WP_Query` SQLi becomes RCE. A `UNION` forges
+  `WP_Post` rows into the object cache (cache trusts the query, not the DB); rendering their
+  `[embed]`/block content performs uncapped `wp_insert_post`/`update_option` writes; a forged
+  `customize_changeset` switches the current user (process-global, sticky); a forged status/type
+  collides with `parse_request` for nested REST re-entry. Composed in one batch request = unauth
+  admin creation. See the lenses in `sqli-expert`, `data-flow-expert`, `priv-esc-expert`,
+  `code-injection-expert`, and the worked chain in `critical-thinker`.
+- **Repro quirks (must-get-right, verify each with a runtime DB oracle — not the HTTP response):**
+  - `split_the_query` → `SELECT wp_posts.ID` only unless `posts_per_page >= 500` or `-1` (then
+    `wp_posts.*`, all 23 columns for the UNION).
+  - oEmbed `oembed_cache` **`wp_insert_post`** branch fires only when the global `$post->ID` is
+    **falsy** (forge `ID=0`); a real ID takes the postmeta branch (no usable post).
+  - non-empty `post_password` → `post_password_required()` blanks `content.rendered` → `the_content`
+    never runs → **no render, no write.** Empty password is required.
+- **Point at it:** `data-flow-expert` + `priv-esc-expert` + `critical-thinker` (run together, after
+  `sqli-expert`/`protocol-confusion-expert` establish the forge).
+
 ---
 
 ## How the PM uses this catalog

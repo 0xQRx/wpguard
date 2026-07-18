@@ -133,6 +133,28 @@ Every field MUST have either a specific value or an explicit "[None]" / "[Defaul
 
 **Never save a finding as "validated" based on code reading alone.** A promising code path that fails dynamic testing is a draft, not a finding. This prevents false positives from wasting the entire downstream pipeline (PoC Writer → PoC Runner → QA).
 
+### Confirm PRIMITIVES against ground truth — "the response looked right" is NOT verification
+
+A `200`/`207` and a well-formed body do **not** prove a write, forge, or state change happened. The
+HTTP response can look perfect while the primitive silently did nothing (a malformed SQL literal, a
+suppressed render, a swallowed error). Two classes of mistake this rule exists to stop:
+
+- **Declaring a primitive DEAD from static analysis** (a "this code path can't be reached / can't
+  write" conclusion never tested at runtime). The wp2shell escalation was wrongly called "blocked"
+  twice this way — both wrong.
+- **Declaring a primitive ALIVE from the response shape** (posts came back, so "the forge worked") —
+  when the underlying DB write never fired.
+
+When a finding claims a **write / forge / privilege change**, confirm it against a ground-truth oracle,
+not the response body:
+- **DB writes:** enable the MySQL query log and read it directly —
+  `wpguard_sandbox_wp_cli` or the DB container: `SET GLOBAL log_output='TABLE'; SET GLOBAL
+  general_log='ON';` then inspect `mysql.general_log` (and diff row counts / `wp_users` before+after).
+- **State changes:** re-read the affected row/option/user via an independent path and diff it.
+- **A "write" primitive that produces nothing:** treat as unproven and hunt the reason (empty/invalid
+  SQL literal, `post_password` non-empty suppressing render, error swallowed) before concluding either
+  "blocked" or "works".
+
 ---
 
 ## When Finished

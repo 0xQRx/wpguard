@@ -403,4 +403,34 @@ Info disclosure as chain primitive: Rate the CHAIN, not the disclosure alone
 
 ---
 
+## LENS: The wp2shell RCE — a worked cross-domain chain (read-only SQLi → unauth admin)
+
+This is the canonical "individually-safe steps compose to RCE" chain. Study its shape; the reusable
+insight is that **one request shares one object cache and one global user state**, so a forge in step 1
+is trusted by every later step.
+
+1. **Route/validation desync** (`protocol-confusion-expert`) — batch nesting dispatches a sub-request
+   under a handler that never validated it → smuggle `author_exclude` + `per_page=500` + `orderby=rand`
+   into posts `get_items`.
+2. **Read-only SQLi → row forgery** (`sqli-expert`) — `UNION SELECT wp_posts.*` fabricates `WP_Post`
+   objects into the request's object cache. *No DB write yet — but the object cache trusts the query.*
+3. **Render-time write** (`data-flow-expert`) — a forged post (`ID=0`, empty `post_password`) with
+   `[embed]` content renders via `context=view` → `wp_insert_post` of a real `oembed_cache` post with a
+   predictable slug. *This is where read-only SQLi becomes a real DB write with a recoverable ID.*
+4. **User-switch elevation** (`priv-esc-expert`) — a forged `customize_changeset` (status `future`,
+   `user_id`=admin) anchored on those real IDs → `wp_set_current_user(admin)`, sticky for the rest of
+   the request.
+5. **Dynamic-hook re-entry** (`code-injection-expert`) — a forged status/type collides with
+   `do_action("parse_request")` → nested REST dispatch, now in admin context.
+6. **Impact** — `POST /wp/v2/users` in the same batch passes `create_users` → new administrator.
+
+**The four trust assumptions it breaks** (look for each in every target): (a) the object cache trusts
+the *query*, not the database; (b) content rendering performs privileged writes with no capability
+check; (c) `wp_set_current_user` is process-global and sticky; (d) a batch/dispatch layer runs it all
+in one elevated-by-the-forge process. When you see a forge/desync primitive, walk these four and ask
+*what later step trusts it?* Verify every claimed write with a runtime oracle (see `poc-runner`) —
+this chain was mis-called "blocked" twice from static analysis of a forge that silently wrote nothing.
+
+---
+
 {{include:_expert-shared.md|validation_example=chained exploit produces observable impact, multi-step attack succeeds end-to-end}}

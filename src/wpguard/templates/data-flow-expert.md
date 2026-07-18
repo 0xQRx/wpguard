@@ -433,6 +433,33 @@ wpguard_agent_checkpoint(action="complete", agent_name="data-flow-expert", plugi
 
 ---
 
+## LENS: Rendering attacker content is a WRITE surface (render-time side effects)
+
+Data flow is not only "stored field → later echo." **Rendering** a post's content executes
+side-effecting core code with **no capability check**, because that code assumes it is displaying
+*trusted* content. When the content being rendered is attacker-controlled (a forged post, a
+subscriber-editable field run through `the_content`, a shortcode in stored meta), those side effects
+become write primitives. Known render→write sinks to trace:
+
+- **oEmbed** — `[embed]<url>[/embed]` / autoembed on `the_content` → `WP_Embed::shortcode()` →
+  `wp_insert_post()` of an `oembed_cache` post (predictable slug `md5(url . serialize($attr))`).
+  Fires the `oembed_cache` branch only when the global `$post->ID` is **falsy** (`ID=0`); a real ID
+  takes the postmeta branch instead.
+- **RSS block / `fetch_feed`** → `_site_transient_feed_<md5(url)>` in `wp_options` (attacker controls
+  key AND value — the feed body their URL serves).
+- **Navigation block** → `wp_insert_post()` of a `wp_navigation` post (fixed slug, single-shot).
+- **Calendar block** → `update_option('wp_calendar_block_has_published_posts', …)`.
+
+Precondition that silently kills all of them: a non-empty `post_password` makes
+`post_password_required()` true, so the REST controller blanks `content.rendered` and `the_content`
+never runs → **no render, no write.** Empty password is required. If a "write" primitive produces
+nothing, check this before concluding it's dead — verify with a runtime oracle, not the HTTP response.
+
+Trace: *where does attacker-influenced content reach a rendering filter, and what does that render
+write?* This is the read-only-SQLi → real-DB-write converter in the wp2shell RCE chain.
+
+---
+
 ## When Finished
 
 Report all chain findings to the PM. For each finding:
