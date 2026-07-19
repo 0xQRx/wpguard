@@ -161,10 +161,14 @@ not the response body:
   marker value) or to prove one did NOT (no record ⇒ the primitive is a no-op, however good the
   response looked). Filter noise with `type_filter` and separate concurrent requests via each record's
   `reqid`. For a compact list use `include_backtrace=false`. wp-cron requests are skipped by default.
-  To see INSIDE an internal function (`move_uploaded_file`, `unserialize`, `wp_check_filetype`, a
-  sanitizer's return) add the trigger `XDEBUG_TRACE=wpguard` to the PoC request (a GET/POST param or
-  cookie) and read with `xdebug=true` — but reach for this only when you need internal args; full
-  Xdebug traces of a whole request are large, so target a specific endpoint.
+  **This is your default write/forge oracle for HTTP PoCs** — sink records + the backtrace answer
+  "did the write happen and via what path" for nearly every finding.
+  > Need to see argument/return values *inside* an internal PHP function (`move_uploaded_file`,
+  > `unserialize`, `wp_check_filetype`, a sanitizer) that the sink tracer can't reach? **Delegate that
+  > to the `dynamic-tracer` agent** — it owns the safe CLI-only Xdebug procedure. **Do NOT run Xdebug
+  > yourself, and never add an `XDEBUG_TRACE` trigger to a web/REST/AJAX request** — a full trace of a
+  > live request is 20–130 MB and wedges the sandbox. For everything else, `wpguard_sink_trace` +
+  > independent re-reads are your tools.
 - **Fallback — raw MySQL query log:** `wpguard_sandbox_wp_cli` or the DB container: `SET GLOBAL
   log_output='TABLE'; SET GLOBAL general_log='ON';` then inspect `mysql.general_log`.
 - **State changes:** also re-read the affected row/option/user via an independent path and diff it

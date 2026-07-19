@@ -184,8 +184,10 @@ python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
 #                                                 #   carrying your marker value; note its `backtrace`
 #      wpguard_sink_trace(action="disable")
 #    No matching record => the primitive is a NO-OP however good the response looked. Use
-#    include_backtrace=false for a compact list; type_filter="sql"|"option"|"user"|... to focus;
-#    xdebug=true (with XDEBUG_TRACE=wpguard on the request) to see inside an internal function.
+#    include_backtrace=false for a compact list; type_filter="sql"|"option"|"user"|... to focus.
+#    NOTE: never put an XDEBUG_TRACE trigger on a web/REST/AJAX PoC — a full trace can wedge the
+#    sandbox. The sink tracer + independent re-reads verify HTTP PoCs. (Deep internal-function
+#    tracing is a CLI-only specialist step; see the file-rce/object-injection/deserialization experts.)
 #
 #    FALLBACK: raw MySQL query log —
 docker exec wp_db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "
