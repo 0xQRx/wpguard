@@ -32,6 +32,18 @@ if ( ! @file_exists( WPGUARD_SINK_FLAG ) ) {
 	return;
 }
 
+// Skip WP-Cron requests by default: publishing a post (and many other actions)
+// spawns wp-cron.php in the background, whose action-scheduler / ping / transient
+// churn would otherwise flood the log and drown out the PoC request. Delete the
+// flag file's sibling `.cron` marker to include cron. Correlate real requests via
+// the per-record `reqid` regardless.
+if ( ( defined( 'DOING_CRON' ) && DOING_CRON )
+	|| ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( $_SERVER['REQUEST_URI'], 'wp-cron.php' ) ) ) {
+	if ( ! @file_exists( WPGUARD_SINK_FLAG . '.cron' ) ) {
+		return;
+	}
+}
+
 /**
  * A short, stable id for the current request so multiple sink hits from one
  * PoC request can be correlated/filtered together.
