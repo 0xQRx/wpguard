@@ -750,6 +750,53 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="wpguard_sink_trace",
+            description=(
+                "Dynamic data-flow oracle. Records every attacker-reachable hit on a dangerous "
+                "WordPress sink (SQL, option write, user/role creation, meta write, outbound HTTP/SSRF, "
+                "mail) WITH the PHP backtrace, so a request's whole flow from entry point to sink is "
+                "visible — a superset of the general_log oracle. Workflow: enable -> run the PoC "
+                "request(s) -> read. For deep INTERNAL-function traces (move_uploaded_file, unserialize, "
+                "file_put_contents, etc.) add the trigger XDEBUG_TRACE=wpguard to the PoC request (GET/POST "
+                "param or cookie) and read with xdebug=true. Off by default (zero overhead)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["enable", "disable", "status", "clear", "read"],
+                        "description": "enable (start+clear), disable, status, clear, or read the trace",
+                    },
+                    "reqid": {
+                        "type": "string",
+                        "description": "read: filter to a single request id (from a prior record's 'reqid')",
+                    },
+                    "type_filter": {
+                        "type": "string",
+                        "enum": ["sql", "option", "user", "meta", "http", "mail"],
+                        "description": "read: filter to one sink type",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "read: max most-recent records to return",
+                        "default": 200,
+                    },
+                    "include_backtrace": {
+                        "type": "boolean",
+                        "description": "read: keep backtrace arrays (false = compact)",
+                        "default": True,
+                    },
+                    "xdebug": {
+                        "type": "boolean",
+                        "description": "read: also return the newest Xdebug internal-function trace",
+                        "default": False,
+                    },
+                },
+                "required": ["action"],
+            },
+        ),
+        Tool(
             name="wpguard_sandbox_get_nonce",
             description="Generate a WordPress nonce for a given action",
             inputSchema={
@@ -1654,6 +1701,16 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         return await _sandbox_get_nonce(
             arguments["action"],
             arguments.get("auth"),
+        )
+
+    elif name == "wpguard_sink_trace":
+        return await _sink_trace(
+            arguments["action"],
+            arguments.get("reqid"),
+            arguments.get("type_filter"),
+            arguments.get("limit", 200),
+            arguments.get("include_backtrace", True),
+            arguments.get("xdebug", False),
         )
 
     elif name == "wpguard_sandbox_get_emails":
@@ -2826,6 +2883,40 @@ def _sandbox_wp_cli_sync(command: str, timeout: int) -> dict[str, Any]:
 async def _sandbox_wp_cli(command: str, timeout: int) -> dict[str, Any]:
     """Execute WP-CLI command in sandbox."""
     return await run_in_executor(_sandbox_wp_cli_sync, command, timeout)
+
+
+def _sink_trace_sync(
+    action: str,
+    reqid: str | None,
+    type_filter: str | None,
+    limit: int,
+    include_backtrace: bool,
+    xdebug: bool,
+) -> dict[str, Any]:
+    """Control/read the dynamic sink tracer (sync version)."""
+    sandbox = _get_sandbox()
+    return sandbox.sink_trace(
+        action=action,
+        reqid=reqid,
+        type_filter=type_filter,
+        limit=limit,
+        include_backtrace=include_backtrace,
+        xdebug=xdebug,
+    )
+
+
+async def _sink_trace(
+    action: str,
+    reqid: str | None,
+    type_filter: str | None,
+    limit: int,
+    include_backtrace: bool,
+    xdebug: bool,
+) -> dict[str, Any]:
+    """Control/read the dynamic sink tracer."""
+    return await run_in_executor(
+        _sink_trace_sync, action, reqid, type_filter, limit, include_backtrace, xdebug
+    )
 
 
 def _sandbox_get_nonce_sync(action: str, auth: str | None) -> dict[str, Any]:

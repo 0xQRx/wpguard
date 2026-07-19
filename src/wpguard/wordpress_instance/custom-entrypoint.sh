@@ -118,6 +118,19 @@ add_action('phpmailer_init', function($phpmailer) {
 MAILPLUGIN
     chown www-data:www-data /var/www/html/wp-content/mu-plugins/wpguard-mailpit.php
 
+    # Install the dynamic sink tracer mu-plugin (baked into the image by the Dockerfile).
+    # It is inert until the flag file /var/log/wpguard/sink-trace.on exists, which the
+    # wpguard_sink_trace MCP tool creates/removes.
+    echo "[WP-Setup] Installing sink tracer mu-plugin..."
+    if [ -f /usr/local/share/wpguard-sink-trace.php ]; then
+        cp /usr/local/share/wpguard-sink-trace.php /var/www/html/wp-content/mu-plugins/wpguard-sink-trace.php
+        chown www-data:www-data /var/www/html/wp-content/mu-plugins/wpguard-sink-trace.php
+    fi
+    # Ensure the trace dir is writable by Apache (www-data) and readable via docker exec.
+    mkdir -p /var/log/wpguard
+    chown www-data:www-data /var/log/wpguard
+    chmod 775 /var/log/wpguard
+
     echo "[WP-Setup] =========================================="
     echo "[WP-Setup] WordPress setup complete!"
     echo "[WP-Setup] Site URL: $SITE_URL"

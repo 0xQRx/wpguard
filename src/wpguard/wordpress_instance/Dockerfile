@@ -17,6 +17,16 @@ RUN apt-get update && apt-get install -y \
 # Permissive PHP config for PoC testing (NOT standard WordPress)
 COPY php-custom.ini /usr/local/etc/php/conf.d/99-wpguard.ini
 
+# Xdebug for deep function-level data-flow tracing (trigger-gated; idle unless
+# a request carries the XDEBUG_TRACE=wpguard trigger — see wpguard-xdebug.ini).
+RUN (pecl install xdebug || true) && docker-php-ext-enable xdebug
+COPY wpguard-xdebug.ini /usr/local/etc/php/conf.d/98-wpguard-xdebug.ini
+
+# Dynamic sink tracer (WordPress-hook-level data-flow oracle). Baked into the
+# image; the entrypoint copies it into mu-plugins. Off unless the flag file
+# exists (managed by the wpguard_sink_trace MCP tool).
+COPY wpguard-sink-trace.php /usr/local/share/wpguard-sink-trace.php
+
 # Handle alternate PHP extensions (.php5, .phtml, .pht, etc.) for upload bypass testing
 COPY wpguard-php-extensions.conf /etc/apache2/conf-enabled/wpguard-php-extensions.conf
 

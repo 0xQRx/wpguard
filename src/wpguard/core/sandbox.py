@@ -152,6 +152,146 @@ class WordPressSandbox:
                 "return_code": -1,
             }
 
+    # =========================================================================
+    # Dynamic sink tracer (data-flow oracle) — see wpguard-sink-trace.php
+    # =========================================================================
+
+    _SINK_DIR = "/var/log/wpguard"
+    _SINK_FLAG = "/var/log/wpguard/sink-trace.on"
+    _SINK_LOG = "/var/log/wpguard/sink-trace.jsonl"
+
+    def _sh(self, script: str, timeout: int = 30) -> dict[str, Any]:
+        """Run a shell one-liner inside the WP container as root."""
+        try:
+            result = subprocess.run(
+                ["docker", "exec", self.container, "sh", "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            return {
+                "success": result.returncode == 0,
+                "stdout": result.stdout,
+                "stderr": result.stderr.strip(),
+                "return_code": result.returncode,
+            }
+        except subprocess.TimeoutExpired:
+            return {"success": False, "stdout": "", "stderr": f"timeout after {timeout}s", "return_code": -1}
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return {"success": False, "stdout": "", "stderr": str(e), "return_code": -1}
+
+    def sink_trace(
+        self,
+        action: str,
+        reqid: str | None = None,
+        type_filter: str | None = None,
+        limit: int = 200,
+        include_backtrace: bool = True,
+        xdebug: bool = False,
+    ) -> dict[str, Any]:
+        """
+        Control and read the dynamic sink tracer.
+
+        The tracer records every attacker-reachable hit on a dangerous
+        WordPress-level sink (SQL / option write / user-role / meta write /
+        outbound HTTP / mail) with the PHP backtrace, so a single request's
+        whole data-flow is visible. It is a superset of the general_log oracle.
+
+        Args:
+            action: enable | disable | status | clear | read
+            reqid: when reading, filter to a single request id (from a prior record)
+            type_filter: when reading, filter to one sink type (sql|option|user|meta|http|mail)
+            limit: when reading, return at most this many most-recent records
+            include_backtrace: when reading, keep the backtrace arrays (set False for a compact view)
+            xdebug: when reading, also return the newest Xdebug function-trace file (deep internal calls)
+
+        Returns:
+            dict with the outcome; for read, a `records` list (parsed JSONL) and optional `xdebug_trace`.
+        """
+        action = (action or "").lower()
+
+        if action == "enable":
+            r = self._sh(
+                f"mkdir -p {self._SINK_DIR} && chown www-data:www-data {self._SINK_DIR} "
+                f"&& chmod 775 {self._SINK_DIR} && : > {self._SINK_LOG} "
+                f"&& chown www-data:www-data {self._SINK_LOG} && chmod 664 {self._SINK_LOG} "
+                f"&& touch {self._SINK_FLAG}"
+            )
+            r["tracing"] = r["success"]
+            r["message"] = (
+                "Sink tracing ENABLED and log cleared. Now run your PoC request(s), then "
+                "sink_trace(action='read'). For deep internal-function traces, add the "
+                "XDEBUG_TRACE=wpguard trigger (GET/POST param or cookie) to the PoC request "
+                "and read with xdebug=True."
+            )
+            return r
+
+        if action == "disable":
+            r = self._sh(f"rm -f {self._SINK_FLAG}")
+            r["tracing"] = False
+            r["message"] = "Sink tracing DISABLED (log preserved; use action='clear' to wipe)."
+            return r
+
+        if action == "clear":
+            r = self._sh(f": > {self._SINK_LOG} 2>/dev/null; rm -f {self._SINK_DIR}/trace.*.xt 2>/dev/null; echo cleared")
+            r["message"] = "Sink log and Xdebug traces cleared."
+            return r
+
+        if action == "status":
+            r = self._sh(
+                f"if [ -f {self._SINK_FLAG} ]; then echo on; else echo off; fi; "
+                f"wc -l < {self._SINK_LOG} 2>/dev/null || echo 0"
+            )
+            lines = r.get("stdout", "").split("\n")
+            r["tracing"] = bool(lines) and lines[0].strip() == "on"
+            try:
+                r["records"] = int(lines[1].strip()) if len(lines) > 1 and lines[1].strip() else 0
+            except ValueError:
+                r["records"] = 0
+            return r
+
+        if action == "read":
+            r = self._sh(f"cat {self._SINK_LOG} 2>/dev/null || true", timeout=30)
+            records: list[dict[str, Any]] = []
+            for line in r.get("stdout", "").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if reqid and rec.get("reqid") != reqid:
+                    continue
+                if type_filter and rec.get("type") != type_filter:
+                    continue
+                if not include_backtrace:
+                    rec.pop("backtrace", None)
+                records.append(rec)
+            total = len(records)
+            if limit and total > limit:
+                records = records[-limit:]
+            out: dict[str, Any] = {
+                "success": True,
+                "tracing_records_returned": len(records),
+                "total_matched": total,
+                "records": records,
+            }
+            if xdebug:
+                xr = self._sh(
+                    f"f=$(ls -t {self._SINK_DIR}/trace.*.xt 2>/dev/null | head -1); "
+                    f"if [ -n \"$f\" ]; then echo \"# $f\"; tail -c 200000 \"$f\"; else echo '# no xdebug trace (did the PoC carry XDEBUG_TRACE=wpguard?)'; fi",
+                    timeout=30,
+                )
+                out["xdebug_trace"] = xr.get("stdout", "")
+            return out
+
+        return {
+            "success": False,
+            "error": f"unknown action '{action}'",
+            "valid_actions": ["enable", "disable", "status", "clear", "read"],
+        }
+
     def install_plugin(
         self,
         slug: str,
