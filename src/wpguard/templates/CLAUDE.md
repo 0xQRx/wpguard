@@ -62,6 +62,7 @@ Expert finds vuln → Impact Assessor → PoC Writer → PoC Runner → QA Triag
 | `sandbox-admin` | Sandbox maintenance — plugin install, user reset, DB cleanup (on-demand) |
 | `surface-mapper` | Fast attack surface recon — counts endpoints, dangerous functions, auth gaps |
 | `vuln-escalator` | Post-expert escalation — tests lower auth levels, expands impact, chains findings |
+| `dynamic-tracer` | Runtime data-flow verifier — proves a write/forge/deserialize/priv-change against ground truth (sink tracer → DB re-read → Xdebug CLI probe). Owns the deep-tracing tooling; any agent delegates focused verification to it. |
 
 ## MCP Servers
 

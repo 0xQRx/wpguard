@@ -90,6 +90,7 @@ SUPPORT_AGENTS = [
     "surface-mapper",
     "impact-assessor",
     "vuln-escalator",
+    "dynamic-tracer",
     "bb-submission",
 ]
 
