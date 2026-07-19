@@ -67,7 +67,7 @@ Expert finds vuln → Impact Assessor → PoC Writer → PoC Runner → QA Triag
 
 | Server | Purpose |
 |--------|---------|
-| `wpguard` | Core tools — downloads, CVE lookup, sandbox, findings, scope checks (60+ tools) |
+| `wpguard` | Core tools — downloads, CVE lookup, sandbox, findings, scope checks (60+ tools). Includes `wpguard_sink_trace`, the runtime data-flow oracle (SQL/option/user/meta/HTTP/mail writes + backtrace, plus Xdebug internal-function trace) — use it to confirm any write/forge/priv-change against ground truth. |
 | `playwright` | Browser automation for poc-runner / bb-submission video evidence |
 | `devrag` | Local web-pentest knowledge base (semantic doc search) |
 | `veloria` | WordPress-wide regex code search — indexes every plugin/theme/core on wordpress.org. Use for variant hunting and pattern-based target discovery in `/target-research` and `/nday`. Queries are private by default. |

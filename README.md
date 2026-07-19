@@ -162,6 +162,7 @@ Track the entire WordPress ecosystem for research opportunities:
 | **Watch (Plugins)** | `wpguard_watch_add`, `wpguard_watch_check`, `wpguard_watch_global`, `wpguard_watch_new` | Plugin monitoring and global updates |
 | **Watch (Themes)** | `wpguard_watch_global_themes`, `wpguard_watch_new_themes` | Theme monitoring and global updates |
 | **Sandbox** | `wpguard_sandbox_start`, `wpguard_sandbox_request`, `wpguard_sandbox_wp_cli`, `wpguard_sandbox_get_nonce`, `wpguard_sandbox_list_endpoints`, `wpguard_sandbox_map_nonces` | Docker WordPress instance, REST discovery, nonce mapping |
+| **Data-flow oracle** | `wpguard_sink_trace` | Runtime tracer: records every hit on a dangerous sink (SQL, option/user/meta write, HTTP/SSRF, mail) with the PHP backtrace + optional Xdebug internal-function trace. Confirms writes/forges/priv-changes against ground truth (`enable` → run PoC → `read`). |
 | **Scope** | `wpguard_scope_check_plugin`, `wpguard_scope_check_finding`, `wpguard_scope_get_vulns` | Wordfence bounty eligibility |
 | **Findings** | `wpguard_finding_create`, `wpguard_finding_update`, `wpguard_finding_list`, `wpguard_finding_stats` | Vulnerability tracking and management |
 | **CVE Database** | `wpguard_cve_search`, `wpguard_cve_get`, `wpguard_cve_stats` | Wordfence vulnerability database |

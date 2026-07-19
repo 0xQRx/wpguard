@@ -147,12 +147,31 @@ suppressed render, a swallowed error). Two classes of mistake this rule exists t
 
 When a finding claims a **write / forge / privilege change**, confirm it against a ground-truth oracle,
 not the response body:
-- **DB writes:** enable the MySQL query log and read it directly —
-  `wpguard_sandbox_wp_cli` or the DB container: `SET GLOBAL log_output='TABLE'; SET GLOBAL
-  general_log='ON';` then inspect `mysql.general_log` (and diff row counts / `wp_users` before+after).
-- **State changes:** re-read the affected row/option/user via an independent path and diff it.
-- **A "write" primitive that produces nothing:** treat as unproven and hunt the reason (empty/invalid
-  SQL literal, `post_password` non-empty suppressing render, error swallowed) before concluding either
+
+- **PREFERRED — `wpguard_sink_trace` (the data-flow oracle).** This records every attacker-reachable
+  hit on a dangerous sink (SQL, option write, user/role creation, meta write, outbound HTTP/SSRF, mail)
+  **with the PHP backtrace**, so you see the whole path from entry point to sink — a superset of the
+  general_log (which only sees SQL). Workflow:
+    1. `wpguard_sink_trace(action="enable")`  (clears the log and turns tracing on)
+    2. Run your PoC request(s) — the real attacker flow (curl / `wpguard_sandbox_request`).
+    3. `wpguard_sink_trace(action="read")` — inspect the `records`. Each has `type`, `sink`, `detail`
+       (the actual SQL / option+value / user role / meta), the auth `user`, and the `backtrace`.
+    4. `wpguard_sink_trace(action="disable")` when done.
+  Use it to PROVE a write fired (find the `INSERT`/`update_option`/`user_register` record with your
+  marker value) or to prove one did NOT (no record ⇒ the primitive is a no-op, however good the
+  response looked). Filter noise with `type_filter` and separate concurrent requests via each record's
+  `reqid`. For a compact list use `include_backtrace=false`. wp-cron requests are skipped by default.
+  To see INSIDE an internal function (`move_uploaded_file`, `unserialize`, `wp_check_filetype`, a
+  sanitizer's return) add the trigger `XDEBUG_TRACE=wpguard` to the PoC request (a GET/POST param or
+  cookie) and read with `xdebug=true` — but reach for this only when you need internal args; full
+  Xdebug traces of a whole request are large, so target a specific endpoint.
+- **Fallback — raw MySQL query log:** `wpguard_sandbox_wp_cli` or the DB container: `SET GLOBAL
+  log_output='TABLE'; SET GLOBAL general_log='ON';` then inspect `mysql.general_log`.
+- **State changes:** also re-read the affected row/option/user via an independent path and diff it
+  (before vs after) — the tracer shows the write happened; the re-read confirms the resulting value.
+- **A "write" primitive that produces nothing:** if `wpguard_sink_trace` shows no matching sink record,
+  treat it as unproven and hunt the reason (empty/invalid SQL literal, `post_password` non-empty
+  suppressing render, a guard that returned early, error swallowed) before concluding either
   "blocked" or "works".
 
 ---
