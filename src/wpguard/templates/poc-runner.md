@@ -175,14 +175,26 @@ python3 poc.py --url http://172.17.0.1:8000 -u subscriber -p subscriber
 # If payload is in source but doesn't execute → FALSE POSITIVE
 
 # 5. DB write / forge oracle — for any claim of INSERT/UPDATE/state-change/priv-change
-#    A 200/207 and a well-formed body do NOT prove a write. Watch the DB directly:
+#    A 200/207 and a well-formed body do NOT prove a write. Watch the sinks directly.
+#
+#    PREFERRED: wpguard_sink_trace (records SQL + option/user/meta/http/mail writes WITH backtrace):
+#      wpguard_sink_trace(action="enable")        # clear + turn on
+#      # ... run the PoC (the real attacker flow) ...
+#      wpguard_sink_trace(action="read")          # find the INSERT/update_option/user_register record
+#                                                 #   carrying your marker value; note its `backtrace`
+#      wpguard_sink_trace(action="disable")
+#    No matching record => the primitive is a NO-OP however good the response looked. Use
+#    include_backtrace=false for a compact list; type_filter="sql"|"option"|"user"|... to focus;
+#    xdebug=true (with XDEBUG_TRACE=wpguard on the request) to see inside an internal function.
+#
+#    FALLBACK: raw MySQL query log —
 docker exec wp_db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "
   SET GLOBAL log_output=\"TABLE\"; SET GLOBAL general_log=\"ON\"; TRUNCATE mysql.general_log;"'
 # ... run the PoC ...
 docker exec wp_db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e "
   SELECT argument FROM mysql.general_log WHERE argument LIKE \"INSERT%\" OR argument LIKE \"UPDATE%\";"'
 # Also diff a real signal (e.g. user count / target row) before vs after.
-# If the response looked like success but NO write appears in the log → the primitive is a NO-OP,
+# If the response looked like success but NO write appears → the primitive is a NO-OP,
 # not a confirmed vuln. (This is exactly how a silently-broken forge fooled a static analysis.)
 docker exec wp_db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SET GLOBAL general_log=\"OFF\";"'
 ```
