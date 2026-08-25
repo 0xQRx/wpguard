@@ -95,9 +95,36 @@ _COMMAND_SYNTAX_RE = re.compile(
 )
 
 
+# `/loop` is a Claude Code built-in with no Codex counterpart, so it cannot be
+# rewritten the way a wpguard command can. Anything that mentions it gets this
+# appended instead, so a Codex reader is not left with a command that does not
+# exist.
+CODEX_SCHEDULING_NOTE = """
+
+## Scheduling on Codex
+
+Codex has no `/loop`. Drive the same thing from your own scheduler (cron, a
+systemd timer) using non-interactive mode:
+
+```
+0 */6 * * *  cd /path/to/project && codex exec "$watch core"
+```
+
+`codex exec` takes a prompt, runs it, and exits — add `--json` for a parseable
+event stream. An unattended run cannot answer approval prompts, so it needs the
+sandbox and approval settings described in AGENTS.md.
+"""
+
+
 def to_codex_syntax(text: str) -> str:
-    """Rewrite Claude slash-command references as Codex skill mentions."""
-    return _COMMAND_SYNTAX_RE.sub(r"$\1", text)
+    """
+    Rewrite Claude slash-command references as Codex skill mentions, and
+    append a scheduling note wherever `/loop` is referenced.
+    """
+    rewritten = _COMMAND_SYNTAX_RE.sub(r"$\1", text)
+    if "/loop" in rewritten:
+        rewritten = rewritten.rstrip() + "\n" + CODEX_SCHEDULING_NOTE
+    return rewritten
 
 
 CODEX_PREAMBLE = """# Codex usage
