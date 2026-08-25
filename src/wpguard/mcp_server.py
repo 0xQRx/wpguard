@@ -1406,7 +1406,7 @@ async def list_tools() -> list[Tool]:
         # Project Initialization
         Tool(
             name="wpguard_init_research",
-            description="Initialize a wpguard research project (agents, commands, dirs)",
+            description="Initialize a wpguard research project (agents, commands, dirs) for Claude Code and/or Codex CLI",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1414,6 +1414,12 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Project directory",
                         "default": "./wpguard-research",
+                    },
+                    "agent": {
+                        "type": "string",
+                        "description": "Agent CLI layout to generate: claude (.claude/ + CLAUDE.md), codex (.codex/ + .agents/skills/ + AGENTS.md), or both",
+                        "enum": ["claude", "codex", "both"],
+                        "default": "both",
                     },
                 },
                 "required": [],
@@ -1941,7 +1947,10 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     # Project Initialization
     elif name == "wpguard_init_research":
-        return await _init_research(arguments.get("output_dir", "./wpguard-research"))
+        return await _init_research(
+            arguments.get("output_dir", "./wpguard-research"),
+            arguments.get("agent", "both"),
+        )
 
     # Wordfence CVE Database Tools
     elif name == "wpguard_cve_download":
@@ -3938,16 +3947,16 @@ async def _discord_send_message(message: str) -> dict[str, Any]:
 
 # Project Initialization Tool Implementation
 
-def _init_research_sync(output_dir: str) -> dict[str, Any]:
+def _init_research_sync(output_dir: str, agent: str = "both") -> dict[str, Any]:
     """Initialize research project (sync version)."""
     from wpguard.core.init import initialize_research_project
 
-    return initialize_research_project(output_dir)
+    return initialize_research_project(output_dir, agent=agent)
 
 
-async def _init_research(output_dir: str) -> dict[str, Any]:
+async def _init_research(output_dir: str, agent: str = "both") -> dict[str, Any]:
     """Initialize research project directory with agent instructions."""
-    return await run_in_executor(_init_research_sync, output_dir)
+    return await run_in_executor(_init_research_sync, output_dir, agent)
 
 
 # Wordfence CVE Database Tool Implementations

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from wpguard.core.audit_history import AUDIT_HISTORY_FILENAME
 from wpguard.core.findings import FINDINGS_FILENAME
+from wpguard.core.init_codex import deploy_codex
 
 
 # Template directory relative to this file
@@ -25,6 +26,22 @@ MCP_TOOLS = [
     "mcp__devrag__*",
     "mcp__veloria__*",
 ]
+
+# Slash command template stems (also the Codex skill names)
+WPGUARD_COMMANDS = [
+    "pm",
+    "target-research",
+    "status",
+    "recon",
+    "findings",
+    "nday",
+    "watch",
+    "diff",
+    "patrol",
+]
+
+# Supported agent CLIs for `initialize_research_project(agent=...)`
+SUPPORTED_AGENT_CLIS = ("claude", "codex", "both")
 
 # Slash commands for agent workflows
 WPGUARD_SLASH_COMMANDS = [
@@ -260,37 +277,63 @@ def get_open_redirect_expert_instructions() -> str:
     return _load_template("open-redirect-expert.md")
 
 
-def initialize_research_project(output_dir: str) -> dict:
+def initialize_research_project(output_dir: str, agent: str = "both") -> dict:
     """
     Create research project with agent instructions.
 
     Args:
         output_dir: Directory to create/initialize
+        agent: Which agent CLI to generate for — "claude", "codex", or "both".
+               Both layouts are generated from the same templates, so a project
+               can be driven from either CLI.
 
     Returns:
         dict with success status and created structure
     """
     root = Path(output_dir).expanduser().resolve()
 
+    agent = (agent or "both").strip().lower()
+    if agent not in SUPPORTED_AGENT_CLIS:
+        return {
+            "success": False,
+            "path": str(root),
+            "message": (
+                f"Unknown agent CLI {agent!r} — "
+                f"expected one of {', '.join(SUPPORTED_AGENT_CLIS)}"
+            ),
+            "error": "invalid_agent",
+        }
+
+    want_claude = agent in ("claude", "both")
+    want_codex = agent in ("codex", "both")
+
     try:
         # Detect if this is a fresh init or update of existing project
-        is_update = (root / FINDINGS_FILENAME).exists() or (root / "CLAUDE.md").exists()
+        is_update = (
+            (root / FINDINGS_FILENAME).exists()
+            or (root / "CLAUDE.md").exists()
+            or (root / "AGENTS.md").exists()
+        )
 
         # Create directories
         root.mkdir(parents=True, exist_ok=True)
         (root / "targets").mkdir(exist_ok=True)
         (root / "reports").mkdir(exist_ok=True)
-        (root / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
 
-        # Create agent directories and write agent definitions
-        for agent_name in ALL_AGENTS:
-            agent_dir = root / ".claude" / "agents" / agent_name
-            agent_dir.mkdir(parents=True, exist_ok=True)
-            agent_content = _load_template(f"{agent_name}.md")
-            (agent_dir / "agent.md").write_text(agent_content)
+        claude_md = get_main_claude_md()
 
-        # Write main CLAUDE.md
-        (root / "CLAUDE.md").write_text(get_main_claude_md())
+        if want_claude:
+            (root / ".claude" / "commands").mkdir(parents=True, exist_ok=True)
+
+            # Create agent directories and write agent definitions
+            for agent_name in ALL_AGENTS:
+                agent_dir = root / ".claude" / "agents" / agent_name
+                agent_dir.mkdir(parents=True, exist_ok=True)
+                agent_content = _load_template(f"{agent_name}.md")
+                (agent_dir / "agent.md").write_text(agent_content)
+
+            # Write main CLAUDE.md
+            (root / "CLAUDE.md").write_text(claude_md)
 
         # Write PM plan template to project root
         (root / "pm-plan.md").write_text(_load_template("pm-plan.md"))
@@ -306,46 +349,24 @@ def initialize_research_project(output_dir: str) -> dict:
             for template_file in poc_templates_src.glob("*.py"):
                 shutil.copy2(template_file, poc_templates_dst / template_file.name)
 
-        # Write slash commands
-        (root / ".claude" / "commands" / "target-research.md").write_text(
-            get_target_researcher_instructions()
-        )
-        (root / ".claude" / "commands" / "pm.md").write_text(
-            get_pm_instructions()
-        )
-        (root / ".claude" / "commands" / "status.md").write_text(
-            _load_template("status.md")
-        )
-        (root / ".claude" / "commands" / "recon.md").write_text(
-            _load_template("recon.md")
-        )
-        (root / ".claude" / "commands" / "findings.md").write_text(
-            _load_template("findings.md")
-        )
-        (root / ".claude" / "commands" / "nday.md").write_text(
-            _load_template("nday.md")
-        )
-        (root / ".claude" / "commands" / "watch.md").write_text(
-            _load_template("watch.md")
-        )
-        (root / ".claude" / "commands" / "diff.md").write_text(
-            _load_template("diff.md")
-        )
-        (root / ".claude" / "commands" / "patrol.md").write_text(
-            _load_template("patrol.md")
-        )
+        if want_claude:
+            # Write slash commands
+            for command_name in WPGUARD_COMMANDS:
+                (root / ".claude" / "commands" / f"{command_name}.md").write_text(
+                    _load_template(f"{command_name}.md")
+                )
 
-        # Write settings.local.json with MCP tool permissions
-        settings_local = {
-            "permissions": {
-                "allow": WPGUARD_CORE_TOOLS + MCP_TOOLS + WPGUARD_SLASH_COMMANDS,
-                "deny": [],
-                "ask": [],
+            # Write settings.local.json with MCP tool permissions
+            settings_local = {
+                "permissions": {
+                    "allow": WPGUARD_CORE_TOOLS + MCP_TOOLS + WPGUARD_SLASH_COMMANDS,
+                    "deny": [],
+                    "ask": [],
+                }
             }
-        }
-        (root / ".claude" / "settings.local.json").write_text(
-            json.dumps(settings_local, indent=2)
-        )
+            (root / ".claude" / "settings.local.json").write_text(
+                json.dumps(settings_local, indent=2)
+            )
 
         # Initialize empty findings file only if it doesn't exist
         # (preserve existing findings on re-init / update)
@@ -395,31 +416,44 @@ def initialize_research_project(output_dir: str) -> dict:
         devrag_dir.mkdir(exist_ok=True)
         (devrag_dir / "config.json").write_text(json.dumps(devrag_config, indent=2))
 
-        # Write .mcp.json with all MCP servers
+        # MCP servers — shared by .mcp.json (Claude) and .codex/config.toml (Codex)
         devrag_bin = shutil.which("devrag") or "devrag"
-        mcp_config = {
-            "mcpServers": {
-                "playwright": {
-                    "command": "npx",
-                    "args": ["@playwright/mcp@latest"],
-                },
-                "wpguard": {
-                    "type": "stdio",
-                    "command": "wpguard-mcp",
-                    "args": [],
-                },
-                "devrag": {
-                    "type": "stdio",
-                    "command": devrag_bin,
-                    "args": ["--config", str(devrag_dir / "config.json")],
-                },
-                "veloria": {
-                    "type": "http",
-                    "url": "https://veloria.dev/mcp",
-                },
-            }
+        mcp_servers = {
+            "playwright": {
+                "command": "npx",
+                "args": ["@playwright/mcp@latest"],
+            },
+            "wpguard": {
+                "type": "stdio",
+                "command": "wpguard-mcp",
+                "args": [],
+            },
+            "devrag": {
+                "type": "stdio",
+                "command": devrag_bin,
+                "args": ["--config", str(devrag_dir / "config.json")],
+            },
+            "veloria": {
+                "type": "http",
+                "url": "https://veloria.dev/mcp",
+            },
         }
-        (root / ".mcp.json").write_text(json.dumps(mcp_config, indent=2))
+        (root / ".mcp.json").write_text(
+            json.dumps({"mcpServers": mcp_servers}, indent=2)
+        )
+
+        # Codex CLI layout — AGENTS.md, .codex/agents/*.toml, .agents/skills/*,
+        # .codex/config.toml — generated from the same templates.
+        codex_structure = None
+        if want_codex:
+            codex_structure = deploy_codex(
+                root=root,
+                load_template=_load_template,
+                claude_md=claude_md,
+                agents=ALL_AGENTS,
+                commands=WPGUARD_COMMANDS,
+                mcp_servers=mcp_servers,
+            )
 
         # Download Wordfence vulnerability database (non-blocking, cached)
         wordfence_status = None
@@ -432,40 +466,36 @@ def initialize_research_project(output_dir: str) -> dict:
 
         action = "updated" if is_update else "initialized"
 
+        directories = [
+            "targets/",
+            "targets/{plugin_slug}/",
+            "reports/",
+            "reports/{plugin_slug}/",
+        ]
+        files = [FINDINGS_FILENAME, ".mcp.json"]
+        if want_claude:
+            directories += [".claude/", ".claude/commands/", ".claude/agents/"]
+            files += [".claude/settings.local.json", "CLAUDE.md"]
+        if want_codex:
+            directories += [".codex/", ".codex/agents/", ".agents/skills/"]
+            files += ["AGENTS.md", ".codex/config.toml"]
+
         return {
             "success": True,
             "path": str(root),
             "is_update": is_update,
             "message": f"Research project {action} at {root}",
             "wordfence_db": wordfence_status,
+            "agent": agent,
+            "codex": codex_structure,
             "structure": {
-                "claude_md": str(root / "CLAUDE.md"),
-                "commands": [
-                    "/pm",
-                    "/target-research",
-                    "/status",
-                    "/recon",
-                    "/findings",
-                    "/nday",
-                    "/watch",
-                    "/diff",
-                    "/patrol",
-                ],
+                "claude_md": str(root / "CLAUDE.md") if want_claude else None,
+                "agents_md": str(root / "AGENTS.md") if want_codex else None,
+                "commands": [f"/{name}" for name in WPGUARD_COMMANDS],
+                "skills": [f"${name}" for name in WPGUARD_COMMANDS] if want_codex else [],
                 "agents": [f"{name}" for name in ALL_AGENTS],
-                "directories": [
-                    "targets/",
-                    "targets/{plugin_slug}/",
-                    "reports/",
-                    "reports/{plugin_slug}/",
-                    ".claude/",
-                    ".claude/commands/",
-                    ".claude/agents/",
-                ],
-                "files": [
-                    FINDINGS_FILENAME,
-                    ".claude/settings.local.json",
-                    ".mcp.json",
-                ],
+                "directories": directories,
+                "files": files,
             },
         }
 
