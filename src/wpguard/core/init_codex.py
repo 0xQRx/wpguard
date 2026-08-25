@@ -86,14 +86,27 @@ COMMAND_DESCRIPTIONS = {
     ),
 }
 
+# Slash commands become skills on Codex: `/pm` -> `$pm`. Anchored so it can only
+# fire on a bare command reference — a preceding word char, slash, dot or dash
+# (i.e. a path like `reports/status` or a URL) blocks the match, as does a
+# trailing word char, slash or dash.
+_COMMAND_SYNTAX_RE = re.compile(
+    r"(?<![\w/.\-])/(" + "|".join(sorted(COMMAND_DESCRIPTIONS, key=len, reverse=True)) + r")(?![\w/\-])"
+)
+
+
+def to_codex_syntax(text: str) -> str:
+    """Rewrite Claude slash-command references as Codex skill mentions."""
+    return _COMMAND_SYNTAX_RE.sub(r"$\1", text)
+
+
 CODEX_PREAMBLE = """# Codex usage
 
 This project was generated for both Claude Code and Codex. On Codex:
 
-- **Skills replace slash commands.** `/pm` is the skill `pm` — run `/skills`, or
-  mention it as `$pm`. Same for every other command listed below: `$recon`,
-  `$diff`, `$watch`, `$status`, `$findings`, `$nday`, `$patrol`,
-  `$target-research`. Read them as `$name`, not `/name`.
+- **Skills replace slash commands.** Workflows are written below as `$pm`,
+  `$recon`, `$diff`, `$watch`, `$status`, `$findings`, `$nday`, `$patrol`,
+  `$target-research`. Run `/skills` to list them, or mention one by name.
 - **Agents are Codex subagents.** They live in `.codex/agents/*.toml`. Spawn one
   by name in a prompt ("spawn the sqli-expert agent to review ..."); use
   `/agent` to inspect and switch between running agent threads.
@@ -225,7 +238,9 @@ def build_agent_toml(agent_name: str, content: str) -> str:
     effort = REASONING_EFFORT.get(tier, DEFAULT_EFFORT)
     lines.append(f"model_reasoning_effort = {_toml_basic_string(effort)}")
     lines.append("")
-    lines.append(f"developer_instructions = {toml_multiline_string(body.lstrip())}")
+    lines.append(
+        f"developer_instructions = {toml_multiline_string(to_codex_syntax(body.lstrip()))}"
+    )
 
     return "\n".join(lines) + "\n"
 
@@ -258,7 +273,7 @@ def build_skill(command_name: str, content: str) -> dict[str, str]:
     ``references/instructions.md``.
     """
     _, body = parse_frontmatter(content)
-    body = body.strip()
+    body = to_codex_syntax(body.strip())
 
     description = COMMAND_DESCRIPTIONS.get(
         command_name, _first_paragraph(body) or f"{command_name} workflow"
@@ -356,8 +371,8 @@ def build_codex_config(mcp_servers: dict[str, dict]) -> str:
 
 
 def build_agents_md(claude_md: str) -> str:
-    """AGENTS.md = the shared project doc with a Codex-specific preamble."""
-    return CODEX_PREAMBLE + claude_md
+    """AGENTS.md = the shared project doc, in Codex syntax, with a preamble."""
+    return CODEX_PREAMBLE + to_codex_syntax(claude_md)
 
 
 def deploy_codex(
