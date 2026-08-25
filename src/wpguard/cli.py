@@ -121,35 +121,60 @@ def cmd_download(args: argparse.Namespace) -> int:
 
 def cmd_init(args: argparse.Namespace) -> int:
     """Initialize a research project with agent instructions."""
-    result = initialize_research_project(args.directory)
+    result = initialize_research_project(args.directory, agent=args.agent)
 
-    if result["success"]:
-        is_update = result.get("is_update", False)
-        action = "updated" if is_update else "initialized"
-        print(f"\n[+] Research project {action}: {result['path']}")
-        if is_update:
-            print("[*] Existing data preserved (findings, plans, reports, plugins)")
-        print("\n[*] Structure:")
-        print(f"    CLAUDE.md            - Project instructions")
-        print(f"    .claude/commands/    - Slash commands (/pm, /target-research)")
-        print(f"    .claude/agents/      - Expert agents ({len(result['structure']['agents'])} agents)")
-        print(f"    targets/             - Plugin source code")
-        print(f"    reports/             - Findings and PoCs")
-        print(f"    findings.json        - Vulnerability findings")
-        print("\n[*] Slash commands:")
-        for cmd in result["structure"]["commands"]:
-            print(f"    {cmd}")
-        print("\n[*] Expert agents:")
-        for agent in result["structure"]["agents"]:
-            print(f"    {agent}")
-        print(f"\n[*] Next steps:")
-        print(f"    cd {result['path']}")
-        print(f"    claude  # Start Claude Code in the project directory")
-        print(f"    /pm     # Start the PM orchestrator")
-        return 0
-    else:
+    if not result["success"]:
         print(f"[ERROR] {result['message']}")
         return 1
+
+    is_update = result.get("is_update", False)
+    action = "updated" if is_update else "initialized"
+    agent = result.get("agent", "both")
+    structure = result["structure"]
+
+    print(f"\n[+] Research project {action}: {result['path']} (agent: {agent})")
+    if is_update:
+        print("[*] Existing data preserved (findings, plans, reports, plugins)")
+
+    print("\n[*] Structure:")
+    if structure.get("claude_md"):
+        print(f"    CLAUDE.md            - Project instructions (Claude Code)")
+        print(f"    .claude/commands/    - Slash commands (/pm, /target-research)")
+        print(f"    .claude/agents/      - Expert agents ({len(structure['agents'])} agents)")
+    if structure.get("agents_md"):
+        print(f"    AGENTS.md            - Project instructions (Codex)")
+        print(f"    .agents/skills/      - Codex skills ({len(structure['skills'])} skills)")
+        print(f"    .codex/agents/       - Codex subagents ({len(structure['agents'])} agents)")
+        print(f"    .codex/config.toml   - MCP servers + sandbox policy")
+    print(f"    targets/             - Plugin source code")
+    print(f"    reports/             - Findings and PoCs")
+    print(f"    findings.json        - Vulnerability findings")
+
+    print("\n[*] Workflows:")
+    for cmd in structure["commands"]:
+        name = cmd.lstrip("/")
+        if not structure.get("claude_md"):
+            print(f"    ${name}")
+        elif structure.get("skills"):
+            print(f"    {cmd}   (Codex: ${name})")
+        else:
+            print(f"    {cmd}")
+
+    print("\n[*] Expert agents:")
+    for agent_name in structure["agents"]:
+        print(f"    {agent_name}")
+
+    codex = result.get("codex") or {}
+    for warning in codex.get("warnings", []):
+        print(f"\n[!] {warning}")
+
+    print(f"\n[*] Next steps:")
+    print(f"    cd {result['path']}")
+    if structure.get("claude_md"):
+        print(f"    claude  # Start Claude Code, then /pm")
+    if structure.get("agents_md"):
+        print(f"    codex   # Start Codex (trust the directory), then $pm")
+    return 0
 
 
 def cmd_svn_diff(args: argparse.Namespace) -> int:
@@ -864,6 +889,12 @@ Examples:
     init_parser.add_argument(
         "directory",
         help="Directory to initialize (e.g., 'autoresearch' or '/tmp/my-research')",
+    )
+    init_parser.add_argument(
+        "--agent",
+        choices=["claude", "codex", "both"],
+        default="both",
+        help="Which agent CLI to generate for (default: both)",
     )
     init_parser.set_defaults(func=cmd_init)
 

@@ -75,12 +75,37 @@ src/wpguard/
 3. Add to expert table in `templates/pm.md` and `templates/CLAUDE.md`
 4. If it uses shared patterns: `{{include:_expert-shared.md|validation_example=...}}`
 
+The Codex `.codex/agents/{agent-name}.toml` is generated from the same template —
+no extra step. Only `model` needs care: it maps through `REASONING_EFFORT` in
+`core/init_codex.py`, so a new tier name must be added there.
+
 ### Adding a slash command
 
 1. Create `src/wpguard/templates/{command}.md`
-2. Add `"SlashCommand(/{command})"` to `WPGUARD_SLASH_COMMANDS` in `core/init.py`
-3. Add file creation in `initialize_research_project()` in `core/init.py`
-4. Add to commands list in return structure and `templates/CLAUDE.md`
+2. Add the stem to `WPGUARD_COMMANDS` in `core/init.py` (drives both the Claude
+   slash command and the Codex skill)
+3. Add `"SlashCommand(/{command})"` to `WPGUARD_SLASH_COMMANDS` in `core/init.py`
+4. Add a Codex skill description to `COMMAND_DESCRIPTIONS` in `core/init_codex.py`
+   — this is what Codex matches user requests against
+5. Add to commands list in `templates/CLAUDE.md`
+
+### Codex CLI support
+
+`initialize_research_project(output_dir, agent="claude"|"codex"|"both")` (default
+`both`, exposed as `wpguard init --agent` and the `agent` param of
+`wpguard_init_research`) generates both layouts from one set of templates:
+
+| Claude Code | Codex |
+|---|---|
+| `CLAUDE.md` | `AGENTS.md` (same body + Codex usage preamble; 32 KiB merge cap) |
+| `.claude/agents/<a>/agent.md` | `.codex/agents/<a>.toml` (`developer_instructions`) |
+| `.claude/commands/<c>.md` | `.agents/skills/<c>/SKILL.md` (+ `references/` when >3.5 KB) |
+| `.mcp.json` | `.codex/config.toml` `[mcp_servers.*]` |
+| `.claude/settings.local.json` | `.codex/config.toml` approval/sandbox preset |
+
+Codex has no `maxTurns`; it is folded into the agent instructions as a turn
+budget. No model id is pinned by default (only `model_reasoning_effort`) — set
+`WPGUARD_CODEX_MODEL_OPUS` / `_SONNET` / `_HAIKU` to emit one.
 
 ### Template include system
 
@@ -114,6 +139,8 @@ Version is defined in `src/wpguard/__init__.py` as `__version__`. `pyproject.tom
 | `WP_SANDBOX_HOST` | No (default: 172.17.0.1) | Sandbox Docker host |
 | `WP_SANDBOX_PORT` | No (default: 8000) | Sandbox port |
 | `WPGUARD_SANDBOX_DIR` | No | Custom sandbox compose directory |
+| `WPGUARD_CODEX_MODEL_OPUS` | No | Pin a Codex model id for `model: opus` agents |
+| `WPGUARD_CODEX_MODEL_SONNET` | No | Pin a Codex model id for `model: sonnet` agents |
 
 ## Testing Changes
 
@@ -128,6 +155,14 @@ python -c "from wpguard.mcp_server import server; print('OK')"
 
 # Verify templates resolve (includes work)
 python -c "from wpguard.core.init import _load_template; _load_template('sqli-expert.md'); print('OK')"
+
+# Verify Codex agent TOML generates and parses
+python -c "
+import tomllib
+from wpguard.core.init import _load_template
+from wpguard.core.init_codex import build_agent_toml
+d = tomllib.loads(build_agent_toml('sqli-expert', _load_template('sqli-expert.md')))
+print('OK', d['name'], d['model_reasoning_effort'])"
 
 # Verify sandbox
 docker exec --user www-data wp_app wp core version
