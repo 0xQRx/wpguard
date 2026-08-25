@@ -107,12 +107,13 @@ Codex has no `/loop`. Drive the same thing from your own scheduler (cron, a
 systemd timer) using non-interactive mode:
 
 ```
-0 */6 * * *  cd /path/to/project && codex exec "$watch core"
+0 */6 * * *  cd /path/to/project && codex exec --approve-for-me "$watch core"
 ```
 
 `codex exec` takes a prompt, runs it, and exits — add `--json` for a parseable
-event stream. An unattended run cannot answer approval prompts, so it needs the
-sandbox and approval settings described in AGENTS.md.
+event stream. `--approve-for-me` is required: plain `codex exec` runs with
+`approval: never`, and every MCP tool call then fails with "requires approval,
+but approval policy is never".
 """
 
 
@@ -141,10 +142,11 @@ This project was generated for both Claude Code and Codex. On Codex:
   every `wpguard_*` tool referenced below.
 - **Sandbox.** Auditing needs network access (wordpress.org, Wordfence, SVN) and
   Docker control of the `wp_app` container. `.codex/config.toml` sets
-  `sandbox_mode = "workspace-write"` with `network_access = true`; unattended
-  `$patrol` / `$watch` loops may additionally need
-  `--dangerously-bypass-approvals-and-sandbox` or a `:danger-full-access`
-  profile. That is a deliberate choice, not a default.
+  `sandbox_mode = "workspace-write"` with `network_access = true`. MCP tool
+  calls still need an approval route: `codex exec` sets `approval: never`, which
+  blocks them outright, so unattended runs need `--approve-for-me` (auto-review
+  under the workspace-write sandbox). `--dangerously-bypass-approvals-and-sandbox`
+  also works but gives up the sandbox entirely.
 
 Project-scoped `.codex/config.toml` is only read for trusted projects — run
 `codex` once in this directory and trust it, or copy the `[mcp_servers.*]`
@@ -381,6 +383,9 @@ def build_codex_config(mcp_servers: dict[str, dict]) -> str:
             lines.append(f"command = {_toml_basic_string(server['command'])}")
             if server.get("args"):
                 lines.append(f"args = {_toml_array(server['args'])}")
+            # Without this every wpguard_* call prompts individually — 60+ tools
+            # across a full audit makes that unusable.
+            lines.append('default_tools_approval_mode = "auto"')
             if name == "wpguard":
                 # env_vars forwards from the parent environment; env would set
                 # literal values, which is wrong for secrets like the
