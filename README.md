@@ -170,7 +170,7 @@ Track the entire WordPress ecosystem for research opportunities:
 | **Scoring** | `wpguard_target_score` | Priority scoring for target selection (installs, CVEs, audit history) |
 | **Regression** | `wpguard_regression_check` | Re-run previous PoCs to detect incomplete patches |
 | **Dedup** | `wpguard_finding_check_duplicate` | Check for duplicate findings before creation |
-| **Project** | `wpguard_init_research` | Initialize research project with all agents and commands |
+| **Project** | `wpguard_init_research` | Initialize research project with all agents and commands (Claude Code and/or Codex) |
 
 ## Installation
 
@@ -310,15 +310,53 @@ pipx install .
 wpguard init wpsec
 ```
 
-This creates the full project structure inside `wpsec/`: `CLAUDE.md`, all agent definitions, slash commands, `.mcp.json` (wpguard, playwright, devrag, veloria), and `settings.local.json` permissions.
+This creates the full project structure inside `wpsec/` for **both Claude Code and Codex** — see [Agent CLI support](#agent-cli-support) to generate just one.
 
-### 13. Start Claude Code inside the project folder
+For Claude Code: `CLAUDE.md`, all agent definitions, slash commands, `.mcp.json` (wpguard, playwright, devrag, veloria), and `settings.local.json` permissions.
+
+For Codex: `AGENTS.md`, `.codex/agents/*.toml` subagents, `.agents/skills/` workflows, and `.codex/config.toml` (MCP servers + sandbox policy).
+
+### 13. Start your agent CLI inside the project folder
 
 ```bash
-cd wpsec && claude
+cd wpsec && claude    # Claude Code
+cd wpsec && codex     # Codex
 ```
 
 Claude will prompt you to approve the MCP servers configured in `.mcp.json`. **Disable `devrag` for now** — it requires a separate knowledge-base configuration. Leave the others (`wpguard`, `playwright`, `veloria`) enabled.
+
+Codex reads a project-scoped `.codex/config.toml` only for **trusted** projects — trust the directory when prompted, or copy the `[mcp_servers.*]` tables into `~/.codex/config.toml`.
+
+### Agent CLI support
+
+`wpguard init` generates both layouts from one set of templates, so the same
+research project runs under either CLI. Pick one with `--agent`:
+
+```bash
+wpguard init wpsec --agent claude   # .claude/ + CLAUDE.md only
+wpguard init wpsec --agent codex    # .codex/ + .agents/skills/ + AGENTS.md only
+wpguard init wpsec --agent both     # default
+```
+
+| Claude Code | Codex |
+|---|---|
+| `CLAUDE.md` | `AGENTS.md` |
+| `/pm`, `/recon`, `/diff`, ... | skills — `$pm`, `$recon`, `$diff`, ... (`/skills` to list) |
+| `.claude/agents/<name>/agent.md` | `.codex/agents/<name>.toml` |
+| `.mcp.json` | `.codex/config.toml` |
+
+Everything below that shows a `/command` works on Codex as `$command`.
+
+Auditing needs outbound network (wordpress.org, Wordfence, SVN) plus Docker
+control of the sandbox container, so the generated `.codex/config.toml` sets
+`sandbox_mode = "workspace-write"` with `network_access = true`. Unattended
+`$patrol` / `$watch` loops may additionally need a `:danger-full-access`
+profile — that is a deliberate choice, not a default.
+
+Codex model ids move fast, so no model is pinned: generated agents set only
+`model_reasoning_effort` (`opus` → `high`, `sonnet` → `medium`). Export
+`WPGUARD_CODEX_MODEL_OPUS` / `WPGUARD_CODEX_MODEL_SONNET` before `wpguard init`
+to pin one.
 
 ### Optional: devrag (RAG over security knowledge base)
 
@@ -413,16 +451,25 @@ Large codebases exhaust agent context. wpguard agents are designed to survive:
 
 ```
 research-project/
-+-- CLAUDE.md                          # Project instructions for agents
++-- CLAUDE.md                          # Project instructions (Claude Code)
 +-- .claude/
 |   +-- commands/                      # Slash commands (/pm, /watch, /recon, ...)
-|   +-- agents/                        # 20+ agent definitions
+|   +-- agents/                        # 30+ agent definitions
 |   |   +-- sqli-expert/agent.md
 |   |   +-- xss-expert/agent.md
 |   |   +-- data-flow-expert/agent.md
 |   |   +-- ...
 |   +-- settings.local.json            # MCP tool permissions
 +-- .mcp.json                          # MCP server config
++-- AGENTS.md                          # Project instructions (Codex)
++-- .codex/
+|   +-- agents/                        # Codex subagents (one TOML per agent)
+|   |   +-- sqli-expert.toml
+|   |   +-- ...
+|   +-- config.toml                    # MCP servers + sandbox/approval policy
++-- .agents/skills/                    # Codex skills ($pm, $watch, $recon, ...)
+|   +-- pm/SKILL.md
+|   +-- ...
 +-- targets/{slug}/extracted/          # Plugin/theme source code
 +-- reports/{slug}/
 |   +-- PLAN.md                        # Audit plan and progress
@@ -439,7 +486,7 @@ research-project/
 
 ## Autonomous Loop Examples
 
-Combine `/loop` with slash commands for fully autonomous operation. These run inside Claude Code.
+Combine `/loop` with slash commands for fully autonomous operation. These run inside Claude Code; on Codex use the equivalent skills (`$pm`, `$patrol`) with its own scheduling.
 
 ### Autonomous Research — Two-Part Setup
 
